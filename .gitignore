@@ -1,0 +1,83 @@
+# Xcode
+build/
+DerivedData/
+*.xcuserstate
+*.xcuserdatad
+**/xcuserdata/
+*.moved-aside
+*.pbxuser
+!default.pbxuser
+*.mode1v3
+!default.mode1v3
+*.mode2v3
+!default.mode2v3
+*.perspectivev3
+!default.perspectivev3
+*.swiftpm
+.swiftpm/
+
+# Pbxproj backups (script artifacts)
+*.pbxproj.backup*
+*.pbxproj.bak
+*.pbxproj.*_backup
+*.backup
+*.bak
+
+# Swift Package Manager
+.build/
+Packages/
+Package.pins
+Package.resolved
+*.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/
+
+# CocoaPods
+Pods/
+Podfile.lock
+
+# Carthage
+Carthage/Build/
+Carthage/Checkouts/
+
+# Fastlane
+fastlane/report.xml
+fastlane/Preview.html
+fastlane/screenshots/**/*.png
+fastlane/test_output
+
+# macOS junk
+.DS_Store
+._*
+.Spotlight-V100
+.Trashes
+
+# Editor
+.idea/
+.vscode/
+*.swp
+*~
+
+# Secrets / certificates — never commit
+*.p12
+*.pem
+*.key
+*.cer
+*.crt
+*.mobileprovision
+*.pfx
+*.jks
+*.keystore
+.env
+.env.local
+.env.*.local
+ExportOptions*.plist
+
+# Build artifacts
+dSYMs/
+screenshots/
+*.ipa
+*.dSYM
+*.dSYM.zip
+project_analysis*.json
+
+# Logs
+*.log

@@ -1,0 +1,87 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>DefaultP12Password</key>
+	<string>$(DEFAULT_P12_PASSWORD)</string>
+	<key>BGTaskSchedulerPermittedIdentifiers</key>
+	<array>
+		<string>com.engindearing.omnitak.mobile.refresh</string>
+		<string>com.engindearing.omnitak.mobile.processing</string>
+	</array>
+	<key>CFBundleIconName</key>
+	<string>AppIcon</string>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>com.omnitak.mobile</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>tak</string>
+			</array>
+		</dict>
+	</array>
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<key>NSAllowsArbitraryLoads</key>
+		<true/>
+		<key>NSAllowsLocalNetworking</key>
+		<true/>
+		<key>NSExceptionDomains</key>
+		<dict>
+			<key>127.0.0.1</key>
+			<dict>
+				<key>NSExceptionAllowsInsecureHTTPLoads</key>
+				<true/>
+			</dict>
+			<key>localhost</key>
+			<dict>
+				<key>NSExceptionAllowsInsecureHTTPLoads</key>
+				<true/>
+				<key>NSIncludesSubdomains</key>
+				<true/>
+			</dict>
+		</dict>
+	</dict>
+	<key>UIApplicationSceneManifest</key>
+	<dict>
+		<key>UIApplicationSupportsMultipleScenes</key>
+		<true/>
+	</dict>
+	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+	<string>OmniTAK needs continuous location access to track your position, share it with team members, and provide turn-by-turn navigation even when the app is in the background.</string>
+	<key>NSLocationAlwaysUsageDescription</key>
+	<string>OmniTAK needs continuous location access to track your position, share it with team members, and provide turn-by-turn navigation even when the app is in the background.</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>OmniTAK needs your location to show your position on the map, share it with team members, and provide navigation assistance.</string>
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>location</string>
+		<string>bluetooth-central</string>
+		<string>fetch</string>
+		<string>remote-notification</string>
+		<string>processing</string>
+	</array>
+	<key>NSBluetoothAlwaysUsageDescription</key>
+	<string>OmniTAK connects to Meshtastic LoRa radios over Bluetooth so you can share position and messages with your team when there is no cellular or Wi-Fi coverage.</string>
+	<key>NSBluetoothPeripheralUsageDescription</key>
+	<string>OmniTAK connects to Meshtastic LoRa radios over Bluetooth so you can share position and messages with your team when there is no cellular or Wi-Fi coverage.</string>
+	<key>NSCameraUsageDescription</key>
+	<string>OmniTAK uses the camera to scan enrollment QR codes for TAK server certificates and to attach photos to map markers.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>OmniTAK lets you attach photos from your library to map markers and share them with your team.</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>OmniTAK saves map exports, screenshots, and captured imagery to your photo library on request.</string>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>OmniTAK discovers TAK servers advertised on your local network so you can connect to them without typing an IP address.</string>
+	<key>NSBonjourServices</key>
+	<array>
+		<string>_tak._tcp</string>
+	</array>
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
+	<key>UILaunchScreen</key>
+	<dict/>
+</dict>
+</plist>
