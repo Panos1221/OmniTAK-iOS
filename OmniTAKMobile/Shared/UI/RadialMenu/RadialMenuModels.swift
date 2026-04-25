@@ -67,6 +67,9 @@ enum RadialMenuAction: Equatable {
     // Drawing Actions
     case openDrawingTools
     case openDrawingsList
+
+    // Layers
+    case openLayers
     case drawLine
     case drawCircle
     case drawPolygon
@@ -116,6 +119,8 @@ enum RadialMenuAction: Equatable {
             return "openDrawingTools"
         case .openDrawingsList:
             return "openDrawingsList"
+        case .openLayers:
+            return "openLayers"
         case .drawLine:
             return "drawLine"
         case .drawCircle:

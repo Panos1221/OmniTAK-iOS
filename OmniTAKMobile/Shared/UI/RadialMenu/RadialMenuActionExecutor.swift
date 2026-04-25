@@ -55,6 +55,8 @@ class RadialMenuActionExecutor {
             return executeOpenDrawingTools(context: context)
         case .openDrawingsList:
             return executeOpenDrawingsList(context: context)
+        case .openLayers:
+            return executeOpenLayers(context: context)
         case .drawLine:
             return executeDrawLine(context: context)
         case .drawCircle:
@@ -433,6 +435,15 @@ class RadialMenuActionExecutor {
     private static func executeOpenDrawingsList(context: RadialMenuContext) -> Bool {
         NotificationCenter.default.post(
             name: .radialMenuOpenDrawingsList,
+            object: nil,
+            userInfo: [:]
+        )
+        return true
+    }
+
+    private static func executeOpenLayers(context: RadialMenuContext) -> Bool {
+        NotificationCenter.default.post(
+            name: .radialMenuShowLayers,
             object: nil,
             userInfo: [:]
         )

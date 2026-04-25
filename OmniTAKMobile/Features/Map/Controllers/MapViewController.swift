@@ -282,6 +282,7 @@ struct ATAKMapView: View {
                     showCoordinates: $showCoordinates,
                     showScaleBar: $showScaleBar,
                     showGrid: $showGrid,
+                    showCallsignPanel: $showCallsignPanel,
                     adsbService: ADSBTrafficService.shared,
                     onLayerToggle: { layer in
                         toggleLayer(layer)
@@ -1109,6 +1110,7 @@ struct ATAKMapView: View {
             case "coordinates": showCoordinates.toggle()
             case "scale": showScaleBar.toggle()
             case "grid": showGrid.toggle()
+            case "callsign": showCallsignPanel.toggle()
             default: break
             }
         }
@@ -1416,6 +1418,7 @@ struct ATAKSidePanel: View {
     @Binding var showCoordinates: Bool
     @Binding var showScaleBar: Bool
     @Binding var showGrid: Bool
+    @Binding var showCallsignPanel: Bool
     @ObservedObject var adsbService: ADSBTrafficService
     let onLayerToggle: (String) -> Void
     let onOverlayToggle: (String) -> Void
@@ -1492,6 +1495,9 @@ struct ATAKSidePanel: View {
                 }
                 LayerButton(icon: "ruler", title: "Scale Bar", isActive: showScaleBar, compact: true) {
                     onMapOverlayToggle("scale")
+                }
+                LayerButton(icon: "person.text.rectangle.fill", title: "Callsign Card", isActive: showCallsignPanel, compact: true) {
+                    onMapOverlayToggle("callsign")
                 }
 
                 Divider()

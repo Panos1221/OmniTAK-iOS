@@ -64,6 +64,12 @@ enum RadialMenuPresets {
                     label: "Waypoint",
                     color: atakOlive,
                     action: .addWaypoint
+                ),
+                RadialMenuItem(
+                    icon: "square.stack.3d.up.fill",
+                    label: "Layers",
+                    color: atakGray,
+                    action: .openLayers
                 )
             ],
             radius: 130,  // Larger to contain labels inside black ring
@@ -524,6 +530,8 @@ struct RadialMenuPresetsPreviewWrapper: View {
             return "Edit Drawing"
         case .deleteDrawing:
             return "Delete Drawing"
+        case .openLayers:
+            return "Layers"
         case .custom:
             return "Custom Action"
         }
