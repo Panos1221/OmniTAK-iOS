@@ -182,6 +182,7 @@
 		B004D2C26FD4F585F7B15E31 /* OmniTAKMobile-Bridging-Header.h in Headers */ = {isa = PBXBuildFile; fileRef = 64977A5E2ADECCCF61D023F2 /* OmniTAKMobile-Bridging-Header.h */; };
 		B291B307F238B64A5231A39B /* RouteStorageManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA1150DC85BAA1B76738C687 /* RouteStorageManager.swift */; };
 		B36DDDD310CB010C14A8DED6 /* EnhancedCoTMarker.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7522ED76D659E2CAEA384D5 /* EnhancedCoTMarker.swift */; };
+		1A2B3C4D5E6F70801A2B3C4D /* SelfPositionMarkerImage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A2B3C4D5E6F70801A2B3C4E /* SelfPositionMarkerImage.swift */; };
 		B4930D30352FB62914534BB0 /* TAKService.swift in Sources */ = {isa = PBXBuildFile; fileRef = BA0E8333659DB4D3BE2BF699 /* TAKService.swift */; };
 		B80AB7E3B230EE4B07BA73F2 /* MeasurementToolView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB5771FBA69E70A6E4BD4764 /* MeasurementToolView.swift */; };
 		B9E7DBC722AEC04DE005B11A /* GeofenceCoTGenerator.swift in Sources */ = {isa = PBXBuildFile; fileRef = F44E4C96A60189A209DF1BCC /* GeofenceCoTGenerator.swift */; };
@@ -467,6 +468,7 @@
 		C132B1527EDDA1CD436D2320 /* ElevationProfileModels.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = ElevationProfileModels.swift; path = OmniTAKMobile/Features/Measurement/Models/ElevationProfileModels.swift; sourceTree = "<group>"; };
 		C2DAE3A8F3F0D5B7D8036B3E /* SFAPACF----.svg */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text; path = "SFAPACF----.svg"; sourceTree = "<group>"; };
 		C7522ED76D659E2CAEA384D5 /* EnhancedCoTMarker.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = EnhancedCoTMarker.swift; path = OmniTAKMobile/Features/Map/Markers/EnhancedCoTMarker.swift; sourceTree = "<group>"; };
+		1A2B3C4D5E6F70801A2B3C4E /* SelfPositionMarkerImage.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = SelfPositionMarkerImage.swift; path = OmniTAKMobile/Features/Map/Markers/SelfPositionMarkerImage.swift; sourceTree = "<group>"; };
 		C7E7E03CF8CE1ECA81C1AA86 /* MeshtasticManager.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = MeshtasticManager.swift; path = OmniTAKMobile/Features/Meshtastic/Managers/MeshtasticManager.swift; sourceTree = "<group>"; };
 		CA8A6851F2CB32B82BEA2817 /* DrawingPropertiesView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = DrawingPropertiesView.swift; path = OmniTAKMobile/Features/Drawing/Views/DrawingPropertiesView.swift; sourceTree = "<group>"; };
 		CAC01FCB3F359AE0399C8DCC /* SFSP-------.svg */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text; path = "SFSP-------.svg"; sourceTree = "<group>"; };
@@ -1122,6 +1124,7 @@
 			children = (
 				B0C1EB9ED3DAD8A96FC15890 /* CustomMarkerAnnotation.swift */,
 				C7522ED76D659E2CAEA384D5 /* EnhancedCoTMarker.swift */,
+				1A2B3C4D5E6F70801A2B3C4E /* SelfPositionMarkerImage.swift */,
 				372BEE330DDD178296377ADA /* MarkerAnnotationView.swift */,
 			);
 			name = Markers;
@@ -2023,6 +2026,7 @@
 				920333E0E3053D6914F3C368 /* MapViewController.swift in Sources */,
 				79D61793BC1DDE18BBBADD21 /* CustomMarkerAnnotation.swift in Sources */,
 				B36DDDD310CB010C14A8DED6 /* EnhancedCoTMarker.swift in Sources */,
+				1A2B3C4D5E6F70801A2B3C4D /* SelfPositionMarkerImage.swift in Sources */,
 				74322F3B928281C798302CA8 /* MarkerAnnotationView.swift in Sources */,
 				E072202BA54DC55005061421 /* BreadcrumbTrailOverlay.swift in Sources */,
 				21F8CB94928A130D0CC47B88 /* CompassOverlay.swift in Sources */,

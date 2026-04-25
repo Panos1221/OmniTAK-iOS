@@ -2554,7 +2554,15 @@ struct TacticalMapView: UIViewRepresentable {
 
         func mapView(_ mapView: MKMapView, viewFor annotation: MKAnnotation) -> MKAnnotationView? {
             if annotation is MKUserLocation {
-                return nil
+                // GAP-032b: tactical bullseye matching Android self-marker.
+                let identifier = "SelfPositionMarker"
+                let view = mapView.dequeueReusableAnnotationView(withIdentifier: identifier)
+                    ?? MKAnnotationView(annotation: annotation, reuseIdentifier: identifier)
+                view.annotation = annotation
+                view.image = SelfPositionMarkerImage.bullseye
+                view.canShowCallout = false
+                view.centerOffset = .zero
+                return view
             }
 
             // Handle point marker annotations (hostile, friendly, etc. from radial menu)
