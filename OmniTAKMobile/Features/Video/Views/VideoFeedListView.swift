@@ -291,6 +291,7 @@ struct VideoFeedRow: View {
         case .http: return .blue
         case .rtsp: return .orange
         case .hls: return .green
+        case .srt: return .purple
         }
     }
 }
