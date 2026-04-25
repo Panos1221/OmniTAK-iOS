@@ -1219,6 +1219,14 @@ struct ATAKStatusBar: View {
     let onServerTap: () -> Void
     let onMenuTap: () -> Void
 
+    /// 24-hour tactical clock used by the top status strip — keeps the
+    /// iOS bar in sync with the Android `timeLabel` (e.g. `19:03`).
+    static let timeLabelFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.dateFormat = "HH:mm"
+        return f
+    }()
+
     @Environment(\.verticalSizeClass) var verticalSizeClass
 
     // Portrait mode detection
@@ -1255,23 +1263,23 @@ struct ATAKStatusBar: View {
                 .foregroundColor(isConnected ? .green : .gray)
             }
 
-            // Messages (compact)
-            HStack(spacing: 4) {
-                Image(systemName: "arrow.down.circle.fill")
-                    .font(.system(size: 9))
-                    .foregroundColor(.cyan)
+            // Messages (compact) — text arrows match Android ATAKStatusBar
+            HStack(spacing: 2) {
+                Text("↓")
+                    .font(.system(size: 13, weight: .bold))
+                    .foregroundColor(Color(red: 0.13, green: 0.59, blue: 0.95))
                 Text("\(messagesReceived)")
-                    .font(.system(size: 10, weight: .medium))
-                    .foregroundColor(.cyan)
+                    .font(.system(size: 12, design: .monospaced))
+                    .foregroundColor(Color(red: 0.13, green: 0.59, blue: 0.95))
             }
 
-            HStack(spacing: 4) {
-                Image(systemName: "arrow.up.circle.fill")
-                    .font(.system(size: 9))
-                    .foregroundColor(.orange)
+            HStack(spacing: 2) {
+                Text("↑")
+                    .font(.system(size: 13, weight: .bold))
+                    .foregroundColor(Color(red: 1.0, green: 0.63, blue: 0.0))
                 Text("\(messagesSent)")
-                    .font(.system(size: 10, weight: .medium))
-                    .foregroundColor(.orange)
+                    .font(.system(size: 12, design: .monospaced))
+                    .foregroundColor(Color(red: 1.0, green: 0.63, blue: 0.0))
             }
 
             Spacer()
@@ -1285,10 +1293,10 @@ struct ATAKStatusBar: View {
             }
             .foregroundColor(gpsAccuracy < 10 ? .green : .yellow)
 
-            // Time (compact)
-            Text(Date().formatted(date: .omitted, time: .shortened))
-                .font(.system(size: 10, weight: .medium))
-                .foregroundColor(.white)
+            // Time (compact) — 24h tactical, matches Android
+            Text(ATAKStatusBar.timeLabelFormatter.string(from: Date()))
+                .font(.system(size: 12, design: .monospaced))
+                .foregroundColor(.white.opacity(0.9))
 
             // Hamburger Menu Button (compact)
             Button(action: onMenuTap) {
