@@ -32,7 +32,7 @@ struct ATAKMapView: View {
     // Radial menu → Edit on a PointMarker posts .radialMenuEditMarker;
     // we hold the marker id here so a sheet can open the edit form.
     @State private var editingPointMarkerID: UUID?
-    @State private var mapType: MKMapType = .satellite
+    @State private var mapType: MKMapType = .standard
     @State private var showToolsMenu = false
     @State private var showLoadingScreen = true
     @State private var showGPSError = false
