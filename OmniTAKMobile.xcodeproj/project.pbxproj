@@ -240,6 +240,8 @@
 		E1F2A3B4C5D6E7F809182930 /* PointMarkerEditView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E1F2A3B4C5D6E7F809182931 /* PointMarkerEditView.swift */; };
 		E3397D517A54F6F76789C606 /* MeshtasticManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7E7E03CF8CE1ECA81C1AA86 /* MeshtasticManager.swift */; };
 		E696090A2C20C65D83CD1F3D /* MeshtasticCoTConverter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1419954D52EBD5859EFA2213 /* MeshtasticCoTConverter.swift */; };
+		A7AC00010000000000B00001 /* ATAKPluginParser.swift in Sources */ = {isa = PBXBuildFile; fileRef = A7AC00010000000000A00001 /* ATAKPluginParser.swift */; };
+		A7AC00010000000000B00002 /* ATAKPluginSerializer.swift in Sources */ = {isa = PBXBuildFile; fileRef = A7AC00010000000000A00002 /* ATAKPluginSerializer.swift */; };
 		E8FC76F4642B0A491FDDD72E /* SFGPUSM----.svg in Resources */ = {isa = PBXBuildFile; fileRef = 2A8886CA936AF8F6E8582BA9 /* SFGPUSM----.svg */; };
 		E913B6AFAD02D35CD5CB4E67 /* OfflineTileCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = 343A9DB3612DAF9A47999950 /* OfflineTileCache.swift */; };
 		EAD59D79838D8D6AF5450128 /* MeshTopologyView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 397C16C7CEF45EB144B930F7 /* MeshTopologyView.swift */; };
@@ -289,6 +291,8 @@
 		11874432DFCDF2E0677A18A4 /* ChatCoTGenerator.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = ChatCoTGenerator.swift; path = OmniTAKMobile/CoT/Generators/ChatCoTGenerator.swift; sourceTree = "<group>"; };
 		1370BC2ECA72FEDBDD92B226 /* PositionBroadcastView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = PositionBroadcastView.swift; path = OmniTAKMobile/Features/Networking/Views/PositionBroadcastView.swift; sourceTree = "<group>"; };
 		1419954D52EBD5859EFA2213 /* MeshtasticCoTConverter.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = MeshtasticCoTConverter.swift; path = OmniTAKMobile/Features/Meshtastic/Services/MeshtasticCoTConverter.swift; sourceTree = "<group>"; };
+		A7AC00010000000000A00001 /* ATAKPluginParser.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = ATAKPluginParser.swift; path = OmniTAKMobile/Features/Meshtastic/Services/ATAKPluginParser.swift; sourceTree = "<group>"; };
+		A7AC00010000000000A00002 /* ATAKPluginSerializer.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = ATAKPluginSerializer.swift; path = OmniTAKMobile/Features/Meshtastic/Services/ATAKPluginSerializer.swift; sourceTree = "<group>"; };
 		14751E8F7455DF58CA15A0A1 /* ChatXMLParser.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = ChatXMLParser.swift; path = OmniTAKMobile/CoT/Parsers/ChatXMLParser.swift; sourceTree = "<group>"; };
 		1576B508B4020A81E6FE9608 /* CoTFilterPanel.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = CoTFilterPanel.swift; path = OmniTAKMobile/Features/Networking/Views/CoTFilterPanel.swift; sourceTree = "<group>"; };
 		1648B4732A5A3CEE2F302194 /* MeasurementModels.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = MeasurementModels.swift; path = OmniTAKMobile/Features/Measurement/Models/MeasurementModels.swift; sourceTree = "<group>"; };
@@ -1051,6 +1055,8 @@
 			children = (
 				1419954D52EBD5859EFA2213 /* MeshtasticCoTConverter.swift */,
 				AD37B36A231B559A5C280059 /* MeshtasticCOTBridge.swift */,
+				A7AC00010000000000A00001 /* ATAKPluginParser.swift */,
+				A7AC00010000000000A00002 /* ATAKPluginSerializer.swift */,
 			);
 			name = Services;
 			sourceTree = "<group>";
@@ -2186,6 +2192,8 @@
 				2262EE8CA832D8F3763D6EC9 /* OmniTAKMobile/Features/Meshtastic/Views/MeshtasticTCPConnectionView.swift in Sources */,
 				6DA119F217E6DEA6623A7EB8 /* MeshtasticBLEClient.swift in Sources */,
 				E696090A2C20C65D83CD1F3D /* MeshtasticCoTConverter.swift in Sources */,
+				A7AC00010000000000B00001 /* ATAKPluginParser.swift in Sources */,
+				A7AC00010000000000B00002 /* ATAKPluginSerializer.swift in Sources */,
 				1374EB3089F65B0141A84BC7 /* MeshNodeMapView.swift in Sources */,
 				2C213DD4704CBFF5DCE841C5 /* PluginSettingsManager.swift in Sources */,
 				8AFC6EAFB6BB89E5858B8929 /* ADSBModels.swift in Sources */,
