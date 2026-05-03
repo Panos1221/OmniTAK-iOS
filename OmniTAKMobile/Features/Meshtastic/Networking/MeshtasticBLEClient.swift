@@ -258,6 +258,39 @@ class MeshtasticBLEClient: NSObject, ObservableObject {
         sendToRadio(packet, peripheral: peripheral, characteristic: characteristic)
     }
 
+    /// Send a portnum-72 (ATAK_PLUGIN) payload over the active BLE connection.
+    /// Returns true if the bytes were dispatched to the radio.
+    @discardableResult
+    func sendATAKPlugin(payload: Data, to destination: UInt32 = 0xFFFFFFFF, channel: UInt32 = 0) -> Bool {
+        guard let peripheral = connectedPeripheral,
+              let characteristic = toRadioCharacteristic,
+              peripheral.state == .connected else {
+            DispatchQueue.main.async { self.lastError = "Not connected" }
+            return false
+        }
+
+        let toRadio = ATAKPluginSerializer.buildToRadio(
+            atakPayload: payload,
+            to: destination,
+            channel: channel
+        )
+        sendToRadio(toRadio, peripheral: peripheral, characteristic: characteristic)
+        return true
+    }
+
+    /// Parse a portnum-72 payload and forward to the CoT pipeline.
+    fileprivate func handleATAKPluginPayload(_ payload: Data, from nodeId: UInt32) {
+        guard let cot = ATAKPluginParser.parse(payload) else {
+            print("   ⚠️ Failed to parse ATAK plugin payload (\(payload.count) bytes) from \(String(format: "0x%08X", nodeId))")
+            return
+        }
+        print("   ✅ ATAK plugin → CoTEvent uid=\(cot.uid) type=\(cot.type) callsign=\(cot.detail.callsign)")
+        let eventType: CoTEventType = ATAKPluginParser.classify(cot)
+        DispatchQueue.main.async {
+            CoTEventHandler.shared.handle(event: eventType)
+        }
+    }
+
     private func sendToRadio(_ data: Data, peripheral: CBPeripheral, characteristic: CBCharacteristic) {
         // For BLE, we send the raw protobuf data without the TCP framing header
         guard peripheral.state == .connected else {
@@ -752,11 +785,9 @@ class MeshtasticBLEClient: NSObject, ObservableObject {
         case 67: // Telemetry
             print("   📊 Telemetry from \(String(format: "0x%08X", packet.from))")
 
-        case 72: // ATAK Plugin
-            print("   🎯 ATAK Plugin message from \(String(format: "0x%08X", packet.from))")
-
-        case 257: // ATAK Forwarder
-            print("   🎯 ATAK Forwarder message from \(String(format: "0x%08X", packet.from))")
+        case 72, 257: // ATAK_PLUGIN / ATAK_FORWARDER
+            print("   🎯 ATAK Plugin message from \(String(format: "0x%08X", packet.from)) (\(packet.payload.count) bytes)")
+            handleATAKPluginPayload(packet.payload, from: packet.from)
 
         default:
             print("   ❓ Unknown portNum \(packet.portNum) from \(String(format: "0x%08X", packet.from))")
