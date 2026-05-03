@@ -389,6 +389,31 @@ public class MeshtasticManager: ObservableObject {
         }
     }
 
+    /// Send a CoT event over the active Meshtastic transport (BLE or TCP) as
+    /// a portnum-72 (ATAK_PLUGIN) packet.
+    /// - Parameters:
+    ///   - event: The CoT event to broadcast.
+    ///   - channelIndex: Meshtastic channel index (defaults to 0 / primary).
+    /// - Returns: true if dispatched to the radio, false if no transport is active.
+    /// - Note: declared `internal` (not `public`) because `CoTEvent` is internal.
+    ///   TODO: widen `CoTEvent` to `public` so this entry point can be used
+    ///   from external Swift packages / framework consumers.
+    @discardableResult
+    func sendCoTOverMesh(_ event: CoTEvent, channelIndex: UInt32 = 0) -> Bool {
+        guard #available(iOS 13.0, *), isConnected, let device = connectedDevice else {
+            lastError = "Not connected"
+            return false
+        }
+
+        let payload = ATAKPluginSerializer.serialize(event)
+        switch device.connectionType {
+        case .bluetooth:
+            return bleClient.sendATAKPlugin(payload: payload, channel: channelIndex)
+        case .tcp:
+            return tcpClient.sendATAKPlugin(payload: payload, channel: channelIndex)
+        }
+    }
+
     // MARK: - Status Properties
 
     /// Check if device is connected

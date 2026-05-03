@@ -525,9 +525,43 @@ class MeshtasticTCPClient: ObservableObject {
                 delegate?.tcpClient(self, didReceivePosition: packet.from, position: position)
             }
 
+        case 72, 257: // ATAK_PLUGIN / ATAK_FORWARDER
+            print("🎯 ATAK Plugin message from \(String(format: "0x%08X", packet.from)) (\(packet.payload.count) bytes)")
+            handleATAKPluginPayload(packet.payload, from: packet.from)
+
         default:
             break
         }
+    }
+
+    /// Parse a portnum-72 payload and forward into the existing CoT pipeline.
+    fileprivate func handleATAKPluginPayload(_ payload: Data, from nodeId: UInt32) {
+        guard let cot = ATAKPluginParser.parse(payload) else {
+            print("⚠️ Failed to parse ATAK plugin payload (\(payload.count) bytes) from \(String(format: "0x%08X", nodeId))")
+            return
+        }
+        print("✅ ATAK plugin → CoTEvent uid=\(cot.uid) type=\(cot.type) callsign=\(cot.detail.callsign)")
+        let eventType: CoTEventType = ATAKPluginParser.classify(cot)
+        DispatchQueue.main.async {
+            CoTEventHandler.shared.handle(event: eventType)
+        }
+    }
+
+    /// Send a portnum-72 (ATAK_PLUGIN) payload over the active TCP connection.
+    /// Returns true if the bytes were dispatched.
+    @discardableResult
+    func sendATAKPlugin(payload: Data, to destination: UInt32 = 0xFFFFFFFF, channel: UInt32 = 0) -> Bool {
+        guard connection != nil, isConnected else {
+            DispatchQueue.main.async { self.lastError = "Not connected" }
+            return false
+        }
+        let toRadio = ATAKPluginSerializer.buildToRadio(
+            atakPayload: payload,
+            to: destination,
+            channel: channel
+        )
+        sendToRadio(toRadio)
+        return true
     }
 
     private func parsePositionPayload(_ data: Data) -> MeshPosition? {
