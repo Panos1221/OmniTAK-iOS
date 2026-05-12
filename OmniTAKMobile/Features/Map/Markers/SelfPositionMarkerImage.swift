@@ -2,10 +2,16 @@
 //  SelfPositionMarkerImage.swift
 //  OmniTAKMobile
 //
-//  ATAK-style tactical bullseye rendered as a UIImage, used as the
-//  custom MKAnnotationView image for MKUserLocation. Mirrors the
-//  Android `ic_self_marker.xml` vector drawable so both clients show
-//  the same self-position iconography.
+//  Self-position UIImages for MKUserLocation's MKAnnotationView.
+//  Two styles ship side by side so users can opt in/out of the
+//  MIL-STD-2525 friendly-combat frame via a SettingsStore toggle:
+//
+//    - `.bullseye`  — legacy tactical bullseye (matches the Android
+//      `ic_self_marker.xml` vector drawable). Default until 2026-05-12.
+//    - `.milStdFriendlyCombat` — friendly combat ground frame
+//      (a-f-G-U-C → SFGPUC------). Default from 2026-05-12 forward to
+//      keep the operator's own pip in the same tactical iconography
+//      family as friendly contact markers.
 //
 
 import UIKit
@@ -18,6 +24,13 @@ enum SelfPositionMarkerImage {
 
     /// Tactical dark navy (Compose: TacticalBackground #0A1628).
     private static let tacticalDark = UIColor(red: 10/255.0, green: 22/255.0, blue: 40/255.0, alpha: 1.0)
+
+    /// MIL-STD friendly fill — cyan/light-blue, matches the
+    /// `Affiliation.friendly` Compose colour on Android.
+    private static let milStdFriendlyFill = UIColor(red: 128/255.0, green: 224/255.0, blue: 255/255.0, alpha: 1.0)
+
+    /// MIL-STD friendly stroke — saturated blue, NATO friendly frame.
+    private static let milStdFriendlyStroke = UIColor(red: 0/255.0, green: 102/255.0, blue: 204/255.0, alpha: 1.0)
 
     /// 32×32 bullseye: dark outer ring → green fill → dark inner dot.
     /// Same proportions as Android `ic_self_marker.xml`.
@@ -36,6 +49,30 @@ enum SelfPositionMarkerImage {
             // Inner dark dot (5pt radius, centered)
             tacticalDark.setFill()
             UIBezierPath(ovalIn: CGRect(x: 11, y: 11, width: 10, height: 10)).fill()
+        }
+    }()
+
+    /// 36×36 friendly-combat ground frame: cyan fill, saturated-blue
+    /// stroke, simple rectangle (no echelon, no function modifier).
+    /// Matches the SFGPUC------ family of MIL-STD-2525B symbols and
+    /// pairs visually with the Android bitmap produced by
+    /// `MilStdIconCache.bitmapFor("a-f-G-U-C")`.
+    static let milStdFriendlyCombat: UIImage = {
+        let size = CGSize(width: 36, height: 36)
+        let renderer = UIGraphicsImageRenderer(size: size)
+        return renderer.image { ctx in
+            // Inset 4pt so the stroke doesn't get clipped at the edges.
+            let frame = CGRect(x: 5, y: 9, width: 26, height: 18)
+            let path = UIBezierPath(rect: frame)
+            milStdFriendlyFill.setFill()
+            path.fill()
+            milStdFriendlyStroke.setStroke()
+            path.lineWidth = 2.5
+            path.stroke()
+
+            // Inner center dot anchors the pip to the GPS coordinate.
+            tacticalDark.setFill()
+            UIBezierPath(ovalIn: CGRect(x: 16, y: 16, width: 4, height: 4)).fill()
         }
     }()
 }
