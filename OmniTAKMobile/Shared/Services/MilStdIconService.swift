@@ -206,19 +206,55 @@ class MilStdIconService {
     // MARK: - Private Methods
 
     private func loadDefaultMappings() {
-        // Load from bundled YAML or use hardcoded defaults
-        if let yamlURL = Bundle.main.url(forResource: "cot_types", withExtension: "yaml"),
-           let yamlString = try? String(contentsOf: yamlURL, encoding: .utf8) {
-            parseYAML(yamlString)
-        } else {
-            loadHardcodedDefaults()
+        // Seed the hardcoded floor first so a corrupt or missing
+        // catalogue file can't strip the baseline entries the rest of
+        // the app depends on. Phase C's cot_types.json then layers
+        // over it (mirrored verbatim from Android assets/cot_types.json).
+        loadHardcodedDefaults()
+
+        if let jsonURL = Bundle.main.url(forResource: "cot_types", withExtension: "json"),
+           let jsonData = try? Data(contentsOf: jsonURL) {
+            loadFromJSON(jsonData)
         }
     }
 
-    private func parseYAML(_ yaml: String) {
-        // Simple YAML parsing for our known structure
-        // In production, consider using Yams library
-        loadHardcodedDefaults()
+    /// Phase C — parse the canonical catalogue and merge it over the
+    /// hardcoded floor. JSON layout is identical to the Android asset
+    /// of the same name.
+    private func loadFromJSON(_ data: Data) {
+        do {
+            let parsed = try JSONDecoder().decode([CoTTypeDefinition].self, from: data)
+            var merged: [String: CoTTypeDefinition] = [:]
+            for def in defaultDefinitions { merged[def.value] = def }
+            for def in parsed { merged[def.value] = def }
+
+            // Preserve insertion order: floor first, then JSON entries
+            // that weren't already in the floor.
+            var ordered: [CoTTypeDefinition] = []
+            var seen: Set<String> = []
+            for def in defaultDefinitions {
+                if let final = merged[def.value], seen.insert(def.value).inserted {
+                    ordered.append(final)
+                }
+            }
+            for def in parsed {
+                if seen.insert(def.value).inserted, let final = merged[def.value] {
+                    ordered.append(final)
+                }
+            }
+
+            defaultDefinitions = ordered
+            cotTypeMap.removeAll(keepingCapacity: true)
+            sidcToCoTMap.removeAll(keepingCapacity: true)
+            for def in ordered {
+                cotTypeMap[def.value] = def
+                sidcToCoTMap[def.sidcCode] = def
+            }
+        } catch {
+            // Silent — the hardcoded floor stays active and the map
+            // still renders. Catalogue health is observable from
+            // defaultDefinitions.count vs the expected catalogue size.
+        }
     }
 
     private func loadHardcodedDefaults() {
