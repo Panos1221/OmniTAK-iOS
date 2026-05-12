@@ -23,6 +23,10 @@ struct SettingsView: View {
     @AppStorage("breadcrumbTrailsEnabled") private var breadcrumbTrailsEnabled = true
     @AppStorage("trailMaxLength") private var trailMaxLength = 100
     @AppStorage("trailColorName") private var trailColorName = "cyan"
+    // Self-position marker style — "milstd" = friendly-combat MIL-STD-2525
+    // frame (default), "bullseye" = legacy tactical bullseye. Read by
+    // MapViewController.Coordinator's MKUserLocation handler.
+    @AppStorage("selfMarkerStyle") private var selfMarkerStyle = "milstd"
 
     @State private var showServersSheet = false
 
@@ -127,6 +131,16 @@ struct SettingsView: View {
                             .font(.caption2)
                             .foregroundColor(.secondary)
                             .padding(.top, 4)
+                    }
+
+                    // Self-position marker style — default is the
+                    // MIL-STD friendly-combat frame so the operator's
+                    // own pip shares iconography with friendly contact
+                    // markers. Picking "Bullseye" reverts to the legacy
+                    // tactical green disc.
+                    Picker("Self-Position Marker", selection: $selfMarkerStyle) {
+                        Text("MIL-STD Symbol").tag("milstd")
+                        Text("Bullseye (Legacy)").tag("bullseye")
                     }
                 }
 

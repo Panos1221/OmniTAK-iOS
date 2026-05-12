@@ -2554,12 +2554,20 @@ struct TacticalMapView: UIViewRepresentable {
 
         func mapView(_ mapView: MKMapView, viewFor annotation: MKAnnotation) -> MKAnnotationView? {
             if annotation is MKUserLocation {
-                // GAP-032b: tactical bullseye matching Android self-marker.
+                // Self-position image — toggle in Settings ("Self-position
+                // style") flips between the legacy tactical bullseye and
+                // the MIL-STD-2525 friendly-combat frame. Default is
+                // "milstd" so the operator's own pip shares iconography
+                // with friendly contact markers; users can revert to the
+                // bullseye if they prefer the prior look.
                 let identifier = "SelfPositionMarker"
                 let view = mapView.dequeueReusableAnnotationView(withIdentifier: identifier)
                     ?? MKAnnotationView(annotation: annotation, reuseIdentifier: identifier)
                 view.annotation = annotation
-                view.image = SelfPositionMarkerImage.bullseye
+                let style = UserDefaults.standard.string(forKey: "selfMarkerStyle") ?? "milstd"
+                view.image = (style == "bullseye")
+                    ? SelfPositionMarkerImage.bullseye
+                    : SelfPositionMarkerImage.milStdFriendlyCombat
                 view.canShowCallout = false
                 view.centerOffset = .zero
                 return view
