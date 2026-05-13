@@ -154,6 +154,12 @@ struct SettingsView: View {
                         .font(.caption2)
                         .foregroundColor(.secondary)
                         .padding(.top, 4)
+
+                    if remoteIdScanEnabled {
+                        Text("iOS will ask for Bluetooth permission the first time the scanner runs. If toggling has no visible effect, open the system Settings app → OmniTAK → Bluetooth and grant access.")
+                            .font(.caption2)
+                            .foregroundColor(.secondary)
+                    }
                 }
 
                 // Trail Settings
