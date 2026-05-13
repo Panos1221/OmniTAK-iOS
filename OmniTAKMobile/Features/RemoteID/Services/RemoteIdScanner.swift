@@ -124,8 +124,18 @@ final class RemoteIdScanner: NSObject {
         // `allowDuplicates` is required so we keep getting
         // advertisement callbacks at the broadcast rate (~1 Hz)
         // instead of just the first sighting per peripheral.
+        //
+        // `withServices: nil` is deliberate — passing
+        // `[Self.serviceUuid]` filters on the advertised service
+        // class UUID list (AD types 0x02/0x03), but ASTM F3411
+        // broadcasts 0xFFFA only in service data (AD type 0x16).
+        // CoreBluetooth's filter never matches service-data UUIDs,
+        // so a filtered scan silently sees nothing. Android hit the
+        // same bug — see OmniTAK-Android 0.7.1 (fix 1/4). We instead
+        // accept all advertisements and check the service-data
+        // dictionary in `didDiscover`.
         cm.scanForPeripherals(
-            withServices: [Self.serviceUuid],
+            withServices: nil,
             options: [CBCentralManagerScanOptionAllowDuplicatesKey: true]
         )
     }
