@@ -27,6 +27,9 @@ struct SettingsView: View {
     // frame (default), "bullseye" = legacy tactical bullseye. Read by
     // MapViewController.Coordinator's MKUserLocation handler.
     @AppStorage("selfMarkerStyle") private var selfMarkerStyle = "milstd"
+    // Phase 2 of the gy6 plan — toggles the CoreBluetooth FAA Remote ID
+    // scanner. Default off because BLE scanning has a battery cost.
+    @AppStorage("remoteIdScanEnabled") private var remoteIdScanEnabled = false
 
     @State private var showServersSheet = false
 
@@ -142,6 +145,15 @@ struct SettingsView: View {
                         Text("MIL-STD Symbol").tag("milstd")
                         Text("Bullseye (Legacy)").tag("bullseye")
                     }
+                }
+
+                Section("DRONE DETECTION") {
+                    Toggle("FAA Remote ID Scanner", isOn: $remoteIdScanEnabled)
+
+                    Text("Listen for nearby drones (DJI Mavic, Skydio, Autel) broadcasting FAA Remote ID over Bluetooth. Detected drones appear on the map as unknown-air UAS contacts. Catches the Bluetooth-broadcast subset of Remote ID; WiFi-beacon broadcasts require a gy6 sensor. BLE scanning has a battery cost.")
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
+                        .padding(.top, 4)
                 }
 
                 // Trail Settings

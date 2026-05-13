@@ -64,7 +64,7 @@
 		<string>processing</string>
 	</array>
 	<key>NSBluetoothAlwaysUsageDescription</key>
-	<string>OmniTAK connects to Meshtastic LoRa radios over Bluetooth so you can share position and messages with your team when there is no cellular or Wi-Fi coverage.</string>
+	<string>OmniTAK connects to Meshtastic LoRa radios over Bluetooth so you can share position and messages with your team when there is no cellular or Wi-Fi coverage, and detects nearby drones broadcasting FAA Remote ID.</string>
 	<key>NSBluetoothPeripheralUsageDescription</key>
 	<string>OmniTAK connects to Meshtastic LoRa radios over Bluetooth so you can share position and messages with your team when there is no cellular or Wi-Fi coverage.</string>
 	<key>NSCameraUsageDescription</key>
