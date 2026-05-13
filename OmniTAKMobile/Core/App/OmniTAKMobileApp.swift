@@ -16,6 +16,7 @@ extension Logger {
 struct OmniTAKMobileApp: App {
     @StateObject private var deepLinkHandler = DeepLinkHandler.shared
     @AppStorage("hasCompletedOnboarding") private var hasCompletedOnboarding = false
+    @AppStorage("remoteIdScanEnabled") private var remoteIdScanEnabled = false
 
     init() {
         // Eagerly initialize the Meshtastic manager so its COT bridge is wired
@@ -23,12 +24,24 @@ struct OmniTAKMobileApp: App {
         // appear on the map after a Meshtastic view is opened.
         _ = MeshtasticManager.shared
         Logger.meshtastic.info("MeshtasticManager + CoT bridge initialized at launch")
+
+        // Wire the FAA Remote ID scanner. The actual on/off state is
+        // pulled from UserDefaults below via `.task` so the @AppStorage
+        // value is the single source of truth — Settings toggle flips
+        // the scanner without needing to talk to the bridge directly.
+        _ = RemoteIdAppBridge.shared
     }
 
     var body: some Scene {
         WindowGroup {
             ZStack {
                 RootTabView()
+                    .onAppear {
+                        RemoteIdAppBridge.shared.setEnabled(remoteIdScanEnabled)
+                    }
+                    .onChange(of: remoteIdScanEnabled) { newValue in
+                        RemoteIdAppBridge.shared.setEnabled(newValue)
+                    }
 
                 // Enrollment overlay
                 if deepLinkHandler.isProcessing {
