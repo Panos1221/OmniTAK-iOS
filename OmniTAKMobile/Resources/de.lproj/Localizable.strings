@@ -1,0 +1,96 @@
+/* OmniTAK Mobile — German / Deutsch
+   Technical standards (TAK, MGRS, UTM, TLS/SSL, QR, FAA Remote ID,
+   MIL-STD, Bluetooth) kept as-is — they are proper nouns. */
+
+/* --- Onboarding navigation --- */
+"onboarding.skip" = "Überspringen";
+"onboarding.continue" = "Weiter";
+"onboarding.getStarted" = "Loslegen";
+"onboarding.back" = "Zurück";
+
+/* --- Onboarding page 1: Welcome --- */
+"onboarding.page1.title" = "Willkommen bei OmniTAK";
+"onboarding.page1.desc" = "Dein leistungsstarker iOS-Client für Team-Awareness-Kit-(TAK)-Server. Verbinden, teilen und in Echtzeit zusammenarbeiten.";
+"onboarding.page1.feature1" = "Positionsfreigabe in Echtzeit";
+"onboarding.page1.feature2" = "Sichere Kommunikation";
+"onboarding.page1.feature3" = "Kartenbasierte Lageübersicht";
+"onboarding.page1.feature4" = "Plattformübergreifende Unterstützung";
+
+/* --- Onboarding page 2: Secure & Certified --- */
+"onboarding.page2.title" = "Sicher & zertifiziert";
+"onboarding.page2.desc" = "OmniTAK unterstützt zertifikatsbasierte Authentifizierung für sichere Verbindungen zu TAK-Servern.";
+"onboarding.page2.feature1" = "Unterstützung für Client-Zertifikate";
+"onboarding.page2.feature2" = "TLS/SSL-Verschlüsselung";
+"onboarding.page2.feature3" = "Schlüsselbund-Integration";
+"onboarding.page2.feature4" = "Automatische Registrierung";
+
+/* --- Onboarding page 3: Quick & Easy Setup --- */
+"onboarding.page3.title" = "Schnelle & einfache Einrichtung";
+"onboarding.page3.desc" = "In Sekunden verbunden dank des intelligenten Einrichtungsassistenten. Mehrere Verbindungsmethoden für jedes Szenario.";
+"onboarding.page3.feature1" = "QR-Code-Scan";
+"onboarding.page3.feature2" = "Automatische Erkennung";
+"onboarding.page3.feature3" = "Gängige Voreinstellungen";
+"onboarding.page3.feature4" = "Manuelle Konfiguration";
+
+/* --- Onboarding page 4: Ready to Connect --- */
+"onboarding.page4.title" = "Bereit zum Verbinden?";
+"onboarding.page4.desc" = "Verbinden wir dich mit einem TAK-Server. Wähle die Methode, die für dich am besten funktioniert.";
+"onboarding.page4.feature1" = "Verbindung in unter 30 Sekunden";
+"onboarding.page4.feature2" = "Keine technischen Kenntnisse nötig";
+"onboarding.page4.feature3" = "Volle ATAK-Kompatibilität";
+"onboarding.page4.feature4" = "Funktioniert mit jedem TAK-Server";
+
+/* --- Quick Start Guide --- */
+"quickstart.title" = "Schnellstart-Anleitung";
+"quickstart.subtitle" = "Wähle die Verbindungsmethode, die am besten zu deiner Situation passt";
+"quickstart.done" = "Fertig";
+"quickstart.needHelp" = "Brauchst du Hilfe?";
+"quickstart.help.docs" = "Dokumentation lesen";
+"quickstart.help.support" = "Support kontaktieren";
+"quickstart.help.videos" = "Tutorial-Videos ansehen";
+"quickstart.item.qr.title" = "QR-Code scannen";
+"quickstart.item.qr.desc" = "Schnellste Methode — scanne den Registrierungs-QR-Code von deinem TAK-Server-Administrator";
+"quickstart.item.discover.title" = "Automatische Erkennung";
+"quickstart.item.discover.desc" = "TAK-Server in deinem lokalen Netzwerk automatisch finden";
+"quickstart.item.quick.title" = "Schnelleinrichtung";
+"quickstart.item.quick.desc" = "Voreinstellungen für gängige TAK-Server-Konfigurationen verwenden";
+"quickstart.item.manual.title" = "Manuelle Einrichtung";
+"quickstart.item.manual.desc" = "Volle Kontrolle — konfiguriere alle Verbindungsparameter selbst";
+"quickstart.difficulty.easiest" = "Am einfachsten";
+"quickstart.difficulty.easy" = "Einfach";
+"quickstart.difficulty.advanced" = "Fortgeschritten";
+
+/* --- Settings --- */
+"settings.title" = "Einstellungen";
+"settings.done" = "Fertig";
+"settings.section.userProfile" = "BENUTZERPROFIL";
+"settings.callsign" = "Rufzeichen";
+"settings.name" = "Name";
+"settings.section.servers" = "SERVER";
+"settings.manageServers" = "Server verwalten";
+"settings.section.navigation" = "NAVIGATION";
+"settings.routeNavigation" = "Routennavigation";
+"settings.section.mapOverlays" = "KARTEN-OVERLAYS";
+"settings.mgrsGridOverlay" = "MGRS-Gitter";
+"settings.gridDensity" = "Gitterdichte";
+"settings.showGridLabels" = "Gitterbeschriftungen anzeigen";
+"settings.coordinateFormat" = "Koordinatenformat";
+"settings.selfPositionMarker" = "Eigener Positionsmarker";
+"settings.section.droneDetection" = "DROHNENERKENNUNG";
+"settings.faaRemoteIdScanner" = "FAA-Remote-ID-Scanner";
+"settings.section.language" = "SPRACHE";
+"settings.appLanguage" = "App-Sprache";
+"settings.section.breadcrumbTrails" = "WEGSPUREN";
+"settings.enableTrails" = "Spuren aktivieren";
+"settings.maxTrailLength" = "Max. Spurlänge";
+"settings.trailColor" = "Spurfarbe";
+"settings.section.display" = "ANZEIGE";
+"settings.unitSystem" = "Einheitensystem";
+"settings.section.performance" = "LEISTUNG";
+"settings.cacheSize" = "Cache-Größe";
+"settings.clearCache" = "Cache leeren";
+"settings.section.dataManagement" = "DATENVERWALTUNG";
+"settings.importDataPackage" = "Datenpaket importieren";
+"settings.resetToDefaults" = "Auf Standard zurücksetzen";
+"settings.section.dangerZone" = "GEFAHRENZONE";
+"settings.clearAllTeamData" = "Alle Teamdaten löschen";

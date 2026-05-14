@@ -80,7 +80,11 @@ struct OmniTAKMobileApp: App {
                 FirstTimeOnboarding(onComplete: {
                     hasCompletedOnboarding = true
                 })
+                .environmentObject(LocalizationManager.shared)
             }
+            // Inject the localization manager app-wide so any view can
+            // observe it and re-render the instant the language changes.
+            .environmentObject(LocalizationManager.shared)
         }
     }
 }
