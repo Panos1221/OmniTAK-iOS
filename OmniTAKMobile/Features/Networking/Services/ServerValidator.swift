@@ -304,8 +304,30 @@ class ServerValidator {
             return false
         }
 
+        // The host field may legitimately carry a full endpoint when
+        // the TAK server sits behind a reverse proxy — e.g.
+        // "https://tak.example.com" or "tak.example.com/tak". Strip an
+        // optional scheme and path prefix, then validate just the
+        // host[:port] core. (Previously any "://" or "/" was rejected
+        // outright, which made proxied servers impossible to enter.)
+        var core = host.trimmingCharacters(in: .whitespaces)
+        if let schemeRange = core.range(of: "://") {
+            core = String(core[schemeRange.upperBound...])
+        }
+        if let slash = core.firstIndex(of: "/") {
+            core = String(core[..<slash])
+        }
+        // Drop an optional :port suffix before host validation.
+        if let colon = core.lastIndex(of: ":"),
+           Int(core[core.index(after: colon)...]) != nil {
+            core = String(core[..<colon])
+        }
+        if core.isEmpty {
+            return false
+        }
+
         // Check if it's a valid IP address
-        if IPv4Address(host) != nil || IPv6Address(host) != nil {
+        if IPv4Address(core) != nil || IPv6Address(core) != nil {
             return true
         }
 
@@ -313,12 +335,7 @@ class ServerValidator {
         let hostnameRegex = "^([a-zA-Z0-9]([a-zA-Z0-9\\-]{0,61}[a-zA-Z0-9])?\\.)*[a-zA-Z0-9]([a-zA-Z0-9\\-]{0,61}[a-zA-Z0-9])?$"
         let hostnamePredicate = NSPredicate(format: "SELF MATCHES %@", hostnameRegex)
 
-        // Also reject URLs (common mistake)
-        if host.contains("://") || host.contains("/") {
-            return false
-        }
-
-        return hostnamePredicate.evaluate(with: host)
+        return hostnamePredicate.evaluate(with: core)
     }
 
     private func isValidPort(_ port: Int) -> Bool {
