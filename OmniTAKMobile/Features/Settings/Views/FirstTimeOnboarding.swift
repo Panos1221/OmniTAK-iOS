@@ -11,6 +11,7 @@ import SwiftUI
 
 struct FirstTimeOnboarding: View {
     @Environment(\.dismiss) private var dismiss
+    @EnvironmentObject private var loc: LocalizationManager
     @State private var currentPage = 0
     @State private var showEnrollment = false
 
@@ -30,7 +31,7 @@ struct FirstTimeOnboarding: View {
                         onComplete()
                         dismiss()
                     }) {
-                        Text("Skip")
+                        Text(loc.t("onboarding.skip"))
                             .font(.system(size: 15, weight: .medium))
                             .foregroundColor(Color(hex: "#CCCCCC"))
                     }
@@ -56,6 +57,7 @@ struct FirstTimeOnboarding: View {
         }
         .fullScreenCover(isPresented: $showEnrollment) {
             SimpleEnrollView()
+                .environmentObject(loc)
         }
     }
 
@@ -84,7 +86,9 @@ struct FirstTimeOnboarding: View {
                 }
             }) {
                 HStack {
-                    Text(currentPage == pages.count - 1 ? "Get Started" : "Continue")
+                    Text(currentPage == pages.count - 1
+                         ? loc.t("onboarding.getStarted")
+                         : loc.t("onboarding.continue"))
                         .font(.system(size: 18, weight: .semibold))
                     if currentPage == pages.count - 1 {
                         Image(systemName: "arrow.right")
@@ -104,7 +108,7 @@ struct FirstTimeOnboarding: View {
                         currentPage -= 1
                     }
                 }) {
-                    Text("Back")
+                    Text(loc.t("onboarding.back"))
                         .font(.system(size: 16, weight: .medium))
                         .foregroundColor(Color(hex: "#CCCCCC"))
                         .frame(maxWidth: .infinity)
@@ -121,58 +125,61 @@ struct FirstTimeOnboarding: View {
 
 struct OnboardingPage {
     let icon: String
-    let title: String
-    let description: String
+    /// Localization keys — resolved through LocalizationManager in
+    /// OnboardingPageView so the page re-renders on a live language
+    /// switch. See Resources/*.lproj/Localizable.strings.
+    let titleKey: String
+    let descKey: String
     let color: Color
-    let features: [String]
+    let featureKeys: [String]
 
     static let all: [OnboardingPage] = [
         OnboardingPage(
             icon: "antenna.radiowaves.left.and.right",
-            title: "Welcome to OmniTAK",
-            description: "Your powerful iOS client for Team Awareness Kit (TAK) servers. Connect, share, and collaborate in real-time.",
+            titleKey: "onboarding.page1.title",
+            descKey: "onboarding.page1.desc",
             color: Color(hex: "#FFFC00"),
-            features: [
-                "Real-time position sharing",
-                "Secure communications",
-                "Map-based awareness",
-                "Multi-platform support"
+            featureKeys: [
+                "onboarding.page1.feature1",
+                "onboarding.page1.feature2",
+                "onboarding.page1.feature3",
+                "onboarding.page1.feature4"
             ]
         ),
         OnboardingPage(
             icon: "lock.shield.fill",
-            title: "Secure & Certified",
-            description: "OmniTAK supports certificate-based authentication for secure connections to TAK servers.",
+            titleKey: "onboarding.page2.title",
+            descKey: "onboarding.page2.desc",
             color: Color(hex: "#00FF00"),
-            features: [
-                "Client certificate support",
-                "TLS/SSL encryption",
-                "Keychain integration",
-                "Automatic enrollment"
+            featureKeys: [
+                "onboarding.page2.feature1",
+                "onboarding.page2.feature2",
+                "onboarding.page2.feature3",
+                "onboarding.page2.feature4"
             ]
         ),
         OnboardingPage(
             icon: "bolt.circle.fill",
-            title: "Quick & Easy Setup",
-            description: "Get connected in seconds with our smart setup wizard. Multiple connection methods for every scenario.",
+            titleKey: "onboarding.page3.title",
+            descKey: "onboarding.page3.desc",
             color: Color(hex: "#00BFFF"),
-            features: [
-                "QR code scanning",
-                "Auto-discovery",
-                "Common presets",
-                "Manual configuration"
+            featureKeys: [
+                "onboarding.page3.feature1",
+                "onboarding.page3.feature2",
+                "onboarding.page3.feature3",
+                "onboarding.page3.feature4"
             ]
         ),
         OnboardingPage(
             icon: "map.fill",
-            title: "Ready to Connect?",
-            description: "Let's get you connected to a TAK server. Choose the method that works best for you.",
+            titleKey: "onboarding.page4.title",
+            descKey: "onboarding.page4.desc",
             color: Color(hex: "#FF6B35"),
-            features: [
-                "Connect in < 30 seconds",
-                "No technical knowledge needed",
-                "Full ATAK compatibility",
-                "Works with any TAK server"
+            featureKeys: [
+                "onboarding.page4.feature1",
+                "onboarding.page4.feature2",
+                "onboarding.page4.feature3",
+                "onboarding.page4.feature4"
             ]
         )
     ]
@@ -182,6 +189,7 @@ struct OnboardingPage {
 
 struct OnboardingPageView: View {
     let page: OnboardingPage
+    @EnvironmentObject private var loc: LocalizationManager
 
     var body: some View {
         VStack(spacing: 32) {
@@ -203,14 +211,14 @@ struct OnboardingPageView: View {
             }
 
             // Title
-            Text(page.title)
+            Text(loc.t(page.titleKey))
                 .font(.system(size: 32, weight: .bold))
                 .foregroundColor(.white)
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, 32)
 
             // Description
-            Text(page.description)
+            Text(loc.t(page.descKey))
                 .font(.system(size: 17))
                 .foregroundColor(Color(hex: "#CCCCCC"))
                 .multilineTextAlignment(.center)
@@ -219,8 +227,8 @@ struct OnboardingPageView: View {
 
             // Features
             VStack(spacing: 14) {
-                ForEach(page.features, id: \.self) { feature in
-                    FeatureRow(text: feature, color: page.color)
+                ForEach(page.featureKeys, id: \.self) { featureKey in
+                    FeatureRow(text: loc.t(featureKey), color: page.color)
                 }
             }
             .padding(.horizontal, 40)
@@ -277,37 +285,38 @@ class OnboardingManager: ObservableObject {
 
 struct QuickStartGuide: View {
     @Environment(\.dismiss) private var dismiss
+    @EnvironmentObject private var loc: LocalizationManager
 
     let guides = [
         QuickStartItem(
             icon: "qrcode.viewfinder",
-            title: "Scan QR Code",
-            description: "Fastest method - scan the enrollment QR from your TAK server admin",
-            difficulty: "Easiest",
+            titleKey: "quickstart.item.qr.title",
+            descKey: "quickstart.item.qr.desc",
+            difficultyKey: "quickstart.difficulty.easiest",
             time: "< 30 sec",
             color: Color(hex: "#00FF00")
         ),
         QuickStartItem(
             icon: "wifi.circle.fill",
-            title: "Auto-Discover",
-            description: "Find TAK servers on your local network automatically",
-            difficulty: "Easy",
+            titleKey: "quickstart.item.discover.title",
+            descKey: "quickstart.item.discover.desc",
+            difficultyKey: "quickstart.difficulty.easy",
             time: "< 1 min",
             color: Color(hex: "#00BFFF")
         ),
         QuickStartItem(
             icon: "bolt.circle.fill",
-            title: "Quick Setup",
-            description: "Use presets for common TAK server configurations",
-            difficulty: "Easy",
+            titleKey: "quickstart.item.quick.title",
+            descKey: "quickstart.item.quick.desc",
+            difficultyKey: "quickstart.difficulty.easy",
             time: "< 2 min",
             color: Color(hex: "#FF6B35")
         ),
         QuickStartItem(
             icon: "keyboard",
-            title: "Manual Setup",
-            description: "Full control - configure all connection parameters yourself",
-            difficulty: "Advanced",
+            titleKey: "quickstart.item.manual.title",
+            descKey: "quickstart.item.manual.desc",
+            difficultyKey: "quickstart.difficulty.advanced",
             time: "~3 min",
             color: Color(hex: "#9B59B6")
         )
@@ -326,11 +335,11 @@ struct QuickStartGuide: View {
                                 .font(.system(size: 48))
                                 .foregroundColor(Color(hex: "#FFFC00"))
 
-                            Text("Quick Start Guide")
+                            Text(loc.t("quickstart.title"))
                                 .font(.system(size: 26, weight: .bold))
                                 .foregroundColor(.white)
 
-                            Text("Choose the connection method that works best for your situation")
+                            Text(loc.t("quickstart.subtitle"))
                                 .font(.system(size: 15))
                                 .foregroundColor(Color(hex: "#CCCCCC"))
                                 .multilineTextAlignment(.center)
@@ -340,7 +349,7 @@ struct QuickStartGuide: View {
 
                         // Guide items
                         VStack(spacing: 16) {
-                            ForEach(guides, id: \.title) { guide in
+                            ForEach(guides, id: \.titleKey) { guide in
                                 QuickStartItemView(item: guide)
                             }
                         }
@@ -355,7 +364,7 @@ struct QuickStartGuide: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("Done") {
+                    Button(loc.t("quickstart.done")) {
                         dismiss()
                     }
                     .foregroundColor(Color(hex: "#FFFC00"))
@@ -369,15 +378,15 @@ struct QuickStartGuide: View {
             HStack {
                 Image(systemName: "questionmark.circle.fill")
                     .foregroundColor(Color(hex: "#FFFC00"))
-                Text("Need Help?")
+                Text(loc.t("quickstart.needHelp"))
                     .font(.system(size: 17, weight: .semibold))
                     .foregroundColor(.white)
             }
 
             VStack(alignment: .leading, spacing: 12) {
-                HelpLink(icon: "doc.text.fill", text: "Read the Documentation", url: "https://docs.omnitak.com")
-                HelpLink(icon: "person.2.fill", text: "Contact Support", url: "mailto:support@omnitak.com")
-                HelpLink(icon: "video.fill", text: "Watch Tutorial Videos", url: "https://youtube.com/@omnitak")
+                HelpLink(icon: "doc.text.fill", text: loc.t("quickstart.help.docs"), url: "https://docs.omnitak.com")
+                HelpLink(icon: "person.2.fill", text: loc.t("quickstart.help.support"), url: "mailto:support@omnitak.com")
+                HelpLink(icon: "video.fill", text: loc.t("quickstart.help.videos"), url: "https://youtube.com/@omnitak")
             }
         }
         .padding(20)
@@ -390,15 +399,19 @@ struct QuickStartGuide: View {
 
 struct QuickStartItem {
     let icon: String
-    let title: String
-    let description: String
-    let difficulty: String
+    /// Localization keys — resolved through LocalizationManager in
+    /// QuickStartItemView. `time` stays a literal (numeric-ish, no
+    /// catalogue key in the v1 scope).
+    let titleKey: String
+    let descKey: String
+    let difficultyKey: String
     let time: String
     let color: Color
 }
 
 struct QuickStartItemView: View {
     let item: QuickStartItem
+    @EnvironmentObject private var loc: LocalizationManager
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -411,12 +424,12 @@ struct QuickStartItemView: View {
                     .clipShape(Circle())
 
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(item.title)
+                    Text(loc.t(item.titleKey))
                         .font(.system(size: 17, weight: .semibold))
                         .foregroundColor(.white)
 
                     HStack(spacing: 12) {
-                        Label(item.difficulty, systemImage: "star.fill")
+                        Label(loc.t(item.difficultyKey), systemImage: "star.fill")
                             .font(.system(size: 12))
                             .foregroundColor(item.color)
 
@@ -429,7 +442,7 @@ struct QuickStartItemView: View {
                 Spacer()
             }
 
-            Text(item.description)
+            Text(loc.t(item.descKey))
                 .font(.system(size: 14))
                 .foregroundColor(Color(hex: "#CCCCCC"))
                 .lineSpacing(2)
@@ -484,6 +497,7 @@ struct FirstTimeOnboarding_Previews: PreviewProvider {
             FirstTimeOnboarding()
             QuickStartGuide()
         }
+        .environmentObject(LocalizationManager.shared)
         .preferredColorScheme(.dark)
     }
 }
