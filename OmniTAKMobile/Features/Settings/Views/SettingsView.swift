@@ -9,6 +9,7 @@ import SwiftUI
 
 struct SettingsView: View {
     @Environment(\.dismiss) var dismiss
+    @EnvironmentObject private var loc: LocalizationManager
     @AppStorage("userCallsign") private var userCallsign = "ALPHA-1"
     @AppStorage("userName") private var userName = "Operator"
     @AppStorage("unitSystem") private var unitSystemString = "Metric"
@@ -37,11 +38,11 @@ struct SettingsView: View {
         NavigationView {
             List {
                 // User Profile
-                Section("USER PROFILE") {
+                Section(loc.t("settings.section.userProfile")) {
                     HStack {
-                        Text("Callsign")
+                        Text(loc.t("settings.callsign"))
                         Spacer()
-                        TextField("Callsign", text: $userCallsign)
+                        TextField(loc.t("settings.callsign"), text: $userCallsign)
                             .multilineTextAlignment(.trailing)
                             .foregroundColor(.blue)
                             .onChange(of: userCallsign) { newValue in
@@ -52,16 +53,16 @@ struct SettingsView: View {
                     }
 
                     HStack {
-                        Text("Name")
+                        Text(loc.t("settings.name"))
                         Spacer()
-                        TextField("Name", text: $userName)
+                        TextField(loc.t("settings.name"), text: $userName)
                             .multilineTextAlignment(.trailing)
                             .foregroundColor(.blue)
                     }
                 }
 
                 // Servers (Streamlined)
-                Section("SERVERS") {
+                Section(loc.t("settings.section.servers")) {
                     Button(action: { showServersSheet = true }) {
                         HStack {
                             // Status indicator
@@ -69,7 +70,7 @@ struct SettingsView: View {
                                 .fill(TAKService.shared.isConnected ? Color(hex: "#00FF00") : Color(hex: "#FF4444"))
                                 .frame(width: 10, height: 10)
 
-                            Text("Manage Servers")
+                            Text(loc.t("settings.manageServers"))
                                 .foregroundColor(.primary)
 
                             Spacer()
@@ -87,13 +88,13 @@ struct SettingsView: View {
                 }
 
                 // Navigation Settings
-                Section("NAVIGATION") {
+                Section(loc.t("settings.section.navigation")) {
                     NavigationLink(destination: NavigationSettingsView()) {
                         HStack {
                             Image(systemName: "location.north.line.fill")
                                 .foregroundColor(Color(hex: "#FFFC00"))
                                 .frame(width: 24)
-                            Text("Route Navigation")
+                            Text(loc.t("settings.routeNavigation"))
                             Spacer()
                             Text("ATAK-Style")
                                 .font(.system(size: 12))
@@ -104,22 +105,22 @@ struct SettingsView: View {
 
 
                 // Map Overlay Settings
-                Section("MAP OVERLAYS") {
+                Section(loc.t("settings.section.mapOverlays")) {
                     // MGRS Grid Settings
-                    Toggle("MGRS Grid Overlay", isOn: $mgrsGridEnabled)
+                    Toggle(loc.t("settings.mgrsGridOverlay"), isOn: $mgrsGridEnabled)
 
                     if mgrsGridEnabled {
-                        Picker("Grid Density", selection: $mgrsGridDensityString) {
+                        Picker(loc.t("settings.gridDensity"), selection: $mgrsGridDensityString) {
                             Text("100km").tag("100km")
                             Text("10km").tag("10km")
                             Text("1km").tag("1km")
                         }
 
-                        Toggle("Show Grid Labels", isOn: $showMGRSLabels)
+                        Toggle(loc.t("settings.showGridLabels"), isOn: $showMGRSLabels)
                     }
 
                     // Coordinate Display Format
-                    Picker("Coordinate Format", selection: $coordinateFormatString) {
+                    Picker(loc.t("settings.coordinateFormat"), selection: $coordinateFormatString) {
                         Text("Decimal Degrees (DD)").tag("DD")
                         Text("Degrees Minutes (DM)").tag("DM")
                         Text("Degrees Minutes Seconds (DMS)").tag("DMS")
@@ -141,14 +142,14 @@ struct SettingsView: View {
                     // own pip shares iconography with friendly contact
                     // markers. Picking "Bullseye" reverts to the legacy
                     // tactical green disc.
-                    Picker("Self-Position Marker", selection: $selfMarkerStyle) {
+                    Picker(loc.t("settings.selfPositionMarker"), selection: $selfMarkerStyle) {
                         Text("MIL-STD Symbol").tag("milstd")
                         Text("Bullseye (Legacy)").tag("bullseye")
                     }
                 }
 
-                Section("DRONE DETECTION") {
-                    Toggle("FAA Remote ID Scanner", isOn: $remoteIdScanEnabled)
+                Section(loc.t("settings.section.droneDetection")) {
+                    Toggle(loc.t("settings.faaRemoteIdScanner"), isOn: $remoteIdScanEnabled)
 
                     Text("Listen for nearby drones (DJI Mavic, Skydio, Autel) broadcasting FAA Remote ID over Bluetooth. Detected drones appear on the map as unknown-air UAS contacts. Catches the Bluetooth-broadcast subset of Remote ID; WiFi-beacon broadcasts require a gy6 sensor. BLE scanning has a battery cost.")
                         .font(.caption2)
@@ -162,14 +163,32 @@ struct SettingsView: View {
                     }
                 }
 
+                // Language — switches the app UI language live, no
+                // restart. Bound straight to LocalizationManager so
+                // every observing view re-renders the instant the
+                // picker changes.
+                Section(loc.t("settings.section.language")) {
+                    Picker(
+                        loc.t("settings.appLanguage"),
+                        selection: Binding(
+                            get: { loc.current },
+                            set: { loc.setLanguage($0) }
+                        )
+                    ) {
+                        ForEach(LocalizationManager.Language.allCases) { lang in
+                            Text("\(lang.flag)  \(lang.displayName)").tag(lang)
+                        }
+                    }
+                }
+
                 // Trail Settings
-                Section("BREADCRUMB TRAILS") {
-                    Toggle("Enable Trails", isOn: $breadcrumbTrailsEnabled)
+                Section(loc.t("settings.section.breadcrumbTrails")) {
+                    Toggle(loc.t("settings.enableTrails"), isOn: $breadcrumbTrailsEnabled)
 
                     if breadcrumbTrailsEnabled {
                         VStack(alignment: .leading, spacing: 4) {
                             HStack {
-                                Text("Max Trail Length")
+                                Text(loc.t("settings.maxTrailLength"))
                                 Spacer()
                                 Text("\(trailMaxLength) points")
                                     .foregroundColor(.gray)
@@ -180,7 +199,7 @@ struct SettingsView: View {
                             ), in: 10...500, step: 10)
                         }
 
-                        Picker("Trail Color", selection: $trailColorName) {
+                        Picker(loc.t("settings.trailColor"), selection: $trailColorName) {
                             Text("Cyan").tag("cyan")
                             Text("Green").tag("green")
                             Text("Orange").tag("orange")
@@ -191,36 +210,36 @@ struct SettingsView: View {
                 }
 
                 // Display Settings
-                Section("DISPLAY") {
+                Section(loc.t("settings.section.display")) {
                     // Unit System Picker
-                    Picker("Unit System", selection: $unitSystemString) {
+                    Picker(loc.t("settings.unitSystem"), selection: $unitSystemString) {
                         Text("Metric (km, m, km/h)").tag("Metric")
                         Text("Imperial (mi, ft, mph)").tag("Imperial")
                     }
                 }
 
                 // Performance
-                Section("PERFORMANCE") {
+                Section(loc.t("settings.section.performance")) {
                     HStack {
-                        Text("Cache Size")
+                        Text(loc.t("settings.cacheSize"))
                         Spacer()
                         Text(cacheSizeText)
                             .foregroundColor(.gray)
                     }
 
-                    Button("Clear Cache") {
+                    Button(loc.t("settings.clearCache")) {
                         clearCache()
                     }
                     .foregroundColor(.red)
                 }
 
                 // Data Management
-                Section("DATA MANAGEMENT") {
+                Section(loc.t("settings.section.dataManagement")) {
                     NavigationLink(destination: DataPackageImportView()) {
-                        Text("Import Data Package")
+                        Text(loc.t("settings.importDataPackage"))
                     }
 
-                    Button("Reset to Defaults") {
+                    Button(loc.t("settings.resetToDefaults")) {
                         userCallsign = "ALPHA-1"
                         userName = "Operator"
                         unitSystemString = "Metric"
@@ -237,18 +256,18 @@ struct SettingsView: View {
                 }
 
                 // Danger Zone
-                Section("DANGER ZONE") {
-                    Button("Clear All Team Data") {
+                Section(loc.t("settings.section.dangerZone")) {
+                    Button(loc.t("settings.clearAllTeamData")) {
                         TeamService.shared.clearAllTeamData()
                     }
                     .foregroundColor(.red)
                 }
             }
-            .navigationTitle("Settings")
+            .navigationTitle(loc.t("settings.title"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("Done") {
+                    Button(loc.t("settings.done")) {
                         dismiss()
                     }
                 }

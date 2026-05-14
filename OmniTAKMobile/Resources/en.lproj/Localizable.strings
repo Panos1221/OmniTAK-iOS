@@ -1,0 +1,97 @@
+/* OmniTAK Mobile — English (base catalogue)
+   v1 scope: onboarding flow + Settings screen.
+   Other screens fall back to these English strings until later
+   localization passes extend coverage. */
+
+/* --- Onboarding navigation --- */
+"onboarding.skip" = "Skip";
+"onboarding.continue" = "Continue";
+"onboarding.getStarted" = "Get Started";
+"onboarding.back" = "Back";
+
+/* --- Onboarding page 1: Welcome --- */
+"onboarding.page1.title" = "Welcome to OmniTAK";
+"onboarding.page1.desc" = "Your powerful iOS client for Team Awareness Kit (TAK) servers. Connect, share, and collaborate in real-time.";
+"onboarding.page1.feature1" = "Real-time position sharing";
+"onboarding.page1.feature2" = "Secure communications";
+"onboarding.page1.feature3" = "Map-based awareness";
+"onboarding.page1.feature4" = "Multi-platform support";
+
+/* --- Onboarding page 2: Secure & Certified --- */
+"onboarding.page2.title" = "Secure & Certified";
+"onboarding.page2.desc" = "OmniTAK supports certificate-based authentication for secure connections to TAK servers.";
+"onboarding.page2.feature1" = "Client certificate support";
+"onboarding.page2.feature2" = "TLS/SSL encryption";
+"onboarding.page2.feature3" = "Keychain integration";
+"onboarding.page2.feature4" = "Automatic enrollment";
+
+/* --- Onboarding page 3: Quick & Easy Setup --- */
+"onboarding.page3.title" = "Quick & Easy Setup";
+"onboarding.page3.desc" = "Get connected in seconds with our smart setup wizard. Multiple connection methods for every scenario.";
+"onboarding.page3.feature1" = "QR code scanning";
+"onboarding.page3.feature2" = "Auto-discovery";
+"onboarding.page3.feature3" = "Common presets";
+"onboarding.page3.feature4" = "Manual configuration";
+
+/* --- Onboarding page 4: Ready to Connect --- */
+"onboarding.page4.title" = "Ready to Connect?";
+"onboarding.page4.desc" = "Let's get you connected to a TAK server. Choose the method that works best for you.";
+"onboarding.page4.feature1" = "Connect in < 30 seconds";
+"onboarding.page4.feature2" = "No technical knowledge needed";
+"onboarding.page4.feature3" = "Full ATAK compatibility";
+"onboarding.page4.feature4" = "Works with any TAK server";
+
+/* --- Quick Start Guide --- */
+"quickstart.title" = "Quick Start Guide";
+"quickstart.subtitle" = "Choose the connection method that works best for your situation";
+"quickstart.done" = "Done";
+"quickstart.needHelp" = "Need Help?";
+"quickstart.help.docs" = "Read the Documentation";
+"quickstart.help.support" = "Contact Support";
+"quickstart.help.videos" = "Watch Tutorial Videos";
+"quickstart.item.qr.title" = "Scan QR Code";
+"quickstart.item.qr.desc" = "Fastest method — scan the enrollment QR from your TAK server admin";
+"quickstart.item.discover.title" = "Auto-Discover";
+"quickstart.item.discover.desc" = "Find TAK servers on your local network automatically";
+"quickstart.item.quick.title" = "Quick Setup";
+"quickstart.item.quick.desc" = "Use presets for common TAK server configurations";
+"quickstart.item.manual.title" = "Manual Setup";
+"quickstart.item.manual.desc" = "Full control — configure all connection parameters yourself";
+"quickstart.difficulty.easiest" = "Easiest";
+"quickstart.difficulty.easy" = "Easy";
+"quickstart.difficulty.advanced" = "Advanced";
+
+/* --- Settings --- */
+"settings.title" = "Settings";
+"settings.done" = "Done";
+"settings.section.userProfile" = "USER PROFILE";
+"settings.callsign" = "Callsign";
+"settings.name" = "Name";
+"settings.section.servers" = "SERVERS";
+"settings.manageServers" = "Manage Servers";
+"settings.section.navigation" = "NAVIGATION";
+"settings.routeNavigation" = "Route Navigation";
+"settings.section.mapOverlays" = "MAP OVERLAYS";
+"settings.mgrsGridOverlay" = "MGRS Grid Overlay";
+"settings.gridDensity" = "Grid Density";
+"settings.showGridLabels" = "Show Grid Labels";
+"settings.coordinateFormat" = "Coordinate Format";
+"settings.selfPositionMarker" = "Self-Position Marker";
+"settings.section.droneDetection" = "DRONE DETECTION";
+"settings.faaRemoteIdScanner" = "FAA Remote ID Scanner";
+"settings.section.language" = "LANGUAGE";
+"settings.appLanguage" = "App Language";
+"settings.section.breadcrumbTrails" = "BREADCRUMB TRAILS";
+"settings.enableTrails" = "Enable Trails";
+"settings.maxTrailLength" = "Max Trail Length";
+"settings.trailColor" = "Trail Color";
+"settings.section.display" = "DISPLAY";
+"settings.unitSystem" = "Unit System";
+"settings.section.performance" = "PERFORMANCE";
+"settings.cacheSize" = "Cache Size";
+"settings.clearCache" = "Clear Cache";
+"settings.section.dataManagement" = "DATA MANAGEMENT";
+"settings.importDataPackage" = "Import Data Package";
+"settings.resetToDefaults" = "Reset to Defaults";
+"settings.section.dangerZone" = "DANGER ZONE";
+"settings.clearAllTeamData" = "Clear All Team Data";

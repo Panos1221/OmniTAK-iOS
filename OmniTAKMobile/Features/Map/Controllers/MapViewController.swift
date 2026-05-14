@@ -730,6 +730,7 @@ struct ATAKMapView: View {
             }
             .sheet(isPresented: $showSettings) {
                 SettingsView()
+                    .environmentObject(LocalizationManager.shared)
             }
             .sheet(isPresented: $showPlugins) {
                 PluginsListView()
