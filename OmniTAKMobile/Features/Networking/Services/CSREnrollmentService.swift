@@ -60,9 +60,64 @@ struct CSREnrollmentConfiguration {
     let clientUid: String = UUID().uuidString
     let clientVersion: String = "OmniTAK-1.0"
 
+    /// Parsed view of [serverHost], which may be a bare hostname or a
+    /// full endpoint when the TAK server sits behind a reverse proxy:
+    ///   "tak.example.com"             → templated with enrollmentPort
+    ///   "tak.example.com:8446"        → explicit port wins
+    ///   "https://tak.example.com"     → scheme default port (443), no :port
+    ///   "https://tak.example.com/tak" → path prefix preserved
+    ///
+    /// Rule: if the host string carries an explicit "://" scheme the
+    /// user is describing a complete endpoint (the proxy case) — honour
+    /// the port they typed, or the scheme default when they typed none,
+    /// and ignore the separate enrollmentPort field. A bare hostname
+    /// keeps the prior behaviour of templating in enrollmentPort.
+    private var endpoint: (scheme: String, host: String, port: Int?, basePath: String) {
+        var raw = serverHost.trimmingCharacters(in: .whitespaces)
+        let hadScheme = raw.contains("://")
+
+        var scheme = useSSL ? "https" : "http"
+        if let schemeRange = raw.range(of: "://") {
+            let parsed = String(raw[..<schemeRange.lowerBound]).lowercased()
+            if !parsed.isEmpty { scheme = parsed }
+            raw = String(raw[schemeRange.upperBound...])
+        }
+
+        var basePath = ""
+        if let slash = raw.firstIndex(of: "/") {
+            basePath = String(raw[slash...])
+            while basePath.hasSuffix("/") { basePath.removeLast() }
+            raw = String(raw[..<slash])
+        }
+
+        var explicitPort: Int?
+        if let colon = raw.lastIndex(of: ":"),
+           let p = Int(raw[raw.index(after: colon)...]) {
+            explicitPort = p
+            raw = String(raw[..<colon])
+        }
+
+        // Port precedence:
+        //  - an explicit port in the host string always wins
+        //  - host carried a scheme but no port → nil (scheme default,
+        //    omitted from the URL — some reverse proxies 404 on :443)
+        //  - bare hostname → fall back to the enrollmentPort field
+        let resolvedPort: Int?
+        if let explicitPort = explicitPort {
+            resolvedPort = explicitPort
+        } else if hadScheme {
+            resolvedPort = nil
+        } else {
+            resolvedPort = enrollmentPort
+        }
+
+        return (scheme, raw, resolvedPort, basePath)
+    }
+
     var baseURL: String {
-        let scheme = useSSL ? "https" : "http"
-        return "\(scheme)://\(serverHost):\(enrollmentPort)"
+        let ep = endpoint
+        let portSegment = ep.port.map { ":\($0)" } ?? ""
+        return "\(ep.scheme)://\(ep.host)\(portSegment)\(ep.basePath)"
     }
 
     var configURL: URL? {

@@ -181,6 +181,10 @@ struct SimpleEnrollView: View {
                     .autocapitalization(.none)
                     .disableAutocorrection(true)
                     .keyboardType(.URL)
+
+                Text("Behind a reverse proxy? Paste the full URL — e.g. https://tak.example.com or https://tak.example.com/tak — and the Enrollment Port below is ignored.")
+                    .font(.system(size: 11))
+                    .foregroundColor(.secondary)
             }
 
             // Username (ATAK-style)
@@ -821,6 +825,10 @@ struct SimpleEnrollViewContent: View {
         VStack(spacing: 16) {
             // Server Host
             FormField(label: "Server", text: $serverHost, placeholder: "public.opentakserver.io")
+
+            Text("Behind a reverse proxy? Paste the full URL — e.g. https://tak.example.com or https://tak.example.com/tak — and the Enrollment Port is ignored.")
+                .font(.system(size: 11))
+                .foregroundColor(.secondary)
 
             // Username
             FormField(label: "Username", text: $username, placeholder: "Enter username")
