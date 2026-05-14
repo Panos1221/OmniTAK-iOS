@@ -1,0 +1,96 @@
+/* OmniTAK Mobile — Polish / Polski
+   Technical standards (TAK, MGRS, UTM, TLS/SSL, QR, FAA Remote ID,
+   MIL-STD, Bluetooth) kept as-is — they are proper nouns. */
+
+/* --- Onboarding navigation --- */
+"onboarding.skip" = "Pomiń";
+"onboarding.continue" = "Dalej";
+"onboarding.getStarted" = "Rozpocznij";
+"onboarding.back" = "Wstecz";
+
+/* --- Onboarding page 1: Welcome --- */
+"onboarding.page1.title" = "Witamy w OmniTAK";
+"onboarding.page1.desc" = "Zaawansowany klient iOS dla serwerów Team Awareness Kit (TAK). Łącz się, udostępniaj i współpracuj w czasie rzeczywistym.";
+"onboarding.page1.feature1" = "Udostępnianie pozycji w czasie rzeczywistym";
+"onboarding.page1.feature2" = "Bezpieczna łączność";
+"onboarding.page1.feature3" = "Świadomość sytuacyjna na mapie";
+"onboarding.page1.feature4" = "Obsługa wielu platform";
+
+/* --- Onboarding page 2: Secure & Certified --- */
+"onboarding.page2.title" = "Bezpieczny i certyfikowany";
+"onboarding.page2.desc" = "OmniTAK obsługuje uwierzytelnianie oparte na certyfikatach dla bezpiecznych połączeń z serwerami TAK.";
+"onboarding.page2.feature1" = "Obsługa certyfikatów klienta";
+"onboarding.page2.feature2" = "Szyfrowanie TLS/SSL";
+"onboarding.page2.feature3" = "Integracja z pęku kluczy";
+"onboarding.page2.feature4" = "Automatyczna rejestracja";
+
+/* --- Onboarding page 3: Quick & Easy Setup --- */
+"onboarding.page3.title" = "Szybka i łatwa konfiguracja";
+"onboarding.page3.desc" = "Połącz się w kilka sekund dzięki inteligentnemu kreatorowi konfiguracji. Wiele metod połączenia dla każdego scenariusza.";
+"onboarding.page3.feature1" = "Skanowanie kodu QR";
+"onboarding.page3.feature2" = "Automatyczne wykrywanie";
+"onboarding.page3.feature3" = "Popularne ustawienia";
+"onboarding.page3.feature4" = "Konfiguracja ręczna";
+
+/* --- Onboarding page 4: Ready to Connect --- */
+"onboarding.page4.title" = "Gotów do połączenia?";
+"onboarding.page4.desc" = "Połączmy Cię z serwerem TAK. Wybierz metodę, która sprawdzi się najlepiej.";
+"onboarding.page4.feature1" = "Połączenie w mniej niż 30 sekund";
+"onboarding.page4.feature2" = "Bez wiedzy technicznej";
+"onboarding.page4.feature3" = "Pełna zgodność z ATAK";
+"onboarding.page4.feature4" = "Działa z dowolnym serwerem TAK";
+
+/* --- Quick Start Guide --- */
+"quickstart.title" = "Szybki start";
+"quickstart.subtitle" = "Wybierz metodę połączenia najlepszą dla Twojej sytuacji";
+"quickstart.done" = "Gotowe";
+"quickstart.needHelp" = "Potrzebujesz pomocy?";
+"quickstart.help.docs" = "Przeczytaj dokumentację";
+"quickstart.help.support" = "Skontaktuj się z pomocą techniczną";
+"quickstart.help.videos" = "Obejrzyj samouczki wideo";
+"quickstart.item.qr.title" = "Skanuj kod QR";
+"quickstart.item.qr.desc" = "Najszybsza metoda — zeskanuj kod QR rejestracji od administratora serwera TAK";
+"quickstart.item.discover.title" = "Automatyczne wykrywanie";
+"quickstart.item.discover.desc" = "Automatycznie znajdź serwery TAK w sieci lokalnej";
+"quickstart.item.quick.title" = "Szybka konfiguracja";
+"quickstart.item.quick.desc" = "Użyj gotowych ustawień dla typowych konfiguracji serwerów TAK";
+"quickstart.item.manual.title" = "Konfiguracja ręczna";
+"quickstart.item.manual.desc" = "Pełna kontrola — skonfiguruj wszystkie parametry połączenia samodzielnie";
+"quickstart.difficulty.easiest" = "Najłatwiejsze";
+"quickstart.difficulty.easy" = "Łatwe";
+"quickstart.difficulty.advanced" = "Zaawansowane";
+
+/* --- Settings --- */
+"settings.title" = "Ustawienia";
+"settings.done" = "Gotowe";
+"settings.section.userProfile" = "PROFIL UŻYTKOWNIKA";
+"settings.callsign" = "Znak wywoławczy";
+"settings.name" = "Imię";
+"settings.section.servers" = "SERWERY";
+"settings.manageServers" = "Zarządzaj serwerami";
+"settings.section.navigation" = "NAWIGACJA";
+"settings.routeNavigation" = "Nawigacja po trasie";
+"settings.section.mapOverlays" = "WARSTWY MAPY";
+"settings.mgrsGridOverlay" = "Siatka MGRS";
+"settings.gridDensity" = "Gęstość siatki";
+"settings.showGridLabels" = "Pokaż etykiety siatki";
+"settings.coordinateFormat" = "Format współrzędnych";
+"settings.selfPositionMarker" = "Znacznik własnej pozycji";
+"settings.section.droneDetection" = "WYKRYWANIE DRONÓW";
+"settings.faaRemoteIdScanner" = "Skaner FAA Remote ID";
+"settings.section.language" = "JĘZYK";
+"settings.appLanguage" = "Język aplikacji";
+"settings.section.breadcrumbTrails" = "ŚLADY TRASY";
+"settings.enableTrails" = "Włącz ślady";
+"settings.maxTrailLength" = "Maks. długość śladu";
+"settings.trailColor" = "Kolor śladu";
+"settings.section.display" = "WYŚWIETLANIE";
+"settings.unitSystem" = "Układ jednostek";
+"settings.section.performance" = "WYDAJNOŚĆ";
+"settings.cacheSize" = "Rozmiar pamięci podręcznej";
+"settings.clearCache" = "Wyczyść pamięć podręczną";
+"settings.section.dataManagement" = "ZARZĄDZANIE DANYMI";
+"settings.importDataPackage" = "Importuj pakiet danych";
+"settings.resetToDefaults" = "Przywróć domyślne";
+"settings.section.dangerZone" = "STREFA NIEBEZPIECZNA";
+"settings.clearAllTeamData" = "Wyczyść wszystkie dane zespołu";

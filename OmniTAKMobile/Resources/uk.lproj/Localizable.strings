@@ -1,0 +1,96 @@
+/* OmniTAK Mobile — Ukrainian / Українська
+   Technical standards (TAK, MGRS, UTM, TLS/SSL, QR, FAA Remote ID,
+   MIL-STD, Bluetooth) kept as-is — they are proper nouns. */
+
+/* --- Onboarding navigation --- */
+"onboarding.skip" = "Пропустити";
+"onboarding.continue" = "Далі";
+"onboarding.getStarted" = "Почати";
+"onboarding.back" = "Назад";
+
+/* --- Onboarding page 1: Welcome --- */
+"onboarding.page1.title" = "Ласкаво просимо до OmniTAK";
+"onboarding.page1.desc" = "Потужний iOS-клієнт для серверів Team Awareness Kit (TAK). Підключайтеся, діліться даними та співпрацюйте в реальному часі.";
+"onboarding.page1.feature1" = "Передавання позиції в реальному часі";
+"onboarding.page1.feature2" = "Захищений зв'язок";
+"onboarding.page1.feature3" = "Ситуаційна обізнаність на карті";
+"onboarding.page1.feature4" = "Підтримка кількох платформ";
+
+/* --- Onboarding page 2: Secure & Certified --- */
+"onboarding.page2.title" = "Безпечно та сертифіковано";
+"onboarding.page2.desc" = "OmniTAK підтримує автентифікацію на основі сертифікатів для безпечного з'єднання з серверами TAK.";
+"onboarding.page2.feature1" = "Підтримка клієнтських сертифікатів";
+"onboarding.page2.feature2" = "Шифрування TLS/SSL";
+"onboarding.page2.feature3" = "Інтеграція з Keychain";
+"onboarding.page2.feature4" = "Автоматична реєстрація";
+
+/* --- Onboarding page 3: Quick & Easy Setup --- */
+"onboarding.page3.title" = "Швидке й просте налаштування";
+"onboarding.page3.desc" = "Підключайтеся за секунди завдяки розумному майстру налаштування. Кілька способів підключення для будь-якої ситуації.";
+"onboarding.page3.feature1" = "Сканування QR-коду";
+"onboarding.page3.feature2" = "Автоматичне виявлення";
+"onboarding.page3.feature3" = "Поширені пресети";
+"onboarding.page3.feature4" = "Ручне налаштування";
+
+/* --- Onboarding page 4: Ready to Connect --- */
+"onboarding.page4.title" = "Готові підключитися?";
+"onboarding.page4.desc" = "Підключімо вас до сервера TAK. Оберіть спосіб, який підходить вам найкраще.";
+"onboarding.page4.feature1" = "Підключення менш ніж за 30 секунд";
+"onboarding.page4.feature2" = "Технічні знання не потрібні";
+"onboarding.page4.feature3" = "Повна сумісність з ATAK";
+"onboarding.page4.feature4" = "Працює з будь-яким сервером TAK";
+
+/* --- Quick Start Guide --- */
+"quickstart.title" = "Короткий посібник";
+"quickstart.subtitle" = "Оберіть спосіб підключення, що найкраще підходить для вашої ситуації";
+"quickstart.done" = "Готово";
+"quickstart.needHelp" = "Потрібна допомога?";
+"quickstart.help.docs" = "Прочитати документацію";
+"quickstart.help.support" = "Звернутися до підтримки";
+"quickstart.help.videos" = "Переглянути відеоуроки";
+"quickstart.item.qr.title" = "Сканувати QR-код";
+"quickstart.item.qr.desc" = "Найшвидший спосіб — відскануйте QR-код реєстрації від адміністратора вашого сервера TAK";
+"quickstart.item.discover.title" = "Автовиявлення";
+"quickstart.item.discover.desc" = "Автоматичний пошук серверів TAK у вашій локальній мережі";
+"quickstart.item.quick.title" = "Швидке налаштування";
+"quickstart.item.quick.desc" = "Використовуйте пресети для типових конфігурацій серверів TAK";
+"quickstart.item.manual.title" = "Ручне налаштування";
+"quickstart.item.manual.desc" = "Повний контроль — налаштуйте всі параметри підключення самостійно";
+"quickstart.difficulty.easiest" = "Найпростіше";
+"quickstart.difficulty.easy" = "Просто";
+"quickstart.difficulty.advanced" = "Для досвідчених";
+
+/* --- Settings --- */
+"settings.title" = "Налаштування";
+"settings.done" = "Готово";
+"settings.section.userProfile" = "ПРОФІЛЬ КОРИСТУВАЧА";
+"settings.callsign" = "Позивний";
+"settings.name" = "Ім'я";
+"settings.section.servers" = "СЕРВЕРИ";
+"settings.manageServers" = "Керування серверами";
+"settings.section.navigation" = "НАВІГАЦІЯ";
+"settings.routeNavigation" = "Навігація маршрутом";
+"settings.section.mapOverlays" = "ШАРИ КАРТИ";
+"settings.mgrsGridOverlay" = "Сітка MGRS";
+"settings.gridDensity" = "Щільність сітки";
+"settings.showGridLabels" = "Показувати підписи сітки";
+"settings.coordinateFormat" = "Формат координат";
+"settings.selfPositionMarker" = "Маркер власної позиції";
+"settings.section.droneDetection" = "ВИЯВЛЕННЯ ДРОНІВ";
+"settings.faaRemoteIdScanner" = "Сканер FAA Remote ID";
+"settings.section.language" = "МОВА";
+"settings.appLanguage" = "Мова застосунку";
+"settings.section.breadcrumbTrails" = "СЛІДИ МАРШРУТУ";
+"settings.enableTrails" = "Увімкнути сліди";
+"settings.maxTrailLength" = "Макс. довжина сліду";
+"settings.trailColor" = "Колір сліду";
+"settings.section.display" = "ВІДОБРАЖЕННЯ";
+"settings.unitSystem" = "Система одиниць";
+"settings.section.performance" = "ПРОДУКТИВНІСТЬ";
+"settings.cacheSize" = "Розмір кешу";
+"settings.clearCache" = "Очистити кеш";
+"settings.section.dataManagement" = "КЕРУВАННЯ ДАНИМИ";
+"settings.importDataPackage" = "Імпортувати пакет даних";
+"settings.resetToDefaults" = "Скинути до типових";
+"settings.section.dangerZone" = "НЕБЕЗПЕЧНА ЗОНА";
+"settings.clearAllTeamData" = "Стерти всі дані команди";
