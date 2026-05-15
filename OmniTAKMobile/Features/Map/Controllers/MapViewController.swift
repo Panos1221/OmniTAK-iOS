@@ -29,6 +29,12 @@ struct ATAKMapView: View {
     @State private var showLassoActions = false
     @State private var lassoActionNotice: String?
     @State private var lassoExportShareItem: URL?
+    // Issue #16 — small floating "Tools" button on the map. Tap pops a
+    // short bottom sheet so the user can pick Lasso / Full Tools…
+    // without leaving the map view. Sized via presentationDetents so
+    // the map stays visible behind the sheet.
+    @State private var showToolsLauncher = false
+    @State private var showFullATAKTools = false
 
     @State private var mapRegion = MKCoordinateRegion(
         center: CLLocationCoordinate2D(latitude: 38.8977, longitude: -77.0365), // Default: DC
@@ -486,6 +492,95 @@ struct ATAKMapView: View {
     // Compact floating pill that surfaces the current selection count
     // and a clear (✕) affordance. Floats next to the radial-menu
     // anchor with NO grey backplate per feedback_radial_menu_no_backdrop
+    // MARK: - Tools launcher (issue #16)
+    // Small floating wrench above the system tab bar. Map stays
+    // visible behind it. Tapping pops a short bottom sheet
+    // (presentationDetents([.height(220), .medium])) that surfaces
+    // Lasso Select up top + a "Full Tools…" entry that opens the
+    // existing 5x4 ATAKToolsView grid. Both orientations supported —
+    // the detent heights work in landscape too because the sheet
+    // measures from the bottom edge.
+    @ViewBuilder
+    private var toolsLauncher: some View {
+        VStack {
+            Spacer()
+            HStack {
+                Spacer()
+                Button {
+                    showToolsLauncher = true
+                } label: {
+                    Image(systemName: "wrench.and.screwdriver.fill")
+                        .font(.system(size: 18, weight: .semibold))
+                        .foregroundColor(.white)
+                        .frame(width: 44, height: 44)
+                        .background(
+                            Circle()
+                                .fill(Color.black.opacity(0.78))
+                                .shadow(color: .black.opacity(0.35), radius: 6, x: 0, y: 3)
+                        )
+                }
+                .accessibilityLabel("Tools")
+                .padding(.trailing, 12)
+                // 8pt above the system tab bar — the safeAreaInset
+                // for the tab bar is already accounted for by VStack
+                // + Spacer, so this offset is the visual breathing
+                // room above the tab bar edge.
+                .padding(.bottom, 8)
+            }
+        }
+        .zIndex(1900) // below the lasso pill (2000), above map chrome
+        .sheet(isPresented: $showToolsLauncher) {
+            // The detent + background-interaction modifiers below are
+            // what give us "map stays visible behind a short popup".
+            // They land in iOS 16 / 16.4 respectively; on iOS 15 the
+            // sheet falls back to the system default (full-height
+            // medium presentation) — still functional, just less
+            // dainty. OmniTAK ships iOS 15 minimum.
+            Group {
+                if #available(iOS 16.4, *) {
+                    ToolsLauncherSheet(
+                        onLasso: handleLassoLauncherTap,
+                        onFullTools: handleFullToolsLauncherTap
+                    )
+                    .presentationDetents([.height(220), .medium])
+                    .presentationDragIndicator(.visible)
+                    .presentationBackgroundInteraction(.enabled(upThrough: .height(220)))
+                } else if #available(iOS 16.0, *) {
+                    ToolsLauncherSheet(
+                        onLasso: handleLassoLauncherTap,
+                        onFullTools: handleFullToolsLauncherTap
+                    )
+                    .presentationDetents([.height(220), .medium])
+                    .presentationDragIndicator(.visible)
+                } else {
+                    ToolsLauncherSheet(
+                        onLasso: handleLassoLauncherTap,
+                        onFullTools: handleFullToolsLauncherTap
+                    )
+                }
+            }
+        }
+        .sheet(isPresented: $showFullATAKTools) {
+            ATAKToolsView(isPresented: $showFullATAKTools, showMeasurement: $showMeasurement)
+        }
+    }
+
+    private func handleLassoLauncherTap() {
+        showToolsLauncher = false
+        drawingManager.startDrawing(mode: .lasso)
+    }
+
+    private func handleFullToolsLauncherTap() {
+        showToolsLauncher = false
+        // Small delay so the launcher sheet finishes its dismiss
+        // animation before the full tools sheet tries to present —
+        // SwiftUI doesn't allow two sheets stacked from the same
+        // anchor in one frame.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+            showFullATAKTools = true
+        }
+    }
+
     // MARK: - Lasso selection actions
     // Issue #16 — drives the confirmationDialog wired off the
     // selection pill. v1 ships Bulk Delete + Clear with real
@@ -787,6 +882,7 @@ struct ATAKMapView: View {
             mapOverlayComponents
             interactiveOverlays
             gpsFollowButton
+            toolsLauncher
 
             // Compact measurement overlay (ATAK-style)
             if showMeasurement {
@@ -1044,6 +1140,13 @@ struct ATAKMapView: View {
                     showDrawingList = false
                     showLayersPanel = false
                 }
+            }
+            // Issue #16 — Tools tab posts this when the user picks
+            // "Lasso Select". Activate lasso mode here so the in-map
+            // gesture recognizer (UILongPressGestureRecognizer keyed on
+            // drawingManager.currentMode == .lasso) starts firing.
+            .onReceive(NotificationCenter.default.publisher(for: .startLassoMode)) { _ in
+                drawingManager.startDrawing(mode: .lasso)
             }
             .onReceive(NotificationCenter.default.publisher(for: .radialMenuOpenDrawingsList)) { _ in
                 withAnimation(.spring()) {
