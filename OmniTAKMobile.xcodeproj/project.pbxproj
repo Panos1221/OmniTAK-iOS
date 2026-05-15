@@ -51,6 +51,7 @@
 		2623ABB8B5C9B206C974B9E9 /* SNGPUULC---.svg in Resources */ = {isa = PBXBuildFile; fileRef = 701980E052FA63176EC5337E /* SNGPUULC---.svg */; };
 		263C73CB7A111BC62A38D6C1 /* CertificateEnrollmentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0C27B3788362A7692A3F6B70 /* CertificateEnrollmentView.swift */; };
 		26E0ABCFEAF8561E21A3AFC5 /* SFGPU------.svg in Resources */ = {isa = PBXBuildFile; fileRef = 0AE09A8DEEF0138AFC876D09 /* SFGPU------.svg */; };
+		273BAFBDAAB79C39F25835BD /* LassoZipWriter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7D5BB3D4B491EB18FF1D1C01 /* LassoZipWriter.swift */; };
 		2748B5AB1E5A1703D8ECA259 /* PointDropperView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A06A59DC9C712878830E5D23 /* PointDropperView.swift */; };
 		277D46D06A7BF886691B6F5C /* SharedUIComponents.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7C96B4A340D4B4628BBDAE89 /* SharedUIComponents.swift */; };
 		27C8F88CAA0E6E88977C276C /* SFGP-------.svg in Resources */ = {isa = PBXBuildFile; fileRef = 0F89B3D56C89FA4871A2956F /* SFGP-------.svg */; };
@@ -84,6 +85,7 @@
 		3B8DA9F0EDA91EFCA89EC904 /* SFAPC------.svg in Resources */ = {isa = PBXBuildFile; fileRef = 52D432E4C3428F0F0A4BF379 /* SFAPC------.svg */; };
 		3BC0BAE8F7A660C4F250DC2C /* SNGPUCI----.svg in Resources */ = {isa = PBXBuildFile; fileRef = F321A46B9ECFAA7A7C739597 /* SNGPUCI----.svg */; };
 		3C4101B3AB28B70F3344FBDD /* SUGPUCI----.svg in Resources */ = {isa = PBXBuildFile; fileRef = E23A94C1C9FE550D90660BD6 /* SUGPUCI----.svg */; };
+		3C81060D2FFBB72033923002 /* LassoExporters.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0E3E4F244163FBE4214BC0C6 /* LassoExporters.swift */; };
 		3CC71CC6036F998F1B657185 /* MeshtasticConnectionView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CD8106AADD977406BA4F0F47 /* MeshtasticConnectionView.swift */; };
 		3D56FC2F1AC8DB3768656EBA /* UnitTrailOverlay.swift in Sources */ = {isa = PBXBuildFile; fileRef = 337B02FC01D3C75F89D078A8 /* UnitTrailOverlay.swift */; };
 		3DD7F472AD7AF7BC9CB6EB29 /* SPOTREPModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = FE87E15631B845393B2BA5AD /* SPOTREPModels.swift */; };
@@ -146,6 +148,7 @@
 		730C9F17A6B541EDF2309CFB /* NavigationVoiceService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8C660158BD1E0563152CB1B6 /* NavigationVoiceService.swift */; };
 		73C474FC499785F0456D017A /* BloodhoundView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3611027C930D5BCF88C9FB3B /* BloodhoundView.swift */; };
 		74322F3B928281C798302CA8 /* MarkerAnnotationView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 372BEE330DDD178296377ADA /* MarkerAnnotationView.swift */; };
+		74906A9B2523F0EC9F6AFD80 /* LassoContactPickerSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0CFC3F270A71C2F7D59AB900 /* LassoContactPickerSheet.swift */; };
 		752CBF5F7AE644C5F9A4A49D /* TrackRecordingButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = D4CBBCEB56FF2843028ECFF3 /* TrackRecordingButton.swift */; };
 		75448E769CF9B75E22F5E0A8 /* CoTEventHandler.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2D61F229B86A7E9D62B8B6DC /* CoTEventHandler.swift */; };
 		763B102741484CBEA23EEC42 /* SNGPEV-----.svg in Resources */ = {isa = PBXBuildFile; fileRef = 7AE4DA48DA1AA36C35A71343 /* SNGPEV-----.svg */; };
@@ -170,6 +173,7 @@
 		7D14F0452B6D98AD5FB1FC0D /* ConversationView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6D15E6FD65F0D6C4467F8C3D /* ConversationView.swift */; };
 		7EDBE9DF6FFCE3C341C5E915 /* DigitalPointerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4C09CF368D064E2DA8CDF9BA /* DigitalPointerView.swift */; };
 		7F4769A3BF90593F6E532177 /* MissionPackageSyncService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 81AB96FEB1A016C2A97FA87E /* MissionPackageSyncService.swift */; };
+		7FB3B16574296B84A7731FF4 /* LassoShareSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 01560943F910CBC6CC9CA56B /* LassoShareSheet.swift */; };
 		80428D117637BA916DE86564 /* SUAPMF-----.svg in Resources */ = {isa = PBXBuildFile; fileRef = 32A0B14AA6AE2A4EA6F01207 /* SUAPMF-----.svg */; };
 		804CCF2345FE867EE8D91EBD /* NavigationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB935C34F50FCED41AA9526D /* NavigationService.swift */; };
 		804EB04B625E53111E9AF10D /* SNAP-------.svg in Resources */ = {isa = PBXBuildFile; fileRef = 6255D6D7C0457143CC3E570B /* SNAP-------.svg */; };
@@ -374,6 +378,7 @@
 		00359DE8F222FE7021D1936A /* SFFPG------.svg */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text; path = "SFFPG------.svg"; sourceTree = "<group>"; };
 		00459F49871153410DCE6A67 /* SHGPUCI----.svg */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text; path = "SHGPUCI----.svg"; sourceTree = "<group>"; };
 		00CFB4EE06C47225356099DC /* RemoteIdScanner.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = RemoteIdScanner.swift; path = OmniTAKMobile/Features/RemoteID/Services/RemoteIdScanner.swift; sourceTree = "<group>"; };
+		01560943F910CBC6CC9CA56B /* LassoShareSheet.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = OmniTAKMobile/Features/Drawing/Views/LassoShareSheet.swift; sourceTree = "<group>"; };
 		01D0268915445A44EEC89107 /* RemoteIdTrack.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = RemoteIdTrack.swift; path = OmniTAKMobile/Features/RemoteID/Models/RemoteIdTrack.swift; sourceTree = "<group>"; };
 		032A62EF89434562EEB3178B /* TrackModels.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = TrackModels.swift; path = OmniTAKMobile/Features/Tracking/Models/TrackModels.swift; sourceTree = "<group>"; };
 		045FA9DC0AB1CBA9035D7E0B /* TurnByTurnNavigationView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = TurnByTurnNavigationView.swift; path = OmniTAKMobile/Features/Navigation/Views/TurnByTurnNavigationView.swift; sourceTree = "<group>"; };
@@ -384,8 +389,10 @@
 		0AE09A8DEEF0138AFC876D09 /* SFGPU------.svg */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text; path = "SFGPU------.svg"; sourceTree = "<group>"; };
 		0C27B3788362A7692A3F6B70 /* CertificateEnrollmentView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = CertificateEnrollmentView.swift; path = OmniTAKMobile/Features/Authentication/Views/CertificateEnrollmentView.swift; sourceTree = "<group>"; };
 		0CAB30EF2A4D5DDC51F0D945 /* SHGPEVF----.svg */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text; path = "SHGPEVF----.svg"; sourceTree = "<group>"; };
+		0CFC3F270A71C2F7D59AB900 /* LassoContactPickerSheet.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = OmniTAKMobile/Features/Drawing/Views/LassoContactPickerSheet.swift; sourceTree = "<group>"; };
 		0DADFB16189D9AD132105CFF /* SNSP-------.svg */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text; path = "SNSP-------.svg"; sourceTree = "<group>"; };
 		0E1F2A3B4C5D6E7F80910A0C /* RootTabView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = RootTabView.swift; path = OmniTAKMobile/Core/App/RootTabView.swift; sourceTree = "<group>"; };
+		0E3E4F244163FBE4214BC0C6 /* LassoExporters.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = OmniTAKMobile/Features/Drawing/Services/LassoExporters.swift; sourceTree = "<group>"; };
 		0F89B3D56C89FA4871A2956F /* SFGP-------.svg */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text; path = "SFGP-------.svg"; sourceTree = "<group>"; };
 		101D7C9B957410F4D6827B09 /* SFGPUST----.svg */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text; path = "SFGPUST----.svg"; sourceTree = "<group>"; };
 		103C33E3B66400D772DDE95F /* SNGP-------.svg */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text; path = "SNGP-------.svg"; sourceTree = "<group>"; };
@@ -545,6 +552,7 @@
 		7C96B4A340D4B4628BBDAE89 /* SharedUIComponents.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = SharedUIComponents.swift; path = OmniTAKMobile/Shared/UI/Components/SharedUIComponents.swift; sourceTree = "<group>"; };
 		7CC8AA92E93DC47AA18BE168 /* LineOfSightService.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = LineOfSightService.swift; path = OmniTAKMobile/Features/Measurement/Services/LineOfSightService.swift; sourceTree = "<group>"; };
 		7D35639DBB6AB10DBC043C4B /* SHGPEV-----.svg */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text; path = "SHGPEV-----.svg"; sourceTree = "<group>"; };
+		7D5BB3D4B491EB18FF1D1C01 /* LassoZipWriter.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = OmniTAKMobile/Features/Drawing/Services/LassoZipWriter.swift; sourceTree = "<group>"; };
 		7D8E2F02A147ACFC3768B6E3 /* SHGPEVC----.svg */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text; path = "SHGPEVC----.svg"; sourceTree = "<group>"; };
 		7DA060C3ECA91A61479E7373 /* SFFPGS-----.svg */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text; path = "SFFPGS-----.svg"; sourceTree = "<group>"; };
 		7DAD962E4B0A0A4D228D2467 /* OmniTAKMobileApp.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = OmniTAKMobileApp.swift; path = OmniTAKMobile/Core/App/OmniTAKMobileApp.swift; sourceTree = "<group>"; };
@@ -1107,6 +1115,8 @@
 			isa = PBXGroup;
 			children = (
 				5E14DC8F84F9C7A9721FDD03 /* LassoSelectionService.swift */,
+				0E3E4F244163FBE4214BC0C6 /* LassoExporters.swift */,
+				7D5BB3D4B491EB18FF1D1C01 /* LassoZipWriter.swift */,
 			);
 			name = Services;
 			sourceTree = "<group>";
@@ -1552,6 +1562,8 @@
 			children = (
 				CF88DFDFB03BF594EB88178A /* LassoSelectionPill.swift */,
 				98FDD932AB0896DCFA82D9BD /* ToolsLauncherSheet.swift */,
+				0CFC3F270A71C2F7D59AB900 /* LassoContactPickerSheet.swift */,
+				01560943F910CBC6CC9CA56B /* LassoShareSheet.swift */,
 			);
 			name = Views;
 			sourceTree = "<group>";
@@ -2673,6 +2685,10 @@
 				FED47954389F0EA4DB422DD7 /* LassoSelectionPill.swift in Sources */,
 				C5B0BD228B239E4E83735254 /* ToolsLauncherSheet.swift in Sources */,
 				48D6F14168132D11BD618DF3 /* DataPackageBootstrap.swift in Sources */,
+				3C81060D2FFBB72033923002 /* LassoExporters.swift in Sources */,
+				273BAFBDAAB79C39F25835BD /* LassoZipWriter.swift in Sources */,
+				74906A9B2523F0EC9F6AFD80 /* LassoContactPickerSheet.swift in Sources */,
+				7FB3B16574296B84A7731FF4 /* LassoShareSheet.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -2891,7 +2907,7 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = YES;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 26051502;
+				CURRENT_PROJECT_VERSION = 26051503;
 				DEVELOPMENT_TEAM = 4HSANV485G;
 				ENABLE_PREVIEWS = YES;
 				FRAMEWORK_SEARCH_PATHS = (
@@ -2918,7 +2934,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 2.22.0;
+				MARKETING_VERSION = 2.22.1;
 				PRODUCT_BUNDLE_IDENTIFIER = com.engindearing.omnitak.mobile;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
@@ -2939,7 +2955,7 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = YES;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 26051502;
+				CURRENT_PROJECT_VERSION = 26051503;
 				DEVELOPMENT_TEAM = 4HSANV485G;
 				ENABLE_PREVIEWS = YES;
 				FRAMEWORK_SEARCH_PATHS = (
@@ -2966,7 +2982,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 2.22.0;
+				MARKETING_VERSION = 2.22.1;
 				PRODUCT_BUNDLE_IDENTIFIER = com.engindearing.omnitak.mobile;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";

@@ -29,6 +29,7 @@ struct ATAKMapView: View {
     @State private var showLassoActions = false
     @State private var lassoActionNotice: String?
     @State private var lassoExportShareItem: URL?
+    @State private var showLassoContactPicker = false
     // Issue #16 — Tools tab in the bottom bar opens a short popup
     // (handled in RootTabView). MapViewController only needs to
     // observe the notifications it posts: .startLassoMode +
@@ -510,51 +511,142 @@ struct ATAKMapView: View {
 
         switch action {
         case .bulkDelete:
-            bulkDeleteLassoSelection(sel)
+            let (deleted, broadcast) = bulkDeleteLassoSelection(sel)
             lassoService.clear()
-            lassoActionNotice = "Deleted \(sel.totalCount) item(s)."
+            if broadcast == deleted {
+                lassoActionNotice = "Deleted \(deleted) item(s) + broadcast tombstones."
+            } else {
+                lassoActionNotice = "Deleted \(deleted) item(s) locally — \(broadcast) tombstones broadcast (others were local-only)."
+            }
 
         case .exportKML:
-            // v1: notice-only. The KMLExporter pattern from
-            // TrackRecordingService.swift is the reuse target; will
-            // land once we settle the per-feature element shape (lines
-            // / polygons / circles / markers with affiliation colors).
-            print("📤 Lasso export-KML requested for \(sel.totalCount) items")
-            lassoActionNotice = "Export as KML — coming in the next build. \(sel.totalCount) item(s) staged."
+            let markers = resolveLassoMarkers(sel)
+            guard !markers.isEmpty else {
+                lassoActionNotice = "Selection empty after resolving — nothing to export."
+                return
+            }
+            do {
+                let url = try LassoKMLBuilder.write(
+                    name: "Lasso selection (\(markers.count))",
+                    markers: markers
+                )
+                lassoExportShareItem = url
+            } catch {
+                lassoActionNotice = "Export failed: \(error.localizedDescription)"
+            }
 
         case .addToDataPackage:
-            print("📦 Lasso add-to-data-package requested for \(sel.totalCount) items")
-            lassoActionNotice = "Add to Data Package — wiring to Features/DataPackages next. \(sel.totalCount) item(s) staged."
+            let markers = resolveLassoMarkers(sel)
+            guard !markers.isEmpty else {
+                lassoActionNotice = "Selection empty after resolving — nothing to package."
+                return
+            }
+            do {
+                let url = try LassoMissionPackageBuilder.build(
+                    name: "Lasso selection (\(markers.count))",
+                    markers: markers
+                )
+                lassoExportShareItem = url
+            } catch {
+                lassoActionNotice = "Package build failed: \(error.localizedDescription)"
+            }
 
         case .sendToContacts:
-            print("📡 Lasso send-to-contacts requested for \(sel.totalCount) items")
-            lassoActionNotice = "Send to Contacts — picker UX in next build. \(sel.totalCount) item(s) staged."
+            // Hand off to the picker — the actual broadcast happens
+            // when the user confirms the recipient UIDs (see
+            // lassoContactPickerSheet view).
+            showLassoContactPicker = true
         }
     }
 
-    /// Walk every selected ID and call the right delete method on the
-    /// right store. The selection set is identity-only by design (see
-    /// SelectionContext), so this is the single place that resolves
-    /// IDs back to live objects.
-    private func bulkDeleteLassoSelection(_ sel: SelectionContext) {
-        // Marker IDs span three sources (LassoMarker has three inits:
-        // cot, point, drawing-store marker). We try each store in
-        // turn — whichever owns the id deletes it; the rest no-op.
-        for markerID in sel.markerIDs {
-            // PointDropperService keys by UUID
-            if let uuid = UUID(uuidString: markerID) {
+    /// Resolve the selection back to LassoExportMarker DTOs across the
+    /// three iOS source types (live CoT events, dropped PointMarkers,
+    /// drawing-store MarkerDrawings).
+    private func resolveLassoMarkers(_ sel: SelectionContext) -> [LassoExportMarker] {
+        var out: [LassoExportMarker] = []
+
+        // 1) Live CoT events (server-pushed)
+        for e in takService.cotEvents where sel.markerIDs.contains(e.uid) {
+            out.append(LassoExportMarker(
+                uid: e.uid,
+                type: e.type,
+                callsign: e.detail.callsign,
+                coordinate: CLLocationCoordinate2D(latitude: e.point.lat, longitude: e.point.lon),
+                remarks: ""
+            ))
+        }
+        // 2) Dropped points — PointMarker uses `name` for callsign-like
+        //    label and an optional `remarks` field.
+        for p in pointDropperService.markers
+            where sel.markerIDs.contains(p.id.uuidString) || sel.markerIDs.contains(p.uid)
+        {
+            out.append(LassoExportMarker(
+                uid: p.uid,
+                type: p.cotType,
+                callsign: p.name,
+                coordinate: p.coordinate,
+                remarks: p.remarks ?? ""
+            ))
+        }
+        // 3) Drawing-store markers — MarkerDrawing's display label
+        //    lives on `name`.
+        for m in drawingStore.markers
+            where sel.markerIDs.contains(m.id.uuidString)
+        {
+            out.append(LassoExportMarker(
+                uid: m.id.uuidString,
+                type: "a-u-G",
+                callsign: m.name,
+                coordinate: m.coordinate,
+                remarks: ""
+            ))
+        }
+        return out
+    }
+
+    /// Walk every selected ID, delete locally + broadcast a CoT
+    /// tombstone (`t-x-d-d`) for marker UIDs that came from the server
+    /// so other EUDs propagate the removal. Returns (deletedCount,
+    /// broadcastCount) so the caller can pick the right toast copy.
+    @discardableResult
+    private func bulkDeleteLassoSelection(_ sel: SelectionContext) -> (deleted: Int, broadcast: Int) {
+        var deleted = 0
+        var broadcast = 0
+        let senderUid = "OMNI-iOS-\(UIDevice.current.identifierForVendor?.uuidString.prefix(8) ?? "unknown")"
+
+        // Self-marker guard — never tombstone our own CoT or we tell
+        // every peer to forget us.
+        let selfUids = Set(takService.cotEvents
+            .filter { $0.uid.contains(senderUid) }
+            .map { $0.uid })
+
+        for markerID in sel.markerIDs where !selfUids.contains(markerID) {
+            // PointDropperService keys by UUID (string form in markerID).
+            if let uuid = UUID(uuidString: markerID),
+               pointDropperService.markers.contains(where: { $0.id == uuid })
+            {
                 pointDropperService.deleteMarker(id: uuid)
+                deleted += 1
             }
             // Drawing-store markers
             if let uuid = UUID(uuidString: markerID),
-               let m = drawingStore.markers.first(where: { $0.id == uuid }) {
+               let m = drawingStore.markers.first(where: { $0.id == uuid })
+            {
                 drawingStore.deleteMarker(m)
+                deleted += 1
             }
-            // CoT (server-side) markers — best-effort soft remove from
-            // the local list; broadcasting a delete-CoT is the followup
-            // when we wire the CoT delete API (currently per-marker
-            // delete uses radial-menu DeleteMarker which routes through
-            // TAKService; bulk path TODO).
+            // Live CoT (server-pushed) — broadcast a tombstone so the
+            // delete propagates to other clients.
+            if takService.cotEvents.contains(where: { $0.uid == markerID }) {
+                let xml = LassoCotBuilders.buildDeleteEvent(
+                    targetUid: markerID,
+                    senderUid: senderUid
+                )
+                if takService.sendCoT(xml: xml) {
+                    broadcast += 1
+                }
+                deleted += 1
+            }
         }
         for drawingID in sel.drawingIDs {
             if let line = drawingStore.lines.first(where: { $0.id == drawingID }) {
@@ -564,7 +656,32 @@ struct ATAKMapView: View {
             } else if let circle = drawingStore.circles.first(where: { $0.id == drawingID }) {
                 drawingStore.deleteCircle(circle)
             }
+            deleted += 1
         }
+        return (deleted, broadcast)
+    }
+
+    /// Broadcast the lasso selection to specific contact UIDs by
+    /// rebuilding each marker's CoT with `<dest>` elements for the
+    /// chosen recipients. Wired from the contact picker's confirm.
+    private func sendLassoSelectionToContacts(_ destUids: Set<String>) {
+        let sel = lassoService.current
+        let markers = resolveLassoMarkers(sel)
+        guard !markers.isEmpty, !destUids.isEmpty else { return }
+        let dests = Array(destUids)
+        var sent = 0
+        for m in markers {
+            let xml = LassoCotBuilders.rebuildEvent(
+                uid: m.uid,
+                type: m.type,
+                callsign: m.callsign,
+                coordinate: m.coordinate,
+                remarks: m.remarks,
+                destUids: dests
+            )
+            if takService.sendCoT(xml: xml) { sent += 1 }
+        }
+        lassoActionNotice = "Sent \(sent)/\(markers.count) marker(s) to \(destUids.count) recipient(s)."
     }
 
     // — the orange tint is the only chrome.
@@ -624,9 +741,40 @@ struct ATAKMapView: View {
             } message: { msg in
                 Text(msg)
             }
+            // KML / Mission Package share sheet — driven by the
+            // exporters' returned URL. UIActivityViewController wrapped
+            // for SwiftUI in LassoShareSheet below.
+            .sheet(item: Binding(
+                get: { lassoExportShareItem.map { LassoShareItem(url: $0) } },
+                set: { _ in lassoExportShareItem = nil }
+            )) { item in
+                LassoShareSheet(activityItems: [item.url])
+            }
+            // Send-to-Contacts picker. Confirm hands the chosen
+            // recipient UIDs back; sendLassoSelectionToContacts walks
+            // the selection and re-emits each CoT with <dest> elements.
+            .sheet(isPresented: $showLassoContactPicker) {
+                LassoContactPickerSheet(
+                    candidates: takService.cotEvents.map { e in
+                        CoTEventLike(uid: e.uid, type: e.type, callsign: e.detail.callsign)
+                    },
+                    excludeUIDs: lassoService.current.markerIDs,
+                    onCancel: {},
+                    onConfirm: { uids in
+                        sendLassoSelectionToContacts(uids)
+                    }
+                )
+            }
         }
     }
     // == Issue #16: lasso selection pill END ==
+
+    // Identifiable wrapper so .sheet(item:) accepts the URL — SwiftUI
+    // needs an Identifiable for that overload.
+    private struct LassoShareItem: Identifiable {
+        let url: URL
+        var id: URL { url }
+    }
 
     @ViewBuilder
     private var loadingScreen: some View {
