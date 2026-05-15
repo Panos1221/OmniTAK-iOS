@@ -202,6 +202,12 @@ struct ATAKToolsView: View {
             // Use the shared measurement overlay from MapViewController
             showMeasurement = true
             isPresented = false  // Dismiss tools menu
+        case "lasso":
+            // Issue #16 — activate freehand multi-select. Same
+            // notification pattern as the drawing tool entry so
+            // MapViewController owns the actual mode change.
+            NotificationCenter.default.post(name: .startLassoMode, object: nil)
+            isPresented = false  // Dismiss tools menu so the user can draw
 
         // Tactical
         case "alert":
@@ -375,6 +381,7 @@ struct ATAKTool: Identifiable {
         ATAKTool(id: "offline", displayName: "Offline Maps", iconName: "arrow.down.doc.fill", description: "Download maps for offline use"),
         ATAKTool(id: "drawing", displayName: "Drawing", iconName: "pencil.tip.crop.circle", description: "Draw on map"),
         ATAKTool(id: "measure", displayName: "Measure", iconName: "ruler", description: "Distance and area measurement"),
+        ATAKTool(id: "lasso", displayName: "Select", iconName: "lasso", description: "Multi-select features in a freehand region (long-press + drag)"),
 
         // Row 3 - Tactical
         ATAKTool(id: "alert", displayName: "Emergency", iconName: "sos", description: "Emergency SOS beacon"),

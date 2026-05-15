@@ -715,6 +715,9 @@ extension Notification.Name {
     static let radialMenuDrawLine = Notification.Name("radialMenuDrawLine")
     static let radialMenuDrawCircle = Notification.Name("radialMenuDrawCircle")
     static let radialMenuDrawPolygon = Notification.Name("radialMenuDrawPolygon")
+    /// Issue #16 — posted by the Tools tab (and the ATAKToolsView lasso
+    /// entry) to ask the map to enter freehand multi-select mode.
+    static let startLassoMode = Notification.Name("startLassoMode")
     static let radialMenuEditDrawing = Notification.Name("radialMenuEditDrawing")
     // App mode & layers
     static let radialMenuShowAppModePicker = Notification.Name("radialMenuShowAppModePicker")
