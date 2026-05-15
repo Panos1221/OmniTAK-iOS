@@ -42,6 +42,13 @@ struct OmniTAKMobileApp: App {
                     .onChange(of: remoteIdScanEnabled) { newValue in
                         RemoteIdAppBridge.shared.setEnabled(newValue)
                     }
+                    #if DEBUG
+                    .task {
+                        // Auto-import any TAK data package staged in
+                        // Documents/import/ — simulator / CI interop only.
+                        await DataPackageBootstrap.runIfNeeded()
+                    }
+                    #endif
 
                 // Enrollment overlay
                 if deepLinkHandler.isProcessing {

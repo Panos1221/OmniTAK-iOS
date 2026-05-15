@@ -21,6 +21,11 @@ struct QuickActionToolbar: View {
     let userLocation: CLLocation?
     let onDropPoint: (CLLocationCoordinate2D) -> Void
     let onToggleMeasure: () -> Void
+    // Issue #16 — Lasso (multi-select) entry point lives on the
+    // quick-action toolbar so it sits alongside the other map-time
+    // operations rather than buried in the drawing tools cluster.
+    let lassoModeActive: Bool
+    let onToggleLasso: () -> Void
 
     @State private var measureModeActive = false
 
@@ -56,6 +61,17 @@ struct QuickActionToolbar: View {
                 withAnimation(.easeInOut(duration: 0.2)) {
                     isCursorModeActive.toggle()
                 }
+            }
+
+            // Lasso multi-select (issue #16). Long-press + drag on the
+            // map once active to select features inside a freehand
+            // region; tap again to exit without selecting.
+            QuickActionButton(
+                icon: "lasso",
+                label: "Select",
+                isActive: lassoModeActive
+            ) {
+                onToggleLasso()
             }
         }
         .padding(.horizontal, 8)
@@ -318,7 +334,9 @@ struct QuickActionToolbar_Previews: PreviewProvider {
                     isCursorModeActive: .constant(false),
                     userLocation: nil,
                     onDropPoint: { _ in },
-                    onToggleMeasure: {}
+                    onToggleMeasure: {},
+                    lassoModeActive: false,
+                    onToggleLasso: {}
                 )
                 .padding()
             }

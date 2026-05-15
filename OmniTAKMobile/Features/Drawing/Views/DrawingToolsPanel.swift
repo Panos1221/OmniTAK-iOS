@@ -103,6 +103,10 @@ struct DrawingToolsPanel: View {
                 ) {
                     drawingManager.startDrawing(mode: .polygon)
                 }
+
+                // Lasso (multi-select) moved to the quick-action
+                // toolbar — it's a map-time operation, not a drawing
+                // tool. See QuickActionToolbar "Select" button.
             }
             .padding(.horizontal, 12)
             .padding(.bottom, 12)
