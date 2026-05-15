@@ -96,7 +96,7 @@ struct SettingsView: View {
                                 .frame(width: 24)
                             Text(loc.t("settings.routeNavigation"))
                             Spacer()
-                            Text("ATAK-Style")
+                            Text(loc.t("settings.atakStyle"))
                                 .font(.system(size: 12))
                                 .foregroundColor(.gray)
                         }
@@ -121,17 +121,19 @@ struct SettingsView: View {
 
                     // Coordinate Display Format
                     Picker(loc.t("settings.coordinateFormat"), selection: $coordinateFormatString) {
-                        Text("Decimal Degrees (DD)").tag("DD")
-                        Text("Degrees Minutes (DM)").tag("DM")
-                        Text("Degrees Minutes Seconds (DMS)").tag("DMS")
+                        Text(loc.t("settings.coord.dd")).tag("DD")
+                        Text(loc.t("settings.coord.dm")).tag("DM")
+                        Text(loc.t("settings.coord.dms")).tag("DMS")
+                        // MGRS / UTM are bare acronyms — no descriptive
+                        // text to translate, left as-is intentionally.
                         Text("MGRS").tag("MGRS")
                         Text("UTM").tag("UTM")
-                        Text("British National Grid (BNG)").tag("BNG")
+                        Text(loc.t("settings.coord.bng")).tag("BNG")
                     }
 
                     // Help text for coordinate formats
                     if coordinateFormatString == "BNG" {
-                        Text("BNG is optimized for UK/Ireland (49°N-61°N, 9°W-2°E). Uses OSGB36 datum with grid squares like SU, TQ, NT.")
+                        Text(loc.t("settings.coord.bngHelp"))
                             .font(.caption2)
                             .foregroundColor(.secondary)
                             .padding(.top, 4)
@@ -143,21 +145,21 @@ struct SettingsView: View {
                     // markers. Picking "Bullseye" reverts to the legacy
                     // tactical green disc.
                     Picker(loc.t("settings.selfPositionMarker"), selection: $selfMarkerStyle) {
-                        Text("MIL-STD Symbol").tag("milstd")
-                        Text("Bullseye (Legacy)").tag("bullseye")
+                        Text(loc.t("settings.marker.milstd")).tag("milstd")
+                        Text(loc.t("settings.marker.bullseye")).tag("bullseye")
                     }
                 }
 
                 Section(loc.t("settings.section.droneDetection")) {
                     Toggle(loc.t("settings.faaRemoteIdScanner"), isOn: $remoteIdScanEnabled)
 
-                    Text("Listen for nearby drones (DJI Mavic, Skydio, Autel) broadcasting FAA Remote ID over Bluetooth. Detected drones appear on the map as unknown-air UAS contacts. Catches the Bluetooth-broadcast subset of Remote ID; WiFi-beacon broadcasts require a gy6 sensor. BLE scanning has a battery cost.")
+                    Text(loc.t("settings.droneDetection.desc"))
                         .font(.caption2)
                         .foregroundColor(.secondary)
                         .padding(.top, 4)
 
                     if remoteIdScanEnabled {
-                        Text("iOS will ask for Bluetooth permission the first time the scanner runs. If toggling has no visible effect, open the system Settings app → OmniTAK → Bluetooth and grant access.")
+                        Text(loc.t("settings.droneDetection.permHint"))
                             .font(.caption2)
                             .foregroundColor(.secondary)
                     }
@@ -190,7 +192,7 @@ struct SettingsView: View {
                             HStack {
                                 Text(loc.t("settings.maxTrailLength"))
                                 Spacer()
-                                Text("\(trailMaxLength) points")
+                                Text(loc.t("settings.trailPoints", trailMaxLength))
                                     .foregroundColor(.gray)
                             }
                             Slider(value: Binding(
@@ -200,11 +202,11 @@ struct SettingsView: View {
                         }
 
                         Picker(loc.t("settings.trailColor"), selection: $trailColorName) {
-                            Text("Cyan").tag("cyan")
-                            Text("Green").tag("green")
-                            Text("Orange").tag("orange")
-                            Text("Red").tag("red")
-                            Text("Blue").tag("blue")
+                            Text(loc.t("settings.color.cyan")).tag("cyan")
+                            Text(loc.t("settings.color.green")).tag("green")
+                            Text(loc.t("settings.color.orange")).tag("orange")
+                            Text(loc.t("settings.color.red")).tag("red")
+                            Text(loc.t("settings.color.blue")).tag("blue")
                         }
                     }
                 }
@@ -213,8 +215,8 @@ struct SettingsView: View {
                 Section(loc.t("settings.section.display")) {
                     // Unit System Picker
                     Picker(loc.t("settings.unitSystem"), selection: $unitSystemString) {
-                        Text("Metric (km, m, km/h)").tag("Metric")
-                        Text("Imperial (mi, ft, mph)").tag("Imperial")
+                        Text(loc.t("settings.unit.metric")).tag("Metric")
+                        Text(loc.t("settings.unit.imperial")).tag("Imperial")
                     }
                 }
 
@@ -275,8 +277,8 @@ struct SettingsView: View {
             .sheet(isPresented: $showServersSheet) {
                 ServersView()
             }
-            .alert("Cache Cleared", isPresented: $showCacheCleared) {
-                Button("OK", role: .cancel) {}
+            .alert(loc.t("settings.cacheCleared.title"), isPresented: $showCacheCleared) {
+                Button(loc.t("settings.ok"), role: .cancel) {}
             }
             .onAppear { refreshCacheSize() }
         }

@@ -95,3 +95,29 @@
 "settings.resetToDefaults" = "Reset to Defaults";
 "settings.section.dangerZone" = "DANGER ZONE";
 "settings.clearAllTeamData" = "Clear All Team Data";
+
+/* --- Settings: picker option values + alerts (v1.1 — full text coverage) --- */
+"settings.atakStyle" = "ATAK-Style";
+"settings.coord.dd" = "Decimal Degrees (DD)";
+"settings.coord.dm" = "Degrees Minutes (DM)";
+"settings.coord.dms" = "Degrees Minutes Seconds (DMS)";
+"settings.coord.bng" = "British National Grid (BNG)";
+"settings.coord.bngHelp" = "BNG is optimized for UK/Ireland (49°N-61°N, 9°W-2°E). Uses OSGB36 datum with grid squares like SU, TQ, NT.";
+"settings.marker.milstd" = "MIL-STD Symbol";
+"settings.marker.bullseye" = "Bullseye (Legacy)";
+"settings.color.cyan" = "Cyan";
+"settings.color.green" = "Green";
+"settings.color.orange" = "Orange";
+"settings.color.red" = "Red";
+"settings.color.blue" = "Blue";
+"settings.unit.metric" = "Metric (km, m, km/h)";
+"settings.unit.imperial" = "Imperial (mi, ft, mph)";
+"settings.trailPoints" = "%d points";
+"settings.cacheCleared.title" = "Cache Cleared";
+"settings.ok" = "OK";
+"settings.droneDetection.desc" = "Listen for nearby drones (DJI Mavic, Skydio, Autel) broadcasting FAA Remote ID over Bluetooth. Detected drones appear on the map as unknown-air UAS contacts. Catches the Bluetooth-broadcast subset of Remote ID; WiFi-beacon broadcasts require a gy6 sensor. BLE scanning has a battery cost.";
+"settings.droneDetection.permHint" = "iOS will ask for Bluetooth permission the first time the scanner runs. If toggling has no visible effect, open the system Settings app → OmniTAK → Bluetooth and grant access.";
+"quickstart.time.qr" = "< 30 sec";
+"quickstart.time.discover" = "< 1 min";
+"quickstart.time.quick" = "< 2 min";
+"quickstart.time.manual" = "~3 min";

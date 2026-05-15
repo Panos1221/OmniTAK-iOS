@@ -293,7 +293,7 @@ struct QuickStartGuide: View {
             titleKey: "quickstart.item.qr.title",
             descKey: "quickstart.item.qr.desc",
             difficultyKey: "quickstart.difficulty.easiest",
-            time: "< 30 sec",
+            timeKey: "quickstart.time.qr",
             color: Color(hex: "#00FF00")
         ),
         QuickStartItem(
@@ -301,7 +301,7 @@ struct QuickStartGuide: View {
             titleKey: "quickstart.item.discover.title",
             descKey: "quickstart.item.discover.desc",
             difficultyKey: "quickstart.difficulty.easy",
-            time: "< 1 min",
+            timeKey: "quickstart.time.discover",
             color: Color(hex: "#00BFFF")
         ),
         QuickStartItem(
@@ -309,7 +309,7 @@ struct QuickStartGuide: View {
             titleKey: "quickstart.item.quick.title",
             descKey: "quickstart.item.quick.desc",
             difficultyKey: "quickstart.difficulty.easy",
-            time: "< 2 min",
+            timeKey: "quickstart.time.quick",
             color: Color(hex: "#FF6B35")
         ),
         QuickStartItem(
@@ -317,7 +317,7 @@ struct QuickStartGuide: View {
             titleKey: "quickstart.item.manual.title",
             descKey: "quickstart.item.manual.desc",
             difficultyKey: "quickstart.difficulty.advanced",
-            time: "~3 min",
+            timeKey: "quickstart.time.manual",
             color: Color(hex: "#9B59B6")
         )
     ]
@@ -400,12 +400,11 @@ struct QuickStartGuide: View {
 struct QuickStartItem {
     let icon: String
     /// Localization keys — resolved through LocalizationManager in
-    /// QuickStartItemView. `time` stays a literal (numeric-ish, no
-    /// catalogue key in the v1 scope).
+    /// QuickStartItemView.
     let titleKey: String
     let descKey: String
     let difficultyKey: String
-    let time: String
+    let timeKey: String
     let color: Color
 }
 
@@ -433,7 +432,7 @@ struct QuickStartItemView: View {
                             .font(.system(size: 12))
                             .foregroundColor(item.color)
 
-                        Label(item.time, systemImage: "clock.fill")
+                        Label(loc.t(item.timeKey), systemImage: "clock.fill")
                             .font(.system(size: 12))
                             .foregroundColor(Color(hex: "#CCCCCC"))
                     }

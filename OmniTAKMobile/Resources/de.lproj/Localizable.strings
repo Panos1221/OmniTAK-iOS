@@ -94,3 +94,29 @@
 "settings.resetToDefaults" = "Auf Standard zurücksetzen";
 "settings.section.dangerZone" = "GEFAHRENZONE";
 "settings.clearAllTeamData" = "Alle Teamdaten löschen";
+
+/* --- Settings: picker option values + alerts (v1.1 — full text coverage) --- */
+"settings.atakStyle" = "ATAK-Stil";
+"settings.coord.dd" = "Dezimalgrad (DD)";
+"settings.coord.dm" = "Grad und Minuten (DM)";
+"settings.coord.dms" = "Grad, Minuten, Sekunden (DMS)";
+"settings.coord.bng" = "British National Grid (BNG)";
+"settings.coord.bngHelp" = "BNG ist für Großbritannien/Irland optimiert (49°-61° N, 9° W - 2° O). Verwendet das OSGB36-Datum mit Gitterquadraten wie SU, TQ, NT.";
+"settings.marker.milstd" = "MIL-STD-Symbol";
+"settings.marker.bullseye" = "Zielscheibe (klassisch)";
+"settings.color.cyan" = "Cyan";
+"settings.color.green" = "Grün";
+"settings.color.orange" = "Orange";
+"settings.color.red" = "Rot";
+"settings.color.blue" = "Blau";
+"settings.unit.metric" = "Metrisch (km, m, km/h)";
+"settings.unit.imperial" = "Imperial (mi, ft, mph)";
+"settings.trailPoints" = "%d Punkte";
+"settings.cacheCleared.title" = "Cache geleert";
+"settings.ok" = "OK";
+"settings.droneDetection.desc" = "Auf nahe Drohnen (DJI Mavic, Skydio, Autel) hören, die FAA Remote ID über Bluetooth senden. Erkannte Drohnen erscheinen auf der Karte als unbekannte Luftkontakte. Erfasst den Bluetooth-Anteil von Remote ID; WiFi-Beacon-Übertragungen benötigen einen gy6-Sensor. BLE-Scannen verbraucht Akku.";
+"settings.droneDetection.permHint" = "iOS fragt beim ersten Start des Scanners nach der Bluetooth-Berechtigung. Wenn das Umschalten keine sichtbare Wirkung hat, öffne die System-Einstellungen → OmniTAK → Bluetooth und erteile den Zugriff.";
+"quickstart.time.qr" = "< 30 Sek.";
+"quickstart.time.discover" = "< 1 Min.";
+"quickstart.time.quick" = "< 2 Min.";
+"quickstart.time.manual" = "~3 Min.";

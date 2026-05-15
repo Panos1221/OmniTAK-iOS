@@ -94,3 +94,29 @@
 "settings.resetToDefaults" = "Скинути до типових";
 "settings.section.dangerZone" = "НЕБЕЗПЕЧНА ЗОНА";
 "settings.clearAllTeamData" = "Стерти всі дані команди";
+
+/* --- Settings: picker option values + alerts (v1.1 — full text coverage) --- */
+"settings.atakStyle" = "Стиль ATAK";
+"settings.coord.dd" = "Десяткові градуси (DD)";
+"settings.coord.dm" = "Градуси й хвилини (DM)";
+"settings.coord.dms" = "Градуси, хвилини, секунди (DMS)";
+"settings.coord.bng" = "Британська національна сітка (BNG)";
+"settings.coord.bngHelp" = "BNG оптимізовано для Великої Британії та Ірландії (49°-61° пн. ш., 9° зх. д. - 2° сх. д.). Використовує датум OSGB36 із квадратами сітки на кшталт SU, TQ, NT.";
+"settings.marker.milstd" = "Символ MIL-STD";
+"settings.marker.bullseye" = "Мішень (застарілий)";
+"settings.color.cyan" = "Блакитний";
+"settings.color.green" = "Зелений";
+"settings.color.orange" = "Помаранчевий";
+"settings.color.red" = "Червоний";
+"settings.color.blue" = "Синій";
+"settings.unit.metric" = "Метрична (км, м, км/год)";
+"settings.unit.imperial" = "Імперська (милі, фути, миль/год)";
+"settings.trailPoints" = "%d точок";
+"settings.cacheCleared.title" = "Кеш очищено";
+"settings.ok" = "Гаразд";
+"settings.droneDetection.desc" = "Прослуховування дронів поблизу (DJI Mavic, Skydio, Autel), що передають FAA Remote ID через Bluetooth. Виявлені дрони з'являються на карті як невідомі повітряні цілі. Охоплює Bluetooth-сегмент Remote ID; для WiFi-передач потрібен датчик gy6. Сканування BLE споживає заряд батареї.";
+"settings.droneDetection.permHint" = "iOS запитає дозвіл на Bluetooth під час першого запуску сканера. Якщо перемикач не дає видимого ефекту, відкрийте системні Налаштування → OmniTAK → Bluetooth і надайте доступ.";
+"quickstart.time.qr" = "< 30 с";
+"quickstart.time.discover" = "< 1 хв";
+"quickstart.time.quick" = "< 2 хв";
+"quickstart.time.manual" = "~3 хв";
