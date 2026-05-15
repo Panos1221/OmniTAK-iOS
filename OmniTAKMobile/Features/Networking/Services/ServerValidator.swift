@@ -35,6 +35,16 @@ struct ValidationIssue {
         case htmlResponseDetected
         case sslRequired
         case unreachable
+        // TAK Server's mTLS-rejection page (title "TAK Server resource
+        // unavailable or not allowed.") — what :8443-style ports return
+        // when the client doesn't present a certificate. Most commonly
+        // seen when a reverse proxy forwards the enrollment hostname to
+        // TAK's :8443 internally instead of :8446.
+        case takMtlsPortRouted
+        // TAK Server's angular login HTML (loginManager) — Authorization
+        // header never reached TAK. Either the :8446 connector lacks
+        // allowBasicAuth="true", or a reverse proxy stripped the header.
+        case takLoginPageReturned
     }
 }
 
@@ -166,6 +176,15 @@ class ServerValidator {
                 }
             }
 
+            // Pattern-match known TAK Server response HTMLs and surface
+            // tailored troubleshooting. This is much more useful than the
+            // generic "wrong port" hint when the user is already on the
+            // right port but a reverse proxy is sending traffic to the
+            // wrong TAK port internally (Pangolin, Traefik, nginx, Caddy).
+            if let tailored = detectTAKErrorPage(body: text, title: pageTitle) {
+                return tailored
+            }
+
             let errorMessage: String
             if let title = pageTitle {
                 errorMessage = "Server returned web page: \"\(title)\""
@@ -188,6 +207,88 @@ class ServerValidator {
                     "1. For enrollment: ensure you're using port 8446",
                     "2. For streaming: use port 8089 with TLS enabled",
                     "3. Verify with your server administrator"
+                ]
+            )
+        }
+
+        return nil
+    }
+
+    /// Recognise specific TAK Server HTML responses and surface
+    /// actionable guidance. Returns nil if the body doesn't match a
+    /// known pattern, in which case the caller falls back to the
+    /// generic "Server returned a web page" issue.
+    private func detectTAKErrorPage(body: String, title: String?) -> ValidationIssue? {
+        // Case 1: TAK's mTLS-rejection page.
+        // Hit when a request lands on a TAK port that requires a client
+        // certificate (typically :8443) and the client doesn't present
+        // one. The user almost certainly typed the right port in the
+        // app — what's wrong is the proxy in front of TAK is forwarding
+        // their enrollment hostname to TAK's :8443 internally.
+        let titleLower = title?.lowercased() ?? ""
+        if titleLower.contains("tak server resource unavailable")
+            || titleLower.contains("not allowed")
+            || body.contains("TAK Server resource unavailable or not allowed") {
+            return ValidationIssue(
+                code: .takMtlsPortRouted,
+                message: "TAK denied the enrollment request",
+                troubleshooting: [
+                    "This is TAK's generic \"access denied\" response. The request reached TAK,",
+                    "but TAK refused to serve the resource. Three likely causes:",
+                    "",
+                    "1. Reverse proxy is sending traffic to the wrong TAK port.",
+                    "   If you're behind Pangolin / Traefik / nginx / Caddy, the proxy is",
+                    "   probably forwarding your enrollment hostname to TAK's :8443",
+                    "   (cert-required) instead of :8446 (cert-enrollment).",
+                    "   → Repoint that route to TAK's internal :8446.",
+                    "   → Keep :8089 on a separate TCP-passthrough route.",
+                    "   → Verify the proxy preserves the Authorization header.",
+                    "",
+                    "2. Your account isn't authorized for certificate enrollment.",
+                    "   If you can reach TAK with iTAK / ATAK / WinTAK using pre-issued",
+                    "   certs but OmniTAK can't enroll, this is the most likely cause.",
+                    "   Ask your admin to grant the account the cert-enrollment role.",
+                    "",
+                    "3. Server-side LDAP / group assignment failure.",
+                    "   TAK accepted the credentials but couldn't complete the post-auth",
+                    "   group lookup (common with fresh LDAP integrations).",
+                    "   Have the admin check takserver-api.log for",
+                    "   \"exception during group assignment\".",
+                    "",
+                    "Quick diagnostic from the TAK host:",
+                    "  curl -sk -u USER:PASS https://YOUR_HOST:8446/Marti/api/tls/config",
+                    "  → XML body = success, fix is in the proxy or on your device.",
+                    "  → this same HTML = server config (LDAP groups, allowBasicAuth, etc.).",
+                    "",
+                    "Alternative: if your admin can issue a QR enrollment package, use",
+                    "\"Scan QR Code Instead\" on the previous screen to bypass this flow."
+                ]
+            )
+        }
+
+        // Case 2: TAK's angular login UI (loginManager).
+        // The request reached TAK but the Authorization header never
+        // arrived, so TAK is serving its browser login screen. Either
+        // :8446's connector lacks allowBasicAuth, or the proxy stripped
+        // the Authorization header.
+        if body.contains("loginManager") || body.contains("data-ng-app") {
+            return ValidationIssue(
+                code: .takLoginPageReturned,
+                message: "Server returned its browser login screen",
+                troubleshooting: [
+                    "TAK didn't see a Basic auth header, so it served its login page instead of the API response.",
+                    "",
+                    "On the TAK server, the :8446 connector needs allowBasicAuth=\"true\":",
+                    "  <connector port=\"8446\" clientAuth=\"false\" allowBasicAuth=\"true\" .../>",
+                    "",
+                    "Also make sure your <auth> block engages an authenticator:",
+                    "  <auth default=\"ldap\" ...>   (or default=\"file\" with users defined)",
+                    "",
+                    "If the server is behind a reverse proxy, confirm the proxy",
+                    "isn't stripping the Authorization header. Quick sanity check from",
+                    "the TAK host:",
+                    "  curl -sk -u USER:PASS https://YOUR_HOST:8446/Marti/api/tls/config",
+                    "  → should return XML; if it returns this same HTML the server itself needs the fix."
                 ]
             )
         }
@@ -440,6 +541,12 @@ class ErrorMessageFormatter {
 
         case .sslRequired:
             message = "This connection requires TLS/SSL encryption."
+
+        case .takMtlsPortRouted:
+            message = "TAK reached your request but refused to serve the resource. The cause is usually one of: a reverse proxy routing traffic to TAK's cert-required :8443 instead of :8446, an account that isn't authorized for enrollment, or a server-side LDAP/group-assignment failure. The steps below help isolate which."
+
+        case .takLoginPageReturned:
+            message = "TAK served its browser login screen because no Basic auth header arrived. The server's :8446 connector probably needs allowBasicAuth=\"true\", or a reverse proxy is stripping the Authorization header."
         }
 
         if !issue.troubleshooting.isEmpty {

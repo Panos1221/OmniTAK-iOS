@@ -94,3 +94,29 @@
 "settings.resetToDefaults" = "Restablecer valores predeterminados";
 "settings.section.dangerZone" = "ZONA DE PELIGRO";
 "settings.clearAllTeamData" = "Borrar todos los datos del equipo";
+
+/* --- Settings: picker option values + alerts (v1.1 — full text coverage) --- */
+"settings.atakStyle" = "Estilo ATAK";
+"settings.coord.dd" = "Grados decimales (DD)";
+"settings.coord.dm" = "Grados y minutos (DM)";
+"settings.coord.dms" = "Grados, minutos, segundos (DMS)";
+"settings.coord.bng" = "Cuadrícula Nacional Británica (BNG)";
+"settings.coord.bngHelp" = "BNG está optimizada para el Reino Unido e Irlanda (49°-61° N, 9° O - 2° E). Usa el datum OSGB36 con cuadrados de cuadrícula como SU, TQ, NT.";
+"settings.marker.milstd" = "Símbolo MIL-STD";
+"settings.marker.bullseye" = "Diana (heredado)";
+"settings.color.cyan" = "Cian";
+"settings.color.green" = "Verde";
+"settings.color.orange" = "Naranja";
+"settings.color.red" = "Rojo";
+"settings.color.blue" = "Azul";
+"settings.unit.metric" = "Métrico (km, m, km/h)";
+"settings.unit.imperial" = "Imperial (mi, ft, mph)";
+"settings.trailPoints" = "%d puntos";
+"settings.cacheCleared.title" = "Caché borrada";
+"settings.ok" = "OK";
+"settings.droneDetection.desc" = "Escucha drones cercanos (DJI Mavic, Skydio, Autel) que emiten FAA Remote ID por Bluetooth. Los drones detectados aparecen en el mapa como contactos aéreos desconocidos. Capta el segmento Bluetooth de Remote ID; las emisiones WiFi requieren un sensor gy6. El escaneo BLE consume batería.";
+"settings.droneDetection.permHint" = "iOS pedirá permiso de Bluetooth la primera vez que se ejecute el escáner. Si el interruptor no tiene efecto visible, abre los Ajustes del sistema → OmniTAK → Bluetooth y concede el acceso.";
+"quickstart.time.qr" = "< 30 s";
+"quickstart.time.discover" = "< 1 min";
+"quickstart.time.quick" = "< 2 min";
+"quickstart.time.manual" = "~3 min";
