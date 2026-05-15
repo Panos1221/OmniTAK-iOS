@@ -20,6 +20,20 @@ struct ATAKMapView: View {
     @ObservedObject private var adsbService = ADSBTrafficService.shared
     @ObservedObject private var pointDropperService = PointDropperService.shared
     @ObservedObject private var serverManager = ServerManager.shared
+    // Issue #16 — lasso multi-select. Singleton so the pill, ring
+    // renderers, and gesture coordinator all see the same state.
+    @ObservedObject private var lassoService = LassoSelectionService.shared
+    // Issue #16 — confirmation dialog for the lasso selection actions
+    // (Add to Data Package / Export KML / Send to Contacts / Bulk
+    // Delete / Clear). Driven from `lassoSelectionPill`.
+    @State private var showLassoActions = false
+    @State private var lassoActionNotice: String?
+    @State private var lassoExportShareItem: URL?
+    @State private var showLassoContactPicker = false
+    // Issue #16 — Tools tab in the bottom bar opens a short popup
+    // (handled in RootTabView). MapViewController only needs to
+    // observe the notifications it posts: .startLassoMode +
+    // .showFullTools. No local launcher state required here.
 
     @State private var mapRegion = MKCoordinateRegion(
         center: CLLocationCoordinate2D(latitude: 38.8977, longitude: -77.0365), // Default: DC
@@ -182,6 +196,7 @@ struct ATAKMapView: View {
             routeOverlayCoordinator: routeOverlayCoordinator,
             mapStateManager: mapStateManager,
             measurementManager: measurementManager,
+            lassoService: lassoService,
             onMapTap: handleMapTap
         )
         .ignoresSafeArea()
@@ -249,6 +264,19 @@ struct ATAKMapView: View {
                     },
                     onToggleMeasure: {
                         showMeasurement = true
+                    },
+                    lassoModeActive: drawingManager.currentMode == .lasso,
+                    onToggleLasso: {
+                        // Issue #16: lasso lives on the quick-action
+                        // toolbar now. Single tap toggles in/out — if
+                        // we're already in lasso mode (button glowing),
+                        // cancel back to idle so the user can re-enter
+                        // pan/zoom without making a stray selection.
+                        if drawingManager.currentMode == .lasso {
+                            drawingManager.cancelDrawing()
+                        } else {
+                            drawingManager.startDrawing(mode: .lasso)
+                        }
                     }
                 )
                 .padding(.horizontal, 16)
@@ -452,10 +480,300 @@ struct ATAKMapView: View {
             loadingScreen
             radialMenu
             cursorModeOverlay
+            lassoSelectionPill  // Issue #16
             // overlaySettingsButton - Removed per user request
             // overlaySettingsPanel - Removed per user request
             // mapCenterDisplay - Removed per user request (coords available via radial menu)
         }
+    }
+
+    // == Issue #16: lasso selection pill BEGIN ==
+    // Compact floating pill that surfaces the current selection count
+    // and a clear (✕) affordance. Floats next to the radial-menu
+    // anchor with NO grey backplate per feedback_radial_menu_no_backdrop
+    // MARK: - Lasso selection actions
+    // Issue #16 — drives the confirmationDialog wired off the
+    // selection pill. v1 ships Bulk Delete + Clear with real
+    // implementations; the other three surface a notice banner with
+    // an explicit "next iteration" message so users see the affordance
+    // and we capture which actions get the most traction before deeper
+    // implementation work.
+    private enum LassoAction {
+        case addToDataPackage
+        case exportKML
+        case sendToContacts
+        case bulkDelete
+    }
+
+    private func performLassoAction(_ action: LassoAction) {
+        let sel = lassoService.current
+        guard !sel.isEmpty else { return }
+
+        switch action {
+        case .bulkDelete:
+            let (deleted, broadcast) = bulkDeleteLassoSelection(sel)
+            lassoService.clear()
+            if broadcast == deleted {
+                lassoActionNotice = "Deleted \(deleted) item(s) + broadcast tombstones."
+            } else {
+                lassoActionNotice = "Deleted \(deleted) item(s) locally — \(broadcast) tombstones broadcast (others were local-only)."
+            }
+
+        case .exportKML:
+            let markers = resolveLassoMarkers(sel)
+            guard !markers.isEmpty else {
+                lassoActionNotice = "Selection empty after resolving — nothing to export."
+                return
+            }
+            do {
+                let url = try LassoKMLBuilder.write(
+                    name: "Lasso selection (\(markers.count))",
+                    markers: markers
+                )
+                lassoExportShareItem = url
+            } catch {
+                lassoActionNotice = "Export failed: \(error.localizedDescription)"
+            }
+
+        case .addToDataPackage:
+            let markers = resolveLassoMarkers(sel)
+            guard !markers.isEmpty else {
+                lassoActionNotice = "Selection empty after resolving — nothing to package."
+                return
+            }
+            do {
+                let url = try LassoMissionPackageBuilder.build(
+                    name: "Lasso selection (\(markers.count))",
+                    markers: markers
+                )
+                lassoExportShareItem = url
+            } catch {
+                lassoActionNotice = "Package build failed: \(error.localizedDescription)"
+            }
+
+        case .sendToContacts:
+            // Hand off to the picker — the actual broadcast happens
+            // when the user confirms the recipient UIDs (see
+            // lassoContactPickerSheet view).
+            showLassoContactPicker = true
+        }
+    }
+
+    /// Resolve the selection back to LassoExportMarker DTOs across the
+    /// three iOS source types (live CoT events, dropped PointMarkers,
+    /// drawing-store MarkerDrawings).
+    private func resolveLassoMarkers(_ sel: SelectionContext) -> [LassoExportMarker] {
+        var out: [LassoExportMarker] = []
+
+        // 1) Live CoT events (server-pushed)
+        for e in takService.cotEvents where sel.markerIDs.contains(e.uid) {
+            out.append(LassoExportMarker(
+                uid: e.uid,
+                type: e.type,
+                callsign: e.detail.callsign,
+                coordinate: CLLocationCoordinate2D(latitude: e.point.lat, longitude: e.point.lon),
+                remarks: ""
+            ))
+        }
+        // 2) Dropped points — PointMarker uses `name` for callsign-like
+        //    label and an optional `remarks` field.
+        for p in pointDropperService.markers
+            where sel.markerIDs.contains(p.id.uuidString) || sel.markerIDs.contains(p.uid)
+        {
+            out.append(LassoExportMarker(
+                uid: p.uid,
+                type: p.cotType,
+                callsign: p.name,
+                coordinate: p.coordinate,
+                remarks: p.remarks ?? ""
+            ))
+        }
+        // 3) Drawing-store markers — MarkerDrawing's display label
+        //    lives on `name`.
+        for m in drawingStore.markers
+            where sel.markerIDs.contains(m.id.uuidString)
+        {
+            out.append(LassoExportMarker(
+                uid: m.id.uuidString,
+                type: "a-u-G",
+                callsign: m.name,
+                coordinate: m.coordinate,
+                remarks: ""
+            ))
+        }
+        return out
+    }
+
+    /// Walk every selected ID, delete locally + broadcast a CoT
+    /// tombstone (`t-x-d-d`) for marker UIDs that came from the server
+    /// so other EUDs propagate the removal. Returns (deletedCount,
+    /// broadcastCount) so the caller can pick the right toast copy.
+    @discardableResult
+    private func bulkDeleteLassoSelection(_ sel: SelectionContext) -> (deleted: Int, broadcast: Int) {
+        var deleted = 0
+        var broadcast = 0
+        let senderUid = "OMNI-iOS-\(UIDevice.current.identifierForVendor?.uuidString.prefix(8) ?? "unknown")"
+
+        // Self-marker guard — never tombstone our own CoT or we tell
+        // every peer to forget us.
+        let selfUids = Set(takService.cotEvents
+            .filter { $0.uid.contains(senderUid) }
+            .map { $0.uid })
+
+        for markerID in sel.markerIDs where !selfUids.contains(markerID) {
+            // PointDropperService keys by UUID (string form in markerID).
+            if let uuid = UUID(uuidString: markerID),
+               pointDropperService.markers.contains(where: { $0.id == uuid })
+            {
+                pointDropperService.deleteMarker(id: uuid)
+                deleted += 1
+            }
+            // Drawing-store markers
+            if let uuid = UUID(uuidString: markerID),
+               let m = drawingStore.markers.first(where: { $0.id == uuid })
+            {
+                drawingStore.deleteMarker(m)
+                deleted += 1
+            }
+            // Live CoT (server-pushed) — broadcast a tombstone so the
+            // delete propagates to other clients.
+            if takService.cotEvents.contains(where: { $0.uid == markerID }) {
+                let xml = LassoCotBuilders.buildDeleteEvent(
+                    targetUid: markerID,
+                    senderUid: senderUid
+                )
+                if takService.sendCoT(xml: xml) {
+                    broadcast += 1
+                }
+                deleted += 1
+            }
+        }
+        for drawingID in sel.drawingIDs {
+            if let line = drawingStore.lines.first(where: { $0.id == drawingID }) {
+                drawingStore.deleteLine(line)
+            } else if let poly = drawingStore.polygons.first(where: { $0.id == drawingID }) {
+                drawingStore.deletePolygon(poly)
+            } else if let circle = drawingStore.circles.first(where: { $0.id == drawingID }) {
+                drawingStore.deleteCircle(circle)
+            }
+            deleted += 1
+        }
+        return (deleted, broadcast)
+    }
+
+    /// Broadcast the lasso selection to specific contact UIDs by
+    /// rebuilding each marker's CoT with `<dest>` elements for the
+    /// chosen recipients. Wired from the contact picker's confirm.
+    private func sendLassoSelectionToContacts(_ destUids: Set<String>) {
+        let sel = lassoService.current
+        let markers = resolveLassoMarkers(sel)
+        guard !markers.isEmpty, !destUids.isEmpty else { return }
+        let dests = Array(destUids)
+        var sent = 0
+        for m in markers {
+            let xml = LassoCotBuilders.rebuildEvent(
+                uid: m.uid,
+                type: m.type,
+                callsign: m.callsign,
+                coordinate: m.coordinate,
+                remarks: m.remarks,
+                destUids: dests
+            )
+            if takService.sendCoT(xml: xml) { sent += 1 }
+        }
+        lassoActionNotice = "Sent \(sent)/\(markers.count) marker(s) to \(destUids.count) recipient(s)."
+    }
+
+    // — the orange tint is the only chrome.
+    @ViewBuilder
+    private var lassoSelectionPill: some View {
+        if !lassoService.current.isEmpty {
+            VStack {
+                Spacer()
+                HStack {
+                    Spacer()
+                    LassoSelectionPill(
+                        count: lassoService.current.totalCount,
+                        onShowActions: {
+                            showLassoActions = true
+                        }
+                    )
+                    .padding(.trailing, 16)
+                    .padding(.bottom, 200) // above the bottom toolbar
+                }
+            }
+            .zIndex(2000)
+            .transition(.opacity)
+            .confirmationDialog(
+                "\(lassoService.current.totalCount) selected",
+                isPresented: $showLassoActions,
+                titleVisibility: .visible
+            ) {
+                // The K9Blue trio (data package, bulk delete, export)
+                // plus send-to-contacts, plus an explicit clear.
+                Button("Add to Data Package…") {
+                    performLassoAction(.addToDataPackage)
+                }
+                Button("Export as KML…") {
+                    performLassoAction(.exportKML)
+                }
+                Button("Send to Contacts…") {
+                    performLassoAction(.sendToContacts)
+                }
+                Button("Delete \(lassoService.current.totalCount) item(s)", role: .destructive) {
+                    performLassoAction(.bulkDelete)
+                }
+                Button("Clear Selection", role: .cancel) {
+                    lassoService.clear()
+                }
+            } message: {
+                Text("Choose an action for the lasso selection.")
+            }
+            .alert(
+                "Selection Action",
+                isPresented: Binding(
+                    get: { lassoActionNotice != nil },
+                    set: { if !$0 { lassoActionNotice = nil } }
+                ),
+                presenting: lassoActionNotice
+            ) { _ in
+                Button("OK") { lassoActionNotice = nil }
+            } message: { msg in
+                Text(msg)
+            }
+            // KML / Mission Package share sheet — driven by the
+            // exporters' returned URL. UIActivityViewController wrapped
+            // for SwiftUI in LassoShareSheet below.
+            .sheet(item: Binding(
+                get: { lassoExportShareItem.map { LassoShareItem(url: $0) } },
+                set: { _ in lassoExportShareItem = nil }
+            )) { item in
+                LassoShareSheet(activityItems: [item.url])
+            }
+            // Send-to-Contacts picker. Confirm hands the chosen
+            // recipient UIDs back; sendLassoSelectionToContacts walks
+            // the selection and re-emits each CoT with <dest> elements.
+            .sheet(isPresented: $showLassoContactPicker) {
+                LassoContactPickerSheet(
+                    candidates: takService.cotEvents.map { e in
+                        CoTEventLike(uid: e.uid, type: e.type, callsign: e.detail.callsign)
+                    },
+                    excludeUIDs: lassoService.current.markerIDs,
+                    onCancel: {},
+                    onConfirm: { uids in
+                        sendLassoSelectionToContacts(uids)
+                    }
+                )
+            }
+        }
+    }
+    // == Issue #16: lasso selection pill END ==
+
+    // Identifiable wrapper so .sheet(item:) accepts the URL — SwiftUI
+    // needs an Identifiable for that overload.
+    private struct LassoShareItem: Identifiable {
+        let url: URL
+        var id: URL { url }
     }
 
     @ViewBuilder
@@ -878,6 +1196,20 @@ struct ATAKMapView: View {
                     showDrawingList = false
                     showLayersPanel = false
                 }
+            }
+            // Issue #16 — Tools tab posts this when the user picks
+            // "Lasso Select". Activate lasso mode here so the in-map
+            // gesture recognizer (UILongPressGestureRecognizer keyed on
+            // drawingManager.currentMode == .lasso) starts firing.
+            .onReceive(NotificationCenter.default.publisher(for: .startLassoMode)) { _ in
+                drawingManager.startDrawing(mode: .lasso)
+            }
+            // Issue #16 — Tools tab "Full Tools…" passthrough. Reuses
+            // the existing in-map ATAKToolsView presentation
+            // (showToolsMenu / .fullScreenCover) so all the tool
+            // wiring stays exactly where it was.
+            .onReceive(NotificationCenter.default.publisher(for: .showFullTools)) { _ in
+                showToolsMenu = true
             }
             .onReceive(NotificationCenter.default.publisher(for: .radialMenuOpenDrawingsList)) { _ in
                 withAnimation(.spring()) {
@@ -1748,6 +2080,9 @@ struct TacticalMapView: UIViewRepresentable {
     @ObservedObject var routeOverlayCoordinator: RouteOverlayCoordinator
     @ObservedObject var mapStateManager: MapStateManager
     @ObservedObject var measurementManager: MeasurementManager
+    // Issue #16 — lasso multi-select. Observed so the selection-ring
+    // overlays re-render whenever the selection set changes.
+    @ObservedObject var lassoService: LassoSelectionService = LassoSelectionService.shared
     let onMapTap: (CLLocationCoordinate2D) -> Void
 
     func makeUIView(context: Context) -> MKMapView {
@@ -1784,6 +2119,25 @@ struct TacticalMapView: UIViewRepresentable {
         longPressGesture.minimumPressDuration = 0.5
         longPressGesture.cancelsTouchesInView = false  // Allow pan gestures to work
         mapView.addGestureRecognizer(longPressGesture)
+
+        // == Issue #16: lasso gesture BEGIN ==
+        // A second long-press recognizer dedicated to the lasso. Fires
+        // only while DrawingToolsManager.currentMode == .lasso (the
+        // recognizer's delegate gates `shouldBegin`). When active it
+        // takes precedence over the pan gesture so the user can drag
+        // to enclose features without the map scrolling away. When
+        // inactive the recognizer no-ops and map pan/zoom is intact.
+        let lassoGesture = UILongPressGestureRecognizer(
+            target: context.coordinator,
+            action: #selector(Coordinator.handleLassoGesture(_:))
+        )
+        lassoGesture.minimumPressDuration = 0.25
+        lassoGesture.allowableMovement = .greatestFiniteMagnitude
+        lassoGesture.cancelsTouchesInView = true  // suppress map-pan during lasso
+        lassoGesture.delegate = context.coordinator
+        mapView.addGestureRecognizer(lassoGesture)
+        context.coordinator.lassoGesture = lassoGesture
+        // == Issue #16: lasso gesture END ==
 
         return mapView
     }
@@ -2098,10 +2452,15 @@ struct TacticalMapView: UIViewRepresentable {
 
     private func updateOverlays(mapView: MKMapView, context: Context) {
         // Remove ONLY drawing/measurement overlays (preserve MGRS grid and other tactical overlays)
+        // Issue #16: also preserve the in-progress lasso polyline and
+        // the per-selection highlight rings — both are short-lived
+        // and driven by state outside the drawing store.
         let overlaysToRemove = mapView.overlays.filter { overlay in
             !(overlay is MGRSGridOverlay) &&
             !(overlay is BreadcrumbTrailPolyline) &&
-            !(overlay is RangeBearingLineOverlay)
+            !(overlay is RangeBearingLineOverlay) &&
+            !(overlay is LassoInProgressPolyline) &&
+            !(overlay is LassoSelectionRing)
         }
         mapView.removeOverlays(overlaysToRemove)
 
@@ -2124,6 +2483,27 @@ struct TacticalMapView: UIViewRepresentable {
             let circle = MKCircle(center: ring.center, radius: ring.radiusMeters)
             mapView.addOverlay(circle)
         }
+
+        // == Issue #16: selection highlight rings BEGIN ==
+        // Rebuild rings on every overlay pass — cheap, and the
+        // selection set is small.
+        let existingRings = mapView.overlays.compactMap { $0 as? LassoSelectionRing }
+        mapView.removeOverlays(existingRings)
+
+        let selection = lassoService.current
+        if !selection.isEmpty {
+            // Marker rings: cot units + dropped points + drawing markers.
+            for cot in markers where selection.markerIDs.contains(cot.uid) {
+                mapView.addOverlay(LassoSelectionRing(center: cot.coordinate, radius: 40))
+            }
+            for pt in pointMarkers where selection.markerIDs.contains(pt.id.uuidString) {
+                mapView.addOverlay(LassoSelectionRing(center: pt.coordinate, radius: 40))
+            }
+            for m in drawingStore.markers where selection.markerIDs.contains(m.id.uuidString) {
+                mapView.addOverlay(LassoSelectionRing(center: m.coordinate, radius: 40))
+            }
+        }
+        // == Issue #16: selection highlight rings END ==
     }
 
     private func mapTypeString(_ type: MKMapType) -> String {
@@ -2138,11 +2518,20 @@ struct TacticalMapView: UIViewRepresentable {
         }
     }
 
-    class Coordinator: NSObject, MKMapViewDelegate {
+    class Coordinator: NSObject, MKMapViewDelegate, UIGestureRecognizerDelegate {
         var parent: TacticalMapView
         var isUserInteracting = false
         var isProgrammaticUpdate = false
         weak var mapView: MKMapView?
+
+        // Issue #16 — lasso state. The outline is drawn on a
+        // CAShapeLayer (see installLassoOverlay below) added to
+        // mapView.layer. View-space points captured during the gesture
+        // back the layer's path. World-space vertices for the
+        // selection logic are held in `parent.lassoService.inProgressPolygon`.
+        weak var lassoGesture: UILongPressGestureRecognizer?
+        private var lassoPathLayer: CAShapeLayer?
+        private var lassoViewPoints: [CGPoint] = []
 
         // Overlay management
         // NOTE: MGRS Grid is now managed by MapOverlayCoordinator and IntegratedMapView
@@ -2816,6 +3205,24 @@ struct TacticalMapView: UIViewRepresentable {
         // MARK: - Overlay Renderers
 
         func mapView(_ mapView: MKMapView, rendererFor overlay: MKOverlay) -> MKOverlayRenderer {
+            // MARK: - Lasso in-progress polyline (issue #16)
+            if let lasso = overlay as? LassoInProgressPolyline {
+                let renderer = MKPolylineRenderer(polyline: lasso)
+                renderer.strokeColor = UIColor.systemOrange
+                renderer.lineWidth = 3
+                renderer.lineDashPattern = [6, 4]
+                return renderer
+            }
+
+            // MARK: - Lasso selection ring (issue #16)
+            if let ring = overlay as? LassoSelectionRing {
+                let renderer = MKCircleRenderer(circle: ring)
+                renderer.strokeColor = UIColor.systemOrange
+                renderer.fillColor = UIColor.systemOrange.withAlphaComponent(0.12)
+                renderer.lineWidth = 2.5
+                return renderer
+            }
+
             // MARK: - RoutePolyline Renderer (Navigation Routes)
             if let routePolyline = overlay as? RoutePolyline {
                 return RoutePolylineRenderer(polyline: routePolyline)
@@ -2880,8 +3287,152 @@ struct TacticalMapView: UIViewRepresentable {
 
             return MKOverlayRenderer(overlay: overlay)
         }
+
+        // MARK: - Issue #16: Lasso gesture
+
+        /// Only allow the lasso recognizer to start when the user has
+        /// explicitly entered lasso mode from the drawing tools cluster.
+        /// This is the gate that keeps map pan/zoom intact in every
+        /// other mode — the recognizer simply refuses to begin.
+        func gestureRecognizer(
+            _ gestureRecognizer: UIGestureRecognizer,
+            shouldBeginWithFor _: Any? = nil
+        ) -> Bool { true }
+
+        func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer,
+                               shouldRecognizeSimultaneouslyWith other: UIGestureRecognizer) -> Bool {
+            // Never run the lasso simultaneously with anything else —
+            // we want pan suppressed.
+            if gestureRecognizer === lassoGesture { return false }
+            return false
+        }
+
+        func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
+            if gestureRecognizer === lassoGesture {
+                // Only fire when the user has actively selected the
+                // lasso tool from the drawing cluster.
+                return parent.drawingManager.isDrawingActive &&
+                       parent.drawingManager.currentMode == .lasso
+            }
+            return true
+        }
+
+        @objc func handleLassoGesture(_ gesture: UILongPressGestureRecognizer) {
+            guard let mapView = gesture.view as? MKMapView else { return }
+            let service = parent.lassoService
+
+            switch gesture.state {
+            case .began:
+                let point = gesture.location(in: mapView)
+                let coord = mapView.convert(point, toCoordinateFrom: mapView)
+                service.beginLasso()
+                service.appendVertex(coord)
+                installLassoOverlay(on: mapView, firstPoint: point)
+
+            case .changed:
+                let point = gesture.location(in: mapView)
+                let coord = mapView.convert(point, toCoordinateFrom: mapView)
+                service.appendVertex(coord)
+                refreshLassoOverlay(on: mapView, point: point)
+
+            case .ended, .cancelled, .failed:
+                // Collect the populations to test against. Pulled
+                // from the current `parent` so we don't have to
+                // mirror them into the coordinator.
+                let markers: [LassoMarker] =
+                    parent.markers.map(LassoMarker.init(cot:)) +
+                    parent.pointMarkers.map(LassoMarker.init(point:)) +
+                    parent.drawingStore.markers.map(LassoMarker.init(marker:))
+
+                let drawings: [LassoDrawing] =
+                    parent.drawingStore.lines.map { LassoDrawing(id: $0.id, coordinates: $0.coordinates) } +
+                    parent.drawingStore.polygons.map { LassoDrawing(id: $0.id, coordinates: $0.coordinates) } +
+                    parent.drawingStore.circles.map { LassoDrawing(id: $0.id, coordinates: [$0.center]) }
+
+                _ = service.endLasso(markers: markers, drawings: drawings)
+                removeLassoOverlay(on: mapView)
+
+                // Exit lasso mode after one selection so the panel
+                // returns to idle and downstream UI (selection pill,
+                // highlight rings) takes over.
+                parent.drawingManager.cancelDrawing()
+
+            default:
+                break
+            }
+        }
+
+        // Issue #16 render fix: the in-progress lasso outline is drawn on
+        // a CAShapeLayer added directly to mapView.layer, NOT as an
+        // MKOverlay. The original implementation swapped a fresh
+        // MKPolyline in on every `.changed` tick (~60 Hz). MKMapView
+        // coalesces overlay redraws against the marker pipeline, which
+        // produced visible flicker — "the map redrawing over the
+        // lasso outline" — and intermittent drops where the shape
+        // simply didn't appear. A CAShapeLayer updates its CGPath in
+        // O(1), renders above every MKMapView subview, and is immune
+        // to the overlay redraw cycle. We accumulate touch points in
+        // view space (stable for the duration of a single gesture
+        // because the map doesn't pan/zoom while lasso is active) and
+        // tear the layer down on gesture end — the persistent visual
+        // is carried by the selection rings (LassoSelectionRing).
+        private func installLassoOverlay(on mapView: MKMapView, firstPoint: CGPoint) {
+            removeLassoOverlay(on: mapView)
+            let layer = CAShapeLayer()
+            layer.frame = mapView.bounds
+            layer.strokeColor = UIColor.systemOrange.cgColor
+            layer.fillColor = UIColor.systemOrange.withAlphaComponent(0.05).cgColor
+            layer.lineWidth = 3
+            layer.lineDashPattern = [6, 4]
+            layer.lineJoin = .round
+            layer.lineCap = .round
+            // Sit above every other layer mapView builds (tiles,
+            // labels, annotations) — addSublayer appends to the top
+            // of the sublayer stack, which is exactly what we want.
+            mapView.layer.addSublayer(layer)
+            lassoPathLayer = layer
+            lassoViewPoints = [firstPoint]
+            updateLassoLayerPath()
+        }
+
+        private func refreshLassoOverlay(on mapView: MKMapView, point: CGPoint) {
+            lassoViewPoints.append(point)
+            updateLassoLayerPath()
+        }
+
+        private func updateLassoLayerPath() {
+            guard let layer = lassoPathLayer, lassoViewPoints.count >= 2 else { return }
+            let path = UIBezierPath()
+            path.move(to: lassoViewPoints[0])
+            for pt in lassoViewPoints.dropFirst() {
+                path.addLine(to: pt)
+            }
+            // No implicit animation — the path must follow the
+            // user's finger frame-for-frame; any tween would lag.
+            CATransaction.begin()
+            CATransaction.setDisableActions(true)
+            layer.path = path.cgPath
+            CATransaction.commit()
+        }
+
+        private func removeLassoOverlay(on mapView: MKMapView) {
+            lassoPathLayer?.removeFromSuperlayer()
+            lassoPathLayer = nil
+            lassoViewPoints = []
+        }
     }
 }
+
+// MARK: - Lasso in-progress polyline marker class
+// Subclass exists purely so `rendererFor overlay:` can distinguish
+// the lasso outline from saved drawing polylines (different style).
+final class LassoInProgressPolyline: MKPolyline {}
+
+// MARK: - Lasso selection highlight ring (issue #16)
+/// Thin orange ring drawn around every marker currently in the lasso
+/// selection set. Sized in meters so it scales naturally with map
+/// zoom (small at city scale, generous at country scale).
+final class LassoSelectionRing: MKCircle {}
 
 // MARK: - Drawing Marker Annotation
 
