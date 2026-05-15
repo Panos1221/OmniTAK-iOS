@@ -14,12 +14,15 @@ import SwiftUI
 
 struct LassoSelectionPill: View {
     let count: Int
-    let onClear: () -> Void
+    let onShowActions: () -> Void
 
     var body: some View {
-        Button(action: onClear) {
+        Button(action: onShowActions) {
             HStack(spacing: 6) {
-                Image(systemName: "xmark.circle.fill")
+                // ellipsis hints "tap for actions"; the X-to-clear
+                // moves into the action sheet so the pill itself is
+                // a single, unambiguous tap target.
+                Image(systemName: "ellipsis.circle.fill")
                     .font(.system(size: 14, weight: .bold))
                 Text("\(count) selected")
                     .font(.system(size: 12, weight: .semibold))
@@ -35,7 +38,7 @@ struct LassoSelectionPill: View {
                     .shadow(color: .black.opacity(0.3), radius: 4, x: 0, y: 2)
             )
         }
-        .accessibilityLabel("Clear lasso selection of \(count) items")
+        .accessibilityLabel("Show actions for \(count) selected items")
     }
 }
 
@@ -43,9 +46,9 @@ struct LassoSelectionPill: View {
 struct LassoSelectionPill_Previews: PreviewProvider {
     static var previews: some View {
         VStack(spacing: 12) {
-            LassoSelectionPill(count: 1, onClear: {})
-            LassoSelectionPill(count: 12, onClear: {})
-            LassoSelectionPill(count: 247, onClear: {})
+            LassoSelectionPill(count: 1, onShowActions: {})
+            LassoSelectionPill(count: 12, onShowActions: {})
+            LassoSelectionPill(count: 247, onShowActions: {})
         }
         .padding()
         .background(Color.gray)
