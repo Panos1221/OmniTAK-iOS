@@ -1002,7 +1002,24 @@ struct ATAKMapView: View {
                 circleDrawings: drawingStore.circles,
                 polygonDrawings: drawingStore.polygons,
                 selfLocation: locationManager.location,
-                selfCallsign: userCallsign
+                selfCallsign: userCallsign,
+                // Phase 3b — saved distance / area measurements mirrored
+                // through the Cesium bridge as dashed polylines + segment
+                // labels. The live in-progress measurement stays Mapbox-
+                // only; Cesium only sees committed sessions.
+                measurements: measurementManager.savedMeasurements,
+                // Phase 3b — operator's own recorded breadcrumb trail.
+                // The service models a single trail; if no recording is
+                // active or it's been cleared the coords list is empty
+                // and the bridge sends `[]` (clears any prior trail).
+                breadcrumbTrailCoords: overlayCoordinator.breadcrumbTrailsEnabled
+                    ? BreadcrumbTrailService.shared.trailCoordinates
+                    : [],
+                // The service stores `teamColor` as a hex string (e.g.
+                // "#00FF00") — direct feed to the bridge. We deliberately
+                // skip PositionBroadcastService.teamColor here (it's a
+                // CoT color name like "Cyan", not hex).
+                breadcrumbTrailColor: BreadcrumbTrailService.shared.configuration.teamColor
             )
             .ignoresSafeArea()
             statusIndicators
@@ -3573,6 +3590,13 @@ struct CesiumMainMap: UIViewRepresentable {
     let polygonDrawings: [PolygonDrawing]
     let selfLocation: CLLocation?
     let selfCallsign: String
+    // Phase 3b — measurement sessions to mirror as dashed polylines with
+    // per-segment distance labels. Sourced from `MeasurementManager`.
+    let measurements: [Measurement]
+    // Phase 3b — operator's breadcrumb trail (single trail; sourced from
+    // `BreadcrumbTrailService.shared`). Empty array means "no trail".
+    let breadcrumbTrailCoords: [CLLocationCoordinate2D]
+    let breadcrumbTrailColor: String
 
     func makeUIView(context: Context) -> WKWebView {
         let config = WKWebViewConfiguration()
@@ -3596,11 +3620,17 @@ struct CesiumMainMap: UIViewRepresentable {
         context.coordinator.parent = self
         let entities = buildEntityJSON()
         let drawings = buildDrawingJSON()
+        let measurementsJSON = buildMeasurementJSON()
+        let trailsJSON = buildTrailJSON()
         context.coordinator.lastSnapshot = entities
         context.coordinator.lastDrawingsSnapshot = drawings
+        context.coordinator.lastMeasurementsSnapshot = measurementsJSON
+        context.coordinator.lastTrailsSnapshot = trailsJSON
         if context.coordinator.isReady {
             webView.evaluateJavaScript("window.OmniBridge.setEntities(\(entities));", completionHandler: nil)
             webView.evaluateJavaScript("window.OmniBridge.setDrawings(\(drawings));", completionHandler: nil)
+            webView.evaluateJavaScript("window.OmniBridge.setMeasurements(\(measurementsJSON));", completionHandler: nil)
+            webView.evaluateJavaScript("window.OmniBridge.setTrails(\(trailsJSON));", completionHandler: nil)
         }
     }
 
@@ -3612,6 +3642,8 @@ struct CesiumMainMap: UIViewRepresentable {
         var isReady = false
         var lastSnapshot: String = "[]"
         var lastDrawingsSnapshot: String = "[]"
+        var lastMeasurementsSnapshot: String = "[]"
+        var lastTrailsSnapshot: String = "[]"
 
         init(_ parent: CesiumMainMap) {
             self.parent = parent
@@ -3630,6 +3662,14 @@ struct CesiumMainMap: UIViewRepresentable {
                 )
                 webView?.evaluateJavaScript(
                     "window.OmniBridge.setDrawings(\(lastDrawingsSnapshot));",
+                    completionHandler: nil
+                )
+                webView?.evaluateJavaScript(
+                    "window.OmniBridge.setMeasurements(\(lastMeasurementsSnapshot));",
+                    completionHandler: nil
+                )
+                webView?.evaluateJavaScript(
+                    "window.OmniBridge.setTrails(\(lastTrailsSnapshot));",
                     completionHandler: nil
                 )
             }
@@ -3727,6 +3767,10 @@ struct CesiumMainMap: UIViewRepresentable {
         let callsign: String?
         let affiliation: String
         let kind: String
+        // Phase 3b — aircraft heading in degrees clockwise from north. Nil
+        // for contacts and self (the HTML bridge treats absent heading as
+        // "no rotation"). Only aircraft carry a meaningful track angle.
+        let heading: Double?
     }
 
     private func buildEntityJSON() -> String {
@@ -3740,7 +3784,8 @@ struct CesiumMainMap: UIViewRepresentable {
                 hae: loc.altitude > 0 ? loc.altitude : nil,
                 callsign: selfCallsign,
                 affiliation: "f",
-                kind: "self"
+                kind: "self",
+                heading: nil
             ))
         }
 
@@ -3752,11 +3797,17 @@ struct CesiumMainMap: UIViewRepresentable {
                 hae: nil, // Phase 2 has no HAE for contacts yet — clamps to ground
                 callsign: c.callsign,
                 affiliation: CesiumMainMap.affiliation(fromCoTType: c.type),
-                kind: "contact"
+                kind: "contact",
+                heading: nil
             ))
         }
 
         for a in aircraft {
+            // Normalise heading into [0, 360). ADSBService can hand back
+            // negative or >360 values for stale tracks; the HTML side
+            // expects a clean compass bearing.
+            let h = a.heading.truncatingRemainder(dividingBy: 360)
+            let normalisedHeading = h < 0 ? h + 360 : h
             all.append(BridgeEntity(
                 uid: "ads-\(a.id)",
                 lat: a.coordinate.latitude,
@@ -3764,13 +3815,126 @@ struct CesiumMainMap: UIViewRepresentable {
                 hae: a.onGround ? nil : a.altitude,
                 callsign: a.callsign,
                 affiliation: "n",
-                kind: "aircraft"
+                kind: "aircraft",
+                heading: normalisedHeading
             ))
         }
 
         guard let data = try? JSONEncoder().encode(all),
               let str = String(data: data, encoding: .utf8) else { return "[]" }
         return str
+    }
+
+    // MARK: - Measurement bridge (Phase 3b)
+
+    private struct BridgeMeasurement: Encodable {
+        let uid: String
+        let vertices: [[Double]]
+        let color: String
+        let segments: [Segment]
+
+        struct Segment: Encodable {
+            let label: String?
+        }
+    }
+
+    private func buildMeasurementJSON() -> String {
+        var all: [BridgeMeasurement] = []
+
+        for m in measurements where !m.points.isEmpty {
+            // Bridge schema is [lon, lat] per vertex. iOS holds
+            // CLLocationCoordinate2D (lat, lon) — flip on the way out.
+            let verts: [[Double]] = m.points.map { [$0.longitude, $0.latitude] }
+
+            // Per-segment label: index 0 has no preceding segment so its
+            // label is empty; index N's label is the great-circle distance
+            // between vertex N-1 and N.
+            var segments: [BridgeMeasurement.Segment] = []
+            segments.reserveCapacity(m.points.count)
+            for (i, pt) in m.points.enumerated() {
+                if i == 0 {
+                    segments.append(.init(label: ""))
+                } else {
+                    let prev = m.points[i - 1]
+                    let metres = CesiumMainMap.haversineMetres(prev, pt)
+                    segments.append(.init(label: CesiumMainMap.formatDistanceLabel(metres)))
+                }
+            }
+
+            all.append(BridgeMeasurement(
+                uid: "meas-\(m.id.uuidString)",
+                vertices: verts,
+                color: CesiumMainMap.hex(forUIColor: m.color),
+                segments: segments
+            ))
+        }
+
+        guard let data = try? JSONEncoder().encode(all),
+              let str = String(data: data, encoding: .utf8) else { return "[]" }
+        return str
+    }
+
+    // MARK: - Trail bridge (Phase 3b)
+
+    private struct BridgeTrail: Encodable {
+        let uid: String
+        let coords: [[Double]]
+        let color: String
+        let width: Double
+    }
+
+    private func buildTrailJSON() -> String {
+        // Only the operator's own breadcrumb trail today — the service
+        // models a single trail. Skip if there's nothing recorded (the JS
+        // side will diff this against any prior trails and remove them).
+        guard breadcrumbTrailCoords.count >= 2 else { return "[]" }
+
+        let coords: [[Double]] = breadcrumbTrailCoords.map { [$0.longitude, $0.latitude] }
+        let trail = BridgeTrail(
+            uid: "trail-self",
+            coords: coords,
+            color: breadcrumbTrailColor,
+            width: 3
+        )
+
+        guard let data = try? JSONEncoder().encode([trail]),
+              let str = String(data: data, encoding: .utf8) else { return "[]" }
+        return str
+    }
+
+    /// Great-circle distance in metres between two coordinates. Mirrors
+    /// the JS `_havDist` so a segment computed in Swift matches a segment
+    /// the HTML side would compute itself.
+    private static func haversineMetres(_ a: CLLocationCoordinate2D, _ b: CLLocationCoordinate2D) -> Double {
+        let R = 6_371_000.0
+        let lat1 = a.latitude * .pi / 180
+        let lat2 = b.latitude * .pi / 180
+        let dLat = (b.latitude - a.latitude) * .pi / 180
+        let dLon = (b.longitude - a.longitude) * .pi / 180
+        let s = sin(dLat / 2) * sin(dLat / 2)
+              + cos(lat1) * cos(lat2) * sin(dLon / 2) * sin(dLon / 2)
+        return 2 * R * asin(min(1, sqrt(s)))
+    }
+
+    /// "1.2 km" if >= 1 km, otherwise "850 m" (integer metres). Matches
+    /// the contract documented in the Phase 3b spec.
+    private static func formatDistanceLabel(_ metres: Double) -> String {
+        if metres >= 1000 {
+            return String(format: "%.1f km", metres / 1000.0)
+        }
+        return "\(Int(metres.rounded())) m"
+    }
+
+    /// Hex string for a measurement's UIColor. Uses the same `#RRGGBB`
+    /// shape as `hex(forDrawingColor:)` so the JS side can lean on a
+    /// single CSS color parser.
+    private static func hex(forUIColor c: UIColor) -> String {
+        var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
+        c.getRed(&r, green: &g, blue: &b, alpha: &a)
+        let R = Int((max(0, min(1, r)) * 255).rounded())
+        let G = Int((max(0, min(1, g)) * 255).rounded())
+        let B = Int((max(0, min(1, b)) * 255).rounded())
+        return String(format: "#%02X%02X%02X", R, G, B)
     }
 
     /// CoT type codes look like `a-f-G-U-C-I` — second token is the
@@ -3818,7 +3982,7 @@ struct CesiumMainMap: UIViewRepresentable {
         <script src=\"https://cesium.com/downloads/cesiumjs/releases/1.124/Build/Cesium/Cesium.js\"></script>
         <script>
           Cesium.Ion.defaultAccessToken='\(cesiumIonToken)';
-          const _state={ready:false,viewer:null,entities:new Map(),drawings:new Map(),billboardCache:new Map()};
+          const _state={ready:false,viewer:null,entities:new Map(),drawings:new Map(),measurements:new Map(),trails:new Map(),billboardCache:new Map()};
           function _drawColor(hex,a){try{const c=Cesium.Color.fromCssColorString(hex||'#4ADE80');return a!==undefined?c.withAlpha(a):c}catch(e){return Cesium.Color.CYAN}}
           function _havDist(a,b){const R=6371000,lat1=a[1]*Math.PI/180,lat2=b[1]*Math.PI/180,dLat=(b[1]-a[1])*Math.PI/180,dLon=(b[0]-a[0])*Math.PI/180;const s=Math.sin(dLat/2)**2+Math.cos(lat1)*Math.cos(lat2)*Math.sin(dLon/2)**2;return 2*R*Math.asin(Math.min(1,Math.sqrt(s)))}
           function _fitViewport(){
@@ -3835,11 +3999,12 @@ struct CesiumMainMap: UIViewRepresentable {
             const key=a+'|'+(k||'');if(_state.billboardCache.has(key))return _state.billboardCache.get(key);
             const c=document.createElement('canvas');c.width=56;c.height=56;const ctx=c.getContext('2d');
             const color=_color(a);ctx.lineWidth=4;ctx.strokeStyle=color;ctx.fillStyle=color+'55';
-            if(a==='f'){ctx.beginPath();ctx.arc(28,28,22,0,Math.PI*2);ctx.fill();ctx.stroke();}
+            if(k==='aircraft'){ctx.beginPath();ctx.moveTo(28,6);ctx.lineTo(46,48);ctx.lineTo(28,38);ctx.lineTo(10,48);ctx.closePath();ctx.fill();ctx.stroke();}
+            else if(a==='f'){ctx.beginPath();ctx.arc(28,28,22,0,Math.PI*2);ctx.fill();ctx.stroke();}
             else if(a==='h'){ctx.beginPath();ctx.moveTo(28,4);ctx.lineTo(52,28);ctx.lineTo(28,52);ctx.lineTo(4,28);ctx.closePath();ctx.fill();ctx.stroke();}
             else if(a==='n'){ctx.fillRect(8,8,40,40);ctx.strokeRect(8,8,40,40);}
             else{ctx.beginPath();ctx.arc(20,28,10,0,Math.PI*2);ctx.arc(36,28,10,0,Math.PI*2);ctx.arc(28,20,10,0,Math.PI*2);ctx.arc(28,36,10,0,Math.PI*2);ctx.fill();ctx.stroke();}
-            ctx.fillStyle=color;ctx.beginPath();ctx.arc(28,28,3,0,Math.PI*2);ctx.fill();
+            if(k!=='aircraft'){ctx.fillStyle=color;ctx.beginPath();ctx.arc(28,28,3,0,Math.PI*2);ctx.fill();}
             const url=c.toDataURL('image/png');_state.billboardCache.set(key,url);return url;
           }
           function _parse(x){return typeof x==='string'?(()=>{try{return JSON.parse(x)}catch(e){return null}})():x}
@@ -3851,12 +4016,14 @@ struct CesiumMainMap: UIViewRepresentable {
           window.OmniBridge={
             upsertEntity(arg){const e=_parse(arg);if(!e||!e.uid||typeof e.lat!=='number'||typeof e.lon!=='number')return;const v=_state.viewer;if(!v)return;
               const hae=(typeof e.hae==='number'&&isFinite(e.hae))?e.hae:0;const useGround=hae===0;
-              const pos=Cesium.Cartesian3.fromDegrees(e.lon,e.lat,hae);let entity=_state.entities.get(e.uid);
+              const pos=Cesium.Cartesian3.fromDegrees(e.lon,e.lat,hae);
+              const rot=(typeof e.heading==='number')?-e.heading*Math.PI/180:0;
+              let entity=_state.entities.get(e.uid);
               if(!entity){entity=v.entities.add({id:e.uid,position:pos,
-                billboard:{image:_billboard(e.affiliation||'u',e.kind),verticalOrigin:Cesium.VerticalOrigin.CENTER,heightReference:useGround?Cesium.HeightReference.CLAMP_TO_GROUND:Cesium.HeightReference.NONE,disableDepthTestDistance:Number.POSITIVE_INFINITY,scale:0.7},
+                billboard:{image:_billboard(e.affiliation||'u',e.kind),verticalOrigin:Cesium.VerticalOrigin.CENTER,heightReference:useGround?Cesium.HeightReference.CLAMP_TO_GROUND:Cesium.HeightReference.NONE,disableDepthTestDistance:Number.POSITIVE_INFINITY,scale:e.kind==='aircraft'?0.85:0.7,rotation:rot},
                 label:e.callsign?{text:e.callsign,font:'12px -apple-system, sans-serif',fillColor:Cesium.Color.WHITE,outlineColor:Cesium.Color.BLACK,outlineWidth:2,style:Cesium.LabelStyle.FILL_AND_OUTLINE,pixelOffset:new Cesium.Cartesian2(0,-32),heightReference:useGround?Cesium.HeightReference.CLAMP_TO_GROUND:Cesium.HeightReference.NONE,disableDepthTestDistance:Number.POSITIVE_INFINITY}:undefined,
               });_state.entities.set(e.uid,entity);}
-              else{entity.position=pos;entity.billboard.image=_billboard(e.affiliation||'u',e.kind);entity.billboard.heightReference=useGround?Cesium.HeightReference.CLAMP_TO_GROUND:Cesium.HeightReference.NONE;if(entity.label&&e.callsign)entity.label.text=e.callsign;}
+              else{entity.position=pos;entity.billboard.image=_billboard(e.affiliation||'u',e.kind);entity.billboard.heightReference=useGround?Cesium.HeightReference.CLAMP_TO_GROUND:Cesium.HeightReference.NONE;entity.billboard.rotation=rot;if(entity.label&&e.callsign)entity.label.text=e.callsign;}
             },
             setEntities(arg){const list=_parse(arg);if(!Array.isArray(list))return;const seen=new Set();
               for(const e of list){if(e&&e.uid){seen.add(e.uid);window.OmniBridge.upsertEntity(e);}}
@@ -3889,7 +4056,34 @@ struct CesiumMainMap: UIViewRepresentable {
               const v=_state.viewer;if(!v)return;
               for(const uid of Array.from(_state.drawings.keys()))if(!seen.has(uid)){const e=_state.drawings.get(uid);if(e)v.entities.remove(e);_state.drawings.delete(uid);}
             },
-            removeDrawing(uid){const v=_state.viewer;if(!v)return;const e=_state.drawings.get(uid);if(e){v.entities.remove(e);_state.drawings.delete(uid);}}
+            removeDrawing(uid){const v=_state.viewer;if(!v)return;const e=_state.drawings.get(uid);if(e){v.entities.remove(e);_state.drawings.delete(uid);}},
+            upsertMeasurement(arg){const m=_parse(arg);if(!m||!m.uid||!Array.isArray(m.vertices)||m.vertices.length<2)return;const v=_state.viewer;if(!v)return;
+              const color=_drawColor(m.color||'#4ADE80',0.95),fillC=_drawColor(m.color||'#4ADE80',0.7);
+              const prior=_state.measurements.get(m.uid);if(prior){if(prior.entity)v.entities.remove(prior.entity);(prior.vertexEntities||[]).forEach(ve=>v.entities.remove(ve));}
+              const positions=m.vertices.map(c=>Cesium.Cartesian3.fromDegrees(c[0],c[1],0));
+              const line=v.entities.add({id:m.uid,polyline:{positions:positions,width:3,material:new Cesium.PolylineDashMaterialProperty({color:color,dashLength:16}),clampToGround:true}});
+              const vertexEntities=m.vertices.map((c,i)=>{const labelText=(m.segments&&m.segments[i])?m.segments[i].label:undefined;
+                return v.entities.add({id:m.uid+':v'+i,position:Cesium.Cartesian3.fromDegrees(c[0],c[1],0),
+                  point:{pixelSize:8,color:fillC,outlineColor:Cesium.Color.BLACK,outlineWidth:1.5,heightReference:Cesium.HeightReference.CLAMP_TO_GROUND,disableDepthTestDistance:Number.POSITIVE_INFINITY},
+                  label:labelText?{text:labelText,font:'11px -apple-system, sans-serif',fillColor:Cesium.Color.WHITE,outlineColor:Cesium.Color.BLACK,outlineWidth:2,style:Cesium.LabelStyle.FILL_AND_OUTLINE,pixelOffset:new Cesium.Cartesian2(0,-18),heightReference:Cesium.HeightReference.CLAMP_TO_GROUND,disableDepthTestDistance:Number.POSITIVE_INFINITY}:undefined});});
+              _state.measurements.set(m.uid,{entity:line,vertexEntities:vertexEntities});
+            },
+            setMeasurements(arg){const list=_parse(arg);if(!Array.isArray(list))return;const seen=new Set();
+              for(const m of list)if(m&&m.uid){seen.add(m.uid);window.OmniBridge.upsertMeasurement(m);}
+              const v=_state.viewer;if(!v)return;
+              for(const uid of Array.from(_state.measurements.keys()))if(!seen.has(uid)){const rec=_state.measurements.get(uid);if(rec.entity)v.entities.remove(rec.entity);(rec.vertexEntities||[]).forEach(ve=>v.entities.remove(ve));_state.measurements.delete(uid);}
+            },
+            upsertTrail(arg){const t=_parse(arg);if(!t||!t.uid||!Array.isArray(t.coords)||t.coords.length<2)return;const v=_state.viewer;if(!v)return;
+              const color=_drawColor(t.color||'#FFC107',0.85),width=typeof t.width==='number'?t.width:3;
+              const prior=_state.trails.get(t.uid);if(prior)v.entities.remove(prior);
+              const positions=t.coords.map(c=>Cesium.Cartesian3.fromDegrees(c[0],c[1],0));
+              _state.trails.set(t.uid,v.entities.add({id:t.uid,polyline:{positions:positions,width:width,material:color,clampToGround:true}}));
+            },
+            setTrails(arg){const list=_parse(arg);if(!Array.isArray(list))return;const seen=new Set();
+              for(const t of list)if(t&&t.uid){seen.add(t.uid);window.OmniBridge.upsertTrail(t);}
+              const v=_state.viewer;if(!v)return;
+              for(const uid of Array.from(_state.trails.keys()))if(!seen.has(uid)){const e=_state.trails.get(uid);if(e)v.entities.remove(e);_state.trails.delete(uid);}
+            }
           };
           (async()=>{
             _fitViewport();
