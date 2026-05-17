@@ -3771,6 +3771,10 @@ struct CesiumMainMap: UIViewRepresentable {
         // for contacts and self (the HTML bridge treats absent heading as
         // "no rotation"). Only aircraft carry a meaningful track angle.
         let heading: Double?
+        // MIL-STD-2525 SIDC code (e.g. "SFGPUCI----"). When present, the
+        // HTML side renders via milsymbol.js; when nil/unparseable it
+        // falls back to the affiliation-shape canvas billboard.
+        let sidc: String?
     }
 
     private func buildEntityJSON() -> String {
@@ -3785,7 +3789,10 @@ struct CesiumMainMap: UIViewRepresentable {
                 callsign: selfCallsign,
                 affiliation: "f",
                 kind: "self",
-                heading: nil
+                heading: nil,
+                // Self renders as a friendly ground combat unit so milsymbol
+                // draws the standard friendly frame the operator expects.
+                sidc: "SFGPUCI----"
             ))
         }
 
@@ -3798,7 +3805,11 @@ struct CesiumMainMap: UIViewRepresentable {
                 callsign: c.callsign,
                 affiliation: CesiumMainMap.affiliation(fromCoTType: c.type),
                 kind: "contact",
-                heading: nil
+                heading: nil,
+                // SIDC from the existing CoT→2525 mapping service — same
+                // mapping the 2D Mapbox / MapKit paths use, so a contact
+                // reads identically across all engines.
+                sidc: MilStdIconService.shared.getSIDC(for: c.type)
             ))
         }
 
@@ -3816,7 +3827,11 @@ struct CesiumMainMap: UIViewRepresentable {
                 callsign: a.callsign,
                 affiliation: "n",
                 kind: "aircraft",
-                heading: normalisedHeading
+                heading: normalisedHeading,
+                // Aircraft keep the heading-rotated arrow billboard — the
+                // HTML _billboard() function ignores sidc when kind ==
+                // "aircraft" so the directional arrow wins.
+                sidc: nil
             ))
         }
 
@@ -3980,6 +3995,7 @@ struct CesiumMainMap: UIViewRepresentable {
         <div id=\"loading\"><span class=\"dot\"></span><span class=\"dot\"></span><span class=\"dot\"></span><div class=\"label\">Loading 3D world…</div></div>
         <div id=\"cesiumContainer\"></div>
         <script src=\"https://cesium.com/downloads/cesiumjs/releases/1.124/Build/Cesium/Cesium.js\"></script>
+        <script src=\"https://unpkg.com/milsymbol@2.2.0/dist/milsymbol.js\"></script>
         <script>
           Cesium.Ion.defaultAccessToken='\(cesiumIonToken)';
           const _state={ready:false,viewer:null,entities:new Map(),drawings:new Map(),measurements:new Map(),trails:new Map(),billboardCache:new Map()};
@@ -3995,7 +4011,9 @@ struct CesiumMainMap: UIViewRepresentable {
           window.addEventListener('resize',_fitViewport);
           document.addEventListener('DOMContentLoaded',_fitViewport);
           function _color(a){return a==='f'?'#4ADE80':a==='h'?'#F44336':a==='n'?'#FFC107':'#B39DDB'}
-          function _billboard(a,k){
+          function _billboard(a,k,sidc){
+            if(sidc&&window.ms&&k!=='aircraft'){const sk='sidc|'+sidc;if(_state.billboardCache.has(sk))return _state.billboardCache.get(sk);
+              try{const sym=new window.ms.Symbol(sidc,{size:32,infoBackground:'transparent',infoColor:'white'});const url=sym.asCanvas().toDataURL('image/png');_state.billboardCache.set(sk,url);return url;}catch(e){console.warn('milsymbol failed for',sidc,e);}}
             const key=a+'|'+(k||'');if(_state.billboardCache.has(key))return _state.billboardCache.get(key);
             const c=document.createElement('canvas');c.width=56;c.height=56;const ctx=c.getContext('2d');
             const color=_color(a);ctx.lineWidth=4;ctx.strokeStyle=color;ctx.fillStyle=color+'55';
@@ -4020,10 +4038,10 @@ struct CesiumMainMap: UIViewRepresentable {
               const rot=(typeof e.heading==='number')?-e.heading*Math.PI/180:0;
               let entity=_state.entities.get(e.uid);
               if(!entity){entity=v.entities.add({id:e.uid,position:pos,
-                billboard:{image:_billboard(e.affiliation||'u',e.kind),verticalOrigin:Cesium.VerticalOrigin.CENTER,heightReference:useGround?Cesium.HeightReference.CLAMP_TO_GROUND:Cesium.HeightReference.NONE,disableDepthTestDistance:Number.POSITIVE_INFINITY,scale:e.kind==='aircraft'?0.85:0.7,rotation:rot},
+                billboard:{image:_billboard(e.affiliation||'u',e.kind,e.sidc),verticalOrigin:Cesium.VerticalOrigin.CENTER,heightReference:useGround?Cesium.HeightReference.CLAMP_TO_GROUND:Cesium.HeightReference.NONE,disableDepthTestDistance:Number.POSITIVE_INFINITY,scale:e.kind==='aircraft'?0.85:0.7,rotation:rot},
                 label:e.callsign?{text:e.callsign,font:'12px -apple-system, sans-serif',fillColor:Cesium.Color.WHITE,outlineColor:Cesium.Color.BLACK,outlineWidth:2,style:Cesium.LabelStyle.FILL_AND_OUTLINE,pixelOffset:new Cesium.Cartesian2(0,-32),heightReference:useGround?Cesium.HeightReference.CLAMP_TO_GROUND:Cesium.HeightReference.NONE,disableDepthTestDistance:Number.POSITIVE_INFINITY}:undefined,
               });_state.entities.set(e.uid,entity);}
-              else{entity.position=pos;entity.billboard.image=_billboard(e.affiliation||'u',e.kind);entity.billboard.heightReference=useGround?Cesium.HeightReference.CLAMP_TO_GROUND:Cesium.HeightReference.NONE;entity.billboard.rotation=rot;if(entity.label&&e.callsign)entity.label.text=e.callsign;}
+              else{entity.position=pos;entity.billboard.image=_billboard(e.affiliation||'u',e.kind,e.sidc);entity.billboard.heightReference=useGround?Cesium.HeightReference.CLAMP_TO_GROUND:Cesium.HeightReference.NONE;entity.billboard.rotation=rot;if(entity.label&&e.callsign)entity.label.text=e.callsign;}
             },
             setEntities(arg){const list=_parse(arg);if(!Array.isArray(list))return;const seen=new Set();
               for(const e of list){if(e&&e.uid){seen.add(e.uid);window.OmniBridge.upsertEntity(e);}}
