@@ -998,6 +998,9 @@ struct ATAKMapView: View {
             CesiumMainMap(
                 contacts: cotMarkers,
                 aircraft: adsbService.settings.isEnabled ? adsbService.aircraft : [],
+                lineDrawings: drawingStore.lines,
+                circleDrawings: drawingStore.circles,
+                polygonDrawings: drawingStore.polygons,
                 selfLocation: locationManager.location,
                 selfCallsign: userCallsign
             )
@@ -3570,6 +3573,9 @@ struct OverlayToggleButton: View {
 struct CesiumMainMap: UIViewRepresentable {
     let contacts: [CoTMarker]
     let aircraft: [Aircraft]
+    let lineDrawings: [LineDrawing]
+    let circleDrawings: [CircleDrawing]
+    let polygonDrawings: [PolygonDrawing]
     let selfLocation: CLLocation?
     let selfCallsign: String
 
@@ -3593,10 +3599,13 @@ struct CesiumMainMap: UIViewRepresentable {
 
     func updateUIView(_ webView: WKWebView, context: Context) {
         context.coordinator.parent = self
-        let payload = buildEntityJSON()
-        context.coordinator.lastSnapshot = payload
+        let entities = buildEntityJSON()
+        let drawings = buildDrawingJSON()
+        context.coordinator.lastSnapshot = entities
+        context.coordinator.lastDrawingsSnapshot = drawings
         if context.coordinator.isReady {
-            webView.evaluateJavaScript("window.OmniBridge.setEntities(\(payload));", completionHandler: nil)
+            webView.evaluateJavaScript("window.OmniBridge.setEntities(\(entities));", completionHandler: nil)
+            webView.evaluateJavaScript("window.OmniBridge.setDrawings(\(drawings));", completionHandler: nil)
         }
     }
 
@@ -3607,6 +3616,7 @@ struct CesiumMainMap: UIViewRepresentable {
         weak var webView: WKWebView?
         var isReady = false
         var lastSnapshot: String = "[]"
+        var lastDrawingsSnapshot: String = "[]"
 
         init(_ parent: CesiumMainMap) {
             self.parent = parent
@@ -3616,14 +3626,101 @@ struct CesiumMainMap: UIViewRepresentable {
         func userContentController(_ controller: WKUserContentController, didReceive message: WKScriptMessage) {
             if message.name == "omniBridgeReady" {
                 isReady = true
-                // Drain the latest snapshot the moment the HTML signals it
+                // Drain the latest snapshots the moment the HTML signals it
                 // has the OmniBridge alive — anything queued during page
                 // load lands in one shot.
                 webView?.evaluateJavaScript(
                     "window.OmniBridge.setEntities(\(lastSnapshot));",
                     completionHandler: nil
                 )
+                webView?.evaluateJavaScript(
+                    "window.OmniBridge.setDrawings(\(lastDrawingsSnapshot));",
+                    completionHandler: nil
+                )
             }
+        }
+    }
+
+    // MARK: - Drawing bridge (Phase 3a)
+
+    private struct BridgeDrawing: Encodable {
+        let uid: String
+        let kind: String      // "line" | "polygon" | "circle"
+        let coords: [[Double]]
+        let color: String
+        let width: Double
+    }
+
+    private func buildDrawingJSON() -> String {
+        var all: [BridgeDrawing] = []
+
+        for line in lineDrawings where !line.coordinates.isEmpty {
+            all.append(BridgeDrawing(
+                uid: "line-\(line.id.uuidString)",
+                kind: "line",
+                coords: line.coordinates.map { [$0.longitude, $0.latitude] },
+                color: CesiumMainMap.hex(forDrawingColor: line.color),
+                width: 3
+            ))
+        }
+
+        for polygon in polygonDrawings where !polygon.coordinates.isEmpty {
+            all.append(BridgeDrawing(
+                uid: "poly-\(polygon.id.uuidString)",
+                kind: "polygon",
+                coords: polygon.coordinates.map { [$0.longitude, $0.latitude] },
+                color: CesiumMainMap.hex(forDrawingColor: polygon.color),
+                width: 3
+            ))
+        }
+
+        for circle in circleDrawings {
+            // The shared bridge schema is [center, edge]; convert iOS's
+            // (center, radiusMetres) shape by shifting one degree's worth
+            // of longitude east by the radius distance.
+            let center = circle.center
+            let edge = CesiumMainMap.edgePoint(from: center, eastMetres: circle.radius)
+            all.append(BridgeDrawing(
+                uid: "circ-\(circle.id.uuidString)",
+                kind: "circle",
+                coords: [
+                    [center.longitude, center.latitude],
+                    [edge.longitude, edge.latitude],
+                ],
+                color: CesiumMainMap.hex(forDrawingColor: circle.color),
+                width: 3
+            ))
+        }
+
+        guard let data = try? JSONEncoder().encode(all),
+              let str = String(data: data, encoding: .utf8) else { return "[]" }
+        return str
+    }
+
+    /// Move `metres` east from a coordinate. Used to translate iOS's
+    /// (center, radius) circle convention to the bridge's [center, edge]
+    /// pair convention. Accurate enough at any latitude we'd plot a
+    /// tactical circle.
+    private static func edgePoint(from center: CLLocationCoordinate2D, eastMetres metres: Double) -> CLLocationCoordinate2D {
+        let metersPerDegLon = 111_320.0 * max(cos(center.latitude * .pi / 180), 0.01)
+        return CLLocationCoordinate2D(
+            latitude: center.latitude,
+            longitude: center.longitude + (metres / metersPerDegLon)
+        )
+    }
+
+    /// Hex string for the bridge — matches the system tints the 2D Mapbox
+    /// path uses so a shape rendered in either engine reads the same.
+    private static func hex(forDrawingColor c: DrawingColor) -> String {
+        switch c {
+        case .red:    return "#FF3B30"
+        case .blue:   return "#007AFF"
+        case .green:  return "#34C759"
+        case .yellow: return "#FFCC00"
+        case .orange: return "#FF9500"
+        case .purple: return "#AF52DE"
+        case .cyan:   return "#5AC8FA"
+        case .white:  return "#FFFFFF"
         }
     }
 
@@ -3726,7 +3823,9 @@ struct CesiumMainMap: UIViewRepresentable {
         <script src=\"https://cesium.com/downloads/cesiumjs/releases/1.124/Build/Cesium/Cesium.js\"></script>
         <script>
           Cesium.Ion.defaultAccessToken='\(cesiumIonToken)';
-          const _state={ready:false,viewer:null,entities:new Map(),billboardCache:new Map()};
+          const _state={ready:false,viewer:null,entities:new Map(),drawings:new Map(),billboardCache:new Map()};
+          function _drawColor(hex,a){try{const c=Cesium.Color.fromCssColorString(hex||'#4ADE80');return a!==undefined?c.withAlpha(a):c}catch(e){return Cesium.Color.CYAN}}
+          function _havDist(a,b){const R=6371000,lat1=a[1]*Math.PI/180,lat2=b[1]*Math.PI/180,dLat=(b[1]-a[1])*Math.PI/180,dLon=(b[0]-a[0])*Math.PI/180;const s=Math.sin(dLat/2)**2+Math.cos(lat1)*Math.cos(lat2)*Math.sin(dLon/2)**2;return 2*R*Math.asin(Math.min(1,Math.sqrt(s)))}
           function _fitViewport(){
             const w=window.innerWidth,h=window.innerHeight;
             document.body.style.width=w+'px';document.body.style.height=h+'px';
@@ -3774,7 +3873,28 @@ struct CesiumMainMap: UIViewRepresentable {
               v.camera.flyTo({destination:Cesium.Cartesian3.fromDegrees(e.lon,e.lat,(typeof e.range==='number')?e.range:5000),
                 orientation:{heading:Cesium.Math.toRadians(e.heading||0),pitch:Cesium.Math.toRadians(typeof e.pitch==='number'?e.pitch:-30),roll:0},duration:1.2});
             },
-            ping(){return _state.ready?'pong':'loading'}
+            ping(){return _state.ready?'pong':'loading'},
+            upsertDrawing(arg){const d=_parse(arg);if(!d||!d.uid||!d.kind||!Array.isArray(d.coords)||d.coords.length===0)return;const v=_state.viewer;if(!v)return;
+              const color=_drawColor(d.color,0.85),fillC=_drawColor(d.color,0.25),width=typeof d.width==='number'?d.width:3;
+              const useGround=!(typeof d.hae==='number'&&isFinite(d.hae)&&d.hae>0),hae=useGround?0:d.hae,heightRef=useGround?Cesium.HeightReference.CLAMP_TO_GROUND:Cesium.HeightReference.NONE;
+              const prior=_state.drawings.get(d.uid);if(prior)v.entities.remove(prior);
+              const opts={id:d.uid};
+              if(d.kind==='line'){opts.polyline={positions:d.coords.map(c=>Cesium.Cartesian3.fromDegrees(c[0],c[1],hae)),width:width,material:color,clampToGround:useGround};}
+              else if(d.kind==='polygon'){const positions=d.coords.map(c=>Cesium.Cartesian3.fromDegrees(c[0],c[1],hae));
+                opts.polygon={hierarchy:new Cesium.PolygonHierarchy(positions),material:(d.filled===false)?undefined:fillC,outline:true,outlineColor:color,outlineWidth:width,heightReference:heightRef};
+                if(useGround){opts.polyline={positions:[...positions,positions[0]],width:width,material:color,clampToGround:true};opts.polygon.outline=false;}}
+              else if(d.kind==='circle'){if(d.coords.length<2)return;const center=d.coords[0],edge=d.coords[1],radius=_havDist(center,edge);
+                opts.position=Cesium.Cartesian3.fromDegrees(center[0],center[1],hae);
+                opts.ellipse={semiMajorAxis:radius,semiMinorAxis:radius,material:fillC,outline:true,outlineColor:color,outlineWidth:width,heightReference:heightRef};}
+              else return;
+              _state.drawings.set(d.uid,v.entities.add(opts));
+            },
+            setDrawings(arg){const list=_parse(arg);if(!Array.isArray(list))return;const seen=new Set();
+              for(const d of list)if(d&&d.uid){seen.add(d.uid);window.OmniBridge.upsertDrawing(d);}
+              const v=_state.viewer;if(!v)return;
+              for(const uid of Array.from(_state.drawings.keys()))if(!seen.has(uid)){const e=_state.drawings.get(uid);if(e)v.entities.remove(e);_state.drawings.delete(uid);}
+            },
+            removeDrawing(uid){const v=_state.viewer;if(!v)return;const e=_state.drawings.get(uid);if(e){v.entities.remove(e);_state.drawings.delete(uid);}}
           };
           (async()=>{
             _fitViewport();
