@@ -3,6 +3,21 @@ import MapKit
 import CoreLocation
 import MapboxMaps
 import UIKit
+import WebKit
+
+// MARK: - Map engine selection
+
+/// Which engine renders the Map tab. Cesium 3D is the default first-class
+/// experience (photoreal terrain + atmosphere + true-altitude entities once
+/// the Phase 2 bridge lands). Mapbox 2D stays available as an offline /
+/// low-bandwidth / older-device fallback.
+enum MapEngine: String, CaseIterable, Identifiable, Codable {
+    case cesium3D = "cesium_3d"
+    case mapbox2D = "mapbox_2d"
+    var id: String { rawValue }
+    var displayName: String { self == .cesium3D ? "3D Globe" : "2D Map" }
+    var icon: String { self == .cesium3D ? "globe.americas.fill" : "map.fill" }
+}
 
 // ATAK-style Map View with tactical interface
 struct ATAKMapView: View {
@@ -56,6 +71,13 @@ struct ATAKMapView: View {
     @State private var showTraffic = false
     @State private var trackingMode: MapUserTrackingMode = .none
     @State private var orientation = UIDeviceOrientation.unknown
+
+    // Map engine selection — Cesium 3D is the default first-class experience;
+    // Mapbox 2D stays available as an offline / low-bandwidth fallback. The
+    // operator can flip between them via the engineToggleFAB in the map's
+    // bottom-left corner or from Settings.
+    @AppStorage("mapEngine") private var mapEngineRaw: String = MapEngine.cesium3D.rawValue
+    private var mapEngine: MapEngine { MapEngine(rawValue: mapEngineRaw) ?? .cesium3D }
 
     // Feature screen states
     @State private var showTeamManagement = false
@@ -778,6 +800,31 @@ struct ATAKMapView: View {
         var id: URL { url }
     }
 
+    // Engine toggle pill — flips between 3D Cesium globe and 2D Mapbox
+    // map. Lives in the bottom-left over the LiquidGlass tab bar so it's
+    // visible regardless of which engine is rendering underneath.
+    @ViewBuilder
+    private var engineToggleFAB: some View {
+        Button {
+            let nextEngine: MapEngine = (mapEngine == .cesium3D) ? .mapbox2D : .cesium3D
+            UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+            mapEngineRaw = nextEngine.rawValue
+        } label: {
+            Image(systemName: mapEngine == .cesium3D ? "map.fill" : "globe.americas.fill")
+                .font(.system(size: 22, weight: .semibold))
+                .foregroundColor(.white)
+                .frame(width: 44, height: 44)
+                .background(
+                    Circle()
+                        .fill(Color.black.opacity(0.65))
+                        .overlay(Circle().stroke(Color.white.opacity(0.15), lineWidth: 1))
+                )
+                .shadow(color: .black.opacity(0.35), radius: 8, x: 0, y: 4)
+        }
+        .accessibilityLabel(mapEngine == .cesium3D ? "Switch to 2D Map" : "Switch to 3D Globe")
+        .accessibilityHint("Toggles between the photoreal Cesium 3D globe and the offline-capable Mapbox 2D map")
+    }
+
     @ViewBuilder
     private var loadingScreen: some View {
         if showLoadingScreen {
@@ -932,6 +979,31 @@ struct ATAKMapView: View {
     }
 
     var body: some View {
+        switch mapEngine {
+        case .cesium3D: cesium3DBody
+        case .mapbox2D: mapbox2DBody
+        }
+    }
+
+    /// Phase 1: render the Cesium scene full-screen behind the existing top
+    /// chrome (status bar / server indicator) and the new engine-toggle FAB.
+    /// CoT entities, drawings, MGRS grid, lasso, etc. are 2D-only for now —
+    /// Phase 2 wires a JS bridge that pushes them into Cesium as Entity
+    /// objects at real altitude.
+    @ViewBuilder
+    private var cesium3DBody: some View {
+        ZStack(alignment: .bottomLeading) {
+            CesiumMainMap()
+                .ignoresSafeArea()
+            statusIndicators
+            engineToggleFAB
+                .padding(.leading, 16)
+                .padding(.bottom, 110) // clear the floating LiquidGlass tab bar
+        }
+    }
+
+    @ViewBuilder
+    private var mapbox2DBody: some View {
         ZStack {
             mainMapView
             gridOverlay
@@ -941,6 +1013,11 @@ struct ATAKMapView: View {
             mapOverlayComponents
             interactiveOverlays
             gpsFollowButton
+            engineToggleFAB
+                .padding(.leading, 16)
+                .padding(.bottom, 130)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
+                .zIndex(1008)
 
             // Compact measurement overlay (ATAK-style)
             if showMeasurement {
@@ -3472,5 +3549,81 @@ struct OverlayToggleButton: View {
             .background(isActive ? Color.green.opacity(0.2) : Color.clear)
             .cornerRadius(6)
         }
+    }
+}
+
+// MARK: - Cesium 3D main-map engine (Phase 1)
+
+/// Full-screen WKWebView hosting the Cesium 3D scene as the main map
+/// surface. Unlike `CesiumScenePresenter` (the Tools-launched modal),
+/// this view renders edge-to-edge with no close button — it IS the map.
+/// CoT entities, drawings, and other tactical layers will land via a
+/// JS bridge in Phase 2.
+struct CesiumMainMap: UIViewRepresentable {
+    func makeUIView(context: Context) -> WKWebView {
+        let config = WKWebViewConfiguration()
+        config.allowsInlineMediaPlayback = true
+        config.defaultWebpagePreferences.allowsContentJavaScript = true
+
+        let webView = WKWebView(frame: .zero, configuration: config)
+        webView.isOpaque = false
+        webView.backgroundColor = .black
+        webView.scrollView.backgroundColor = .black
+        webView.scrollView.bounces = false
+        webView.scrollView.contentInsetAdjustmentBehavior = .never
+
+        webView.loadHTMLString(CesiumMainMap.html, baseURL: URL(string: "https://cesium.com/"))
+        return webView
+    }
+
+    func updateUIView(_ webView: WKWebView, context: Context) {
+        // Phase 1: no live updates. Phase 2 will eval JS here to push
+        // contact upserts / removes / camera-flyTo into the scene.
+    }
+
+    private static let cesiumIonToken =
+        "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqdGkiOiI3NDUwNGNjMy05ZGM2LTRhNjgtYWY1ZS0xNjdjMTI0OTYxMjYiLCJpZCI6NDMyNTU0LCJpc3MiOiJodHRwczovL2lvbi5jZXNpdW0uY29tIiwiYXVkIjoidW5kZWZpbmVkX2RlZmF1bHQiLCJpYXQiOjE3Nzg5OTYwNzd9.4MTmIKjioTboeXn02fm7i7Ftude-JVIg3RYW4jgIZ48"
+
+    private static var html: String {
+        """
+        <!DOCTYPE html><html lang=\"en\"><head>
+        <meta charset=\"utf-8\">
+        <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover\">
+        <link href=\"https://cesium.com/downloads/cesiumjs/releases/1.124/Build/Cesium/Widgets/widgets.css\" rel=\"stylesheet\">
+        <style>
+          html,body{margin:0;padding:0;height:100%;width:100%;overflow:hidden;background:#000;color:#fff;font-family:-apple-system,BlinkMacSystemFont,sans-serif}
+          #cesiumContainer{position:absolute;inset:0}
+          #loading{position:absolute;top:50%;left:0;right:0;text-align:center;transform:translateY(-50%);z-index:10;pointer-events:none}
+          .dot{display:inline-block;width:12px;height:12px;border-radius:50%;background:#FFCC00;margin:0 4px;animation:p 1.4s infinite}
+          .dot:nth-child(2){animation-delay:.2s}.dot:nth-child(3){animation-delay:.4s}
+          @keyframes p{0%,80%,100%{opacity:.3}40%{opacity:1}}
+          .label{margin-top:16px;font-size:14px;opacity:.7}
+          .cesium-viewer-bottom{display:none!important}
+        </style></head><body>
+        <div id=\"loading\"><span class=\"dot\"></span><span class=\"dot\"></span><span class=\"dot\"></span><div class=\"label\">Loading 3D world…</div></div>
+        <div id=\"cesiumContainer\"></div>
+        <script src=\"https://cesium.com/downloads/cesiumjs/releases/1.124/Build/Cesium/Cesium.js\"></script>
+        <script>
+          Cesium.Ion.defaultAccessToken='\(cesiumIonToken)';
+          (async()=>{
+            const v=new Cesium.Viewer('cesiumContainer',{
+              terrain:Cesium.Terrain.fromWorldTerrain(),
+              animation:false,timeline:false,baseLayerPicker:false,geocoder:false,
+              homeButton:false,sceneModePicker:false,navigationHelpButton:false,
+              fullscreenButton:false,infoBox:false,selectionIndicator:false,
+              creditContainer:document.createElement('div')
+            });
+            v.scene.skyAtmosphere.show=true;v.scene.globe.enableLighting=true;
+            try{const t=await Cesium.createGooglePhotorealistic3DTileset();v.scene.primitives.add(t);}catch(e){console.warn('Photoreal unavailable:',e);}
+            v.camera.flyTo({
+              destination:Cesium.Cartesian3.fromDegrees(-77.0365,38.8977,5000),
+              orientation:{heading:0,pitch:Cesium.Math.toRadians(-30),roll:0},
+              duration:1.5,
+              complete:()=>{const el=document.getElementById('loading');if(el)el.style.display='none';}
+            });
+            // Phase 2 will install a window.OmniBridge here for CoT upserts.
+          })().catch(e=>{const el=document.getElementById('loading');if(el)el.innerHTML='<div class=\"label\">3D scene failed: '+(e&&e.message?e.message:'unknown')+'</div>';});
+        </script></body></html>
+        """
     }
 }
