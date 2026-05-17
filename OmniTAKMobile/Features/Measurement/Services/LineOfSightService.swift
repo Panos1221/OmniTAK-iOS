@@ -580,10 +580,5 @@ enum PropagationEnvironment: String, CaseIterable {
     case forest = "Forest"
 }
 
-// MARK: - CLLocationCoordinate2D Extension
-
-extension CLLocationCoordinate2D: @retroactive Equatable {
-    public static func == (lhs: CLLocationCoordinate2D, rhs: CLLocationCoordinate2D) -> Bool {
-        return lhs.latitude == rhs.latitude && lhs.longitude == rhs.longitude
-    }
-}
+// CLLocationCoordinate2D already conforms to Equatable via CoreLocation
+// (iOS 17+) and Mapbox's own retroactive conformance, so we don't redeclare.

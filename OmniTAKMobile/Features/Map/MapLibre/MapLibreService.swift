@@ -2,299 +2,266 @@
 //  MapLibreService.swift
 //  OmniTAKMobile
 //
-//  Service layer for MapLibre configuration, terrain, and state management
+//  Service layer for the Mapbox Maps SDK v3 (native).
+//  Class/struct/enum names are preserved (MapLibre*) so existing call sites
+//  keep compiling; a rename PR can follow once the engine swap is verified.
 //
 
 import Foundation
-import MapLibre
+import MapboxMaps
 import CoreLocation
 import SwiftUI
+import UIKit
 
-// MARK: - MapLibre Service
+// MARK: - Map Service
 
 class MapLibreService: ObservableObject {
     static let shared = MapLibreService()
 
-    // MARK: - Published Properties
-
     @Published var isMapLoaded = false
     @Published var is3DEnabled = false
     @Published var terrainExaggeration: Double = 1.5
-    @Published var currentStyle: MapLibreStyle = .liberty
+    @Published var currentStyle: MapLibreStyle = .standard
     @Published var showBuildings = true
 
-    // MARK: - Map Reference
+    weak var mapView: MapView?
 
-    weak var mapView: MLNMapView?
+    var currentStyleURL: URL? { currentStyle.url }
 
-    // MARK: - Tile Providers
+    // MARK: - Terrain & Atmosphere
 
-    // OpenFreeMap - Free, no API key required, no rate limits
-    // https://openfreemap.org
-    // Uses OpenStreetMap data, MIT license, attribution automatic with MapLibre
+    func configureTerrain(for _: Any? = nil) {
+        guard let mapView else { return }
+        guard is3DEnabled else { removeTerrain(from: nil); return }
 
-    // MARK: - Style URLs
+        do {
+            if !mapView.mapboxMap.sourceExists(withId: "mapbox-dem") {
+                var source = RasterDemSource(id: "mapbox-dem")
+                source.url = "mapbox://mapbox.mapbox-terrain-dem-v1"
+                source.tileSize = 514
+                source.maxzoom = 14.0
+                try mapView.mapboxMap.addSource(source)
+            }
 
-    var currentStyleURL: URL? {
-        return currentStyle.url
-    }
+            var terrain = Terrain(sourceId: "mapbox-dem")
+            terrain.exaggeration = .constant(terrainExaggeration)
+            try mapView.mapboxMap.setTerrain(terrain)
 
-    // MARK: - Terrain Configuration
-
-    func configureTerrain(for style: MLNStyle) {
-        guard is3DEnabled else {
-            removeTerrain(from: style)
-            return
-        }
-
-        // Add terrain RGB DEM source for hillshade visualization
-        // Using AWS Terrain Tiles (free, no API key required)
-        // Note: Full 3D terrain (MLNTerrain) is not yet available in MapLibre iOS SDK
-        let terrainSourceID = "terrain-dem"
-        if style.source(withIdentifier: terrainSourceID) == nil {
-            // AWS Terrain Tiles - free public dataset (Terrarium encoding)
-            let terrainURL = "https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png"
-            let terrainSource = MLNRasterDEMSource(
-                identifier: terrainSourceID,
-                tileURLTemplates: [terrainURL],
-                options: [
-                    .tileSize: 256,
-                    .minimumZoomLevel: 0,
-                    .maximumZoomLevel: 15
-                ]
-            )
-            style.addSource(terrainSource)
-        }
-
-        // Add hillshade layer for terrain visualization
-        addHillshadeLayer(to: style, sourceID: terrainSourceID)
-    }
-
-    func removeTerrain(from style: MLNStyle) {
-        // Remove hillshade layer
-        if let hillshade = style.layer(withIdentifier: "terrain-hillshade") {
-            style.removeLayer(hillshade)
+            var atmosphere = Atmosphere()
+            atmosphere.color = .constant(StyleColor(red: 0, green: 128, blue: 255, alpha: 1.0)!)
+            atmosphere.highColor = .constant(StyleColor(red: 25, green: 77, blue: 179, alpha: 1.0)!)
+            atmosphere.horizonBlend = .constant(0.1)
+            atmosphere.spaceColor = .constant(StyleColor(red: 0, green: 0, blue: 13, alpha: 1.0)!)
+            atmosphere.starIntensity = .constant(0.15)
+            try mapView.mapboxMap.setAtmosphere(atmosphere)
+        } catch {
+            print("MapLibreService: failed to configure terrain — \(error)")
         }
     }
 
-    private func addHillshadeLayer(to style: MLNStyle, sourceID: String) {
-        let hillshadeID = "terrain-hillshade"
-
-        // Remove existing if present
-        if let existing = style.layer(withIdentifier: hillshadeID) {
-            style.removeLayer(existing)
-        }
-
-        let hillshade = MLNHillshadeStyleLayer(identifier: hillshadeID, source: style.source(withIdentifier: sourceID)!)
-        hillshade.hillshadeExaggeration = NSExpression(forConstantValue: 0.5)
-        hillshade.hillshadeShadowColor = NSExpression(forConstantValue: UIColor.black.withAlphaComponent(0.3))
-        hillshade.hillshadeHighlightColor = NSExpression(forConstantValue: UIColor.white.withAlphaComponent(0.3))
-        hillshade.hillshadeAccentColor = NSExpression(forConstantValue: UIColor.gray)
-
-        // Insert below labels
-        if let firstSymbolLayer = style.layers.first(where: { $0 is MLNSymbolStyleLayer }) {
-            style.insertLayer(hillshade, below: firstSymbolLayer)
-        } else {
-            style.addLayer(hillshade)
-        }
+    func removeTerrain(from _: Any? = nil) {
+        guard let mapView else { return }
+        mapView.mapboxMap.removeTerrain()
+        try? mapView.mapboxMap.removeAtmosphere()
     }
 
-    // Note: MLNSkyLayer is not available in current MapLibre iOS SDK
-    // Sky/atmosphere effects would require a future version of the SDK
-
-    // MARK: - Camera Controls
+    // MARK: - Camera
 
     func set3DMode(enabled: Bool) {
         is3DEnabled = enabled
-
-        guard let mapView = mapView, let style = mapView.style else { return }
-
+        guard let mapView else { return }
+        let camera = CameraOptions(pitch: enabled ? 60 : 0)
+        mapView.camera.ease(to: camera, duration: 0.5)
         if enabled {
-            // Tilt camera for 3D view
-            let camera = mapView.camera
-            camera.pitch = 60
-            mapView.setCamera(camera, withDuration: 0.5, animationTimingFunction: CAMediaTimingFunction(name: .easeInEaseOut))
-
-            configureTerrain(for: style)
+            configureTerrain()
         } else {
-            // Reset to 2D view
-            let camera = mapView.camera
-            camera.pitch = 0
-            mapView.setCamera(camera, withDuration: 0.5, animationTimingFunction: CAMediaTimingFunction(name: .easeInEaseOut))
-
-            removeTerrain(from: style)
+            removeTerrain()
         }
     }
 
     func setTerrainExaggeration(_ value: Double) {
         terrainExaggeration = value
-        // Note: Full terrain exaggeration requires MLNTerrain which is not available
-        // in the current MapLibre iOS SDK. This value is stored for future use
-        // or when using hillshade visualization intensity.
+        if is3DEnabled { configureTerrain() }
     }
 
     func setCameraPitch(_ pitch: Double) {
-        guard let mapView = mapView else { return }
-
-        let camera = mapView.camera
-        camera.pitch = CGFloat(min(85, max(0, pitch)))
-        mapView.setCamera(camera, animated: true)
+        guard let mapView else { return }
+        let clamped = CGFloat(min(85, max(0, pitch)))
+        mapView.camera.ease(to: CameraOptions(pitch: clamped), duration: 0.25)
     }
 
     func setCameraBearing(_ bearing: Double) {
-        guard let mapView = mapView else { return }
-        mapView.direction = bearing
+        guard let mapView else { return }
+        mapView.camera.ease(to: CameraOptions(bearing: bearing), duration: 0.25)
     }
 
-    func flyTo(coordinate: CLLocationCoordinate2D, zoom: Double? = nil, pitch: Double? = nil, bearing: Double? = nil, duration: TimeInterval = 2.0) {
-        guard let mapView = mapView else { return }
-
-        let camera = MLNMapCamera(
-            lookingAtCenter: coordinate,
-            altitude: mapView.camera.altitude,
-            pitch: CGFloat(pitch ?? Double(mapView.camera.pitch)),
-            heading: bearing ?? mapView.direction
+    func flyTo(coordinate: CLLocationCoordinate2D,
+               zoom: Double? = nil,
+               pitch: Double? = nil,
+               bearing: Double? = nil,
+               duration: TimeInterval = 2.0) {
+        guard let mapView else { return }
+        let current = mapView.mapboxMap.cameraState
+        let opts = CameraOptions(
+            center: coordinate,
+            zoom: zoom ?? current.zoom,
+            bearing: bearing ?? current.bearing,
+            pitch: pitch.map { CGFloat($0) } ?? current.pitch
         )
-
-        if let zoom = zoom {
-            camera.altitude = MLNAltitudeForZoomLevel(zoom, CGFloat(camera.pitch), coordinate.latitude, mapView.frame.size)
-        }
-
-        mapView.fly(to: camera, withDuration: duration, completionHandler: nil)
+        mapView.camera.fly(to: opts, duration: duration)
     }
 
     func resetCamera() {
-        guard let mapView = mapView else { return }
-
-        let camera = MLNMapCamera(
-            lookingAtCenter: mapView.centerCoordinate,
-            altitude: mapView.camera.altitude,
-            pitch: 0,
-            heading: 0
-        )
-
-        mapView.fly(to: camera, withDuration: 0.5, completionHandler: nil)
+        guard let mapView else { return }
+        let current = mapView.mapboxMap.cameraState
+        let opts = CameraOptions(center: current.center, zoom: current.zoom, bearing: 0, pitch: 0)
+        mapView.camera.fly(to: opts, duration: 0.5)
     }
 
-    // MARK: - Style Management
+    // MARK: - Style
 
     func setStyle(_ style: MapLibreStyle) {
         currentStyle = style
-
-        guard let mapView = mapView, let url = style.url else { return }
-        mapView.styleURL = url
+        guard let mapView else { return }
+        mapView.mapboxMap.loadStyle(style.styleURI) { [weak self] _ in
+            if self?.is3DEnabled == true {
+                self?.configureTerrain()
+            }
+        }
     }
 
-    // MARK: - Marker Management
+    // MARK: - Annotations
 
-    func addMarker(at coordinate: CLLocationCoordinate2D, title: String?, icon: UIImage? = nil) -> MLNPointAnnotation {
-        let annotation = MLNPointAnnotation()
-        annotation.coordinate = coordinate
-        annotation.title = title
-        mapView?.addAnnotation(annotation)
+    private var pointManager: PointAnnotationManager?
+    private var lineManager: PolylineAnnotationManager?
+
+    private func ensurePointManager() -> PointAnnotationManager? {
+        if let m = pointManager { return m }
+        guard let mapView else { return nil }
+        let m = mapView.annotations.makePointAnnotationManager()
+        pointManager = m
+        return m
+    }
+
+    private func ensureLineManager() -> PolylineAnnotationManager? {
+        if let m = lineManager { return m }
+        guard let mapView else { return nil }
+        let m = mapView.annotations.makePolylineAnnotationManager()
+        lineManager = m
+        return m
+    }
+
+    @discardableResult
+    func addMarker(at coordinate: CLLocationCoordinate2D,
+                   title: String?,
+                   icon: UIImage? = nil) -> PointAnnotation? {
+        guard let manager = ensurePointManager() else { return nil }
+        var annotation = PointAnnotation(coordinate: coordinate)
+        if let icon {
+            annotation.image = .init(image: icon, name: title ?? UUID().uuidString)
+        }
+        annotation.textField = title
+        manager.annotations.append(annotation)
         return annotation
     }
 
-    func removeMarker(_ annotation: MLNPointAnnotation) {
-        mapView?.removeAnnotation(annotation)
+    func removeMarker(_ annotation: PointAnnotation) {
+        pointManager?.annotations.removeAll { $0.id == annotation.id }
     }
 
     func removeAllMarkers() {
-        guard let mapView = mapView, let annotations = mapView.annotations else { return }
-        mapView.removeAnnotations(annotations)
+        pointManager?.annotations = []
     }
 
-    // MARK: - Polyline/Route
-
-    func addRoute(coordinates: [CLLocationCoordinate2D], color: UIColor = .systemBlue, lineWidth: CGFloat = 4) -> MLNPolyline {
-        let polyline = MLNPolyline(coordinates: coordinates, count: UInt(coordinates.count))
-        mapView?.addAnnotation(polyline)
-        return polyline
+    @discardableResult
+    func addRoute(coordinates: [CLLocationCoordinate2D],
+                  color: UIColor = .systemBlue,
+                  lineWidth: CGFloat = 4) -> PolylineAnnotation? {
+        guard let manager = ensureLineManager() else { return nil }
+        var annotation = PolylineAnnotation(lineCoordinates: coordinates)
+        annotation.lineColor = StyleColor(color)
+        annotation.lineWidth = Double(lineWidth)
+        manager.annotations.append(annotation)
+        return annotation
     }
 }
 
 // MARK: - Map Styles
 
 enum MapLibreStyle: String, CaseIterable, Identifiable {
-    case liberty = "Liberty"        // OpenFreeMap - colorful OSM style
-    case bright = "Bright"          // OpenFreeMap - clean bright style
-    case positron = "Positron"      // OpenFreeMap - light minimalist style
-    case streets = "Streets"        // OSM Carto style
-    case dark = "Dark"              // Dark theme
+    case standard  = "Standard"   // Mapbox Standard — 3D buildings + atmosphere + lighting
+    case streets   = "Streets"
+    case outdoors  = "Outdoors"
+    case satellite = "Satellite"
+    case dark      = "Dark"
+    case light     = "Light"
 
     var id: String { rawValue }
 
     var icon: String {
         switch self {
-        case .liberty: return "map.fill"
-        case .bright: return "sun.max.fill"
-        case .positron: return "rectangle.split.3x1"
-        case .streets: return "road.lanes"
-        case .dark: return "moon.fill"
+        case .standard:  return "globe.americas.fill"
+        case .streets:   return "map.fill"
+        case .outdoors:  return "mountain.2.fill"
+        case .satellite: return "globe"
+        case .dark:      return "moon.fill"
+        case .light:     return "sun.max.fill"
         }
     }
 
-    // Free tile sources - no API keys required
-    var url: URL? {
-        let urlString: String
-
+    var styleURI: StyleURI {
         switch self {
-        case .liberty:
-            // OpenFreeMap Liberty - colorful detailed style
-            urlString = "https://tiles.openfreemap.org/styles/liberty"
-        case .bright:
-            // OpenFreeMap Bright - clean bright style
-            urlString = "https://tiles.openfreemap.org/styles/bright"
-        case .positron:
-            // OpenFreeMap Positron - light minimalist style
-            urlString = "https://tiles.openfreemap.org/styles/positron"
-        case .streets:
-            // OpenStreetMap Carto style (raster fallback)
-            urlString = "https://tiles.openfreemap.org/styles/liberty"
-        case .dark:
-            // Dark style - using Positron as base (can be customized)
-            urlString = "https://tiles.openfreemap.org/styles/positron"
+        case .standard:  return .standard
+        case .streets:   return .streets
+        case .outdoors:  return .outdoors
+        case .satellite: return .satelliteStreets
+        case .dark:      return .dark
+        case .light:     return .light
         }
-
-        return URL(string: urlString)
     }
+
+    var url: URL? { URL(string: styleURI.rawValue) }
+
+    // Backwards-compat aliases for legacy OpenFreeMap style names.
+    static let liberty:  MapLibreStyle = .standard
+    static let bright:   MapLibreStyle = .outdoors
+    static let positron: MapLibreStyle = .light
 }
 
-// MARK: - Flyover Animation
+// MARK: - Flyover
 
 extension MapLibreService {
-    func startFlyover(along coordinates: [CLLocationCoordinate2D], altitude: Double = 500, duration: TimeInterval = 30) {
-        guard let mapView = mapView, coordinates.count >= 2 else { return }
-
-        // Calculate waypoints with smooth camera transitions
-        let totalPoints = coordinates.count
-        let segmentDuration = duration / Double(totalPoints - 1)
-
-        flyoverStep(mapView: mapView, coordinates: coordinates, currentIndex: 0, altitude: altitude, segmentDuration: segmentDuration)
+    func startFlyover(along coordinates: [CLLocationCoordinate2D],
+                      altitude: Double = 500,
+                      duration: TimeInterval = 30) {
+        guard let mapView, coordinates.count >= 2 else { return }
+        let segmentDuration = duration / Double(coordinates.count - 1)
+        flyoverStep(mapView: mapView,
+                    coordinates: coordinates,
+                    currentIndex: 0,
+                    altitude: altitude,
+                    segmentDuration: segmentDuration)
     }
 
-    private func flyoverStep(mapView: MLNMapView, coordinates: [CLLocationCoordinate2D], currentIndex: Int, altitude: Double, segmentDuration: TimeInterval) {
+    private func flyoverStep(mapView: MapView,
+                             coordinates: [CLLocationCoordinate2D],
+                             currentIndex: Int,
+                             altitude: Double,
+                             segmentDuration: TimeInterval) {
         guard currentIndex < coordinates.count else { return }
-
         let coordinate = coordinates[currentIndex]
-
-        // Calculate bearing to next point
-        var bearing: Double = mapView.direction
+        var bearing = mapView.mapboxMap.cameraState.bearing
         if currentIndex < coordinates.count - 1 {
-            let nextCoord = coordinates[currentIndex + 1]
-            bearing = bearingBetween(from: coordinate, to: nextCoord)
+            bearing = bearingBetween(from: coordinate, to: coordinates[currentIndex + 1])
         }
-
-        let camera = MLNMapCamera(
-            lookingAtCenter: coordinate,
-            altitude: altitude,
-            pitch: 70, // High pitch for flyover effect
-            heading: bearing
-        )
-
-        mapView.fly(to: camera, withDuration: segmentDuration) { [weak self] in
-            // Continue to next waypoint
-            self?.flyoverStep(mapView: mapView, coordinates: coordinates, currentIndex: currentIndex + 1, altitude: altitude, segmentDuration: segmentDuration)
+        let zoom = zoomFor(altitude: altitude, latitude: coordinate.latitude)
+        let camera = CameraOptions(center: coordinate, zoom: zoom, bearing: bearing, pitch: 70)
+        mapView.camera.fly(to: camera, duration: segmentDuration) { [weak self] _ in
+            self?.flyoverStep(mapView: mapView,
+                              coordinates: coordinates,
+                              currentIndex: currentIndex + 1,
+                              altitude: altitude,
+                              segmentDuration: segmentDuration)
         }
     }
 
@@ -302,13 +269,19 @@ extension MapLibreService {
         let lat1 = from.latitude * .pi / 180
         let lat2 = to.latitude * .pi / 180
         let dLon = (to.longitude - from.longitude) * .pi / 180
-
         let y = sin(dLon) * cos(lat2)
         let x = cos(lat1) * sin(lat2) - sin(lat1) * cos(lat2) * cos(dLon)
-
         var bearing = atan2(y, x) * 180 / .pi
         bearing = (bearing + 360).truncatingRemainder(dividingBy: 360)
-
         return bearing
+    }
+
+    private func zoomFor(altitude: Double, latitude: Double) -> Double {
+        let earthCircumference = 40_075_017.0
+        let latRad = latitude * .pi / 180
+        let metersPerPixelAtZoom0 = earthCircumference * cos(latRad) / 256
+        let targetMetersPerPixel = max(altitude / 50, 1.0)
+        let z = log2(metersPerPixelAtZoom0 / targetMetersPerPixel)
+        return min(max(z, 0), 22)
     }
 }

@@ -232,7 +232,7 @@
 		A39258D9C30862F33F8ED940 /* SUAPMHQ----.svg in Resources */ = {isa = PBXBuildFile; fileRef = C4C6755C8B6629F45526C18E /* SUAPMHQ----.svg */; };
 		A59C8E0C95564E90277AB48E /* TrackOverlayRenderer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5D2A5DFDD7975D09495FA81A /* TrackOverlayRenderer.swift */; };
 		A633639D8EC73D468D105269 /* TileDownloader.swift in Sources */ = {isa = PBXBuildFile; fileRef = 17EF09598A6E3E19F6F83576 /* TileDownloader.swift */; };
-		A6CEA9E02F31C917002D96E2 /* MapLibre in Frameworks */ = {isa = PBXBuildFile; productRef = 7D6348C4CBB3428FBD5FF5CC /* MapLibre */; };
+		A6CEA9E02F31C917002D96E2 /* MapboxMaps in Frameworks */ = {isa = PBXBuildFile; productRef = 7D6348C4CBB3428FBD5FF5CC /* MapboxMaps */; };
 		A7AC00010000000000B00001 /* ATAKPluginParser.swift in Sources */ = {isa = PBXBuildFile; fileRef = A7AC00010000000000A00001 /* ATAKPluginParser.swift */; };
 		A7AC00010000000000B00002 /* ATAKPluginSerializer.swift in Sources */ = {isa = PBXBuildFile; fileRef = A7AC00010000000000A00002 /* ATAKPluginSerializer.swift */; };
 		A9321E0EC74569E8473691D6 /* CompassOverlayView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2D240A72682F8C0E3253BA1F /* CompassOverlayView.swift */; };
@@ -742,7 +742,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				A6CEA9E02F31C917002D96E2 /* MapLibre in Frameworks */,
+				A6CEA9E02F31C917002D96E2 /* MapboxMaps in Frameworks */,
 				A1645CC72ECC172B00B71E89 /* BuildFile in Frameworks */,
 				A1645CC82ECC172B00B71E89 /* BuildFile in Frameworks */,
 				A1645CC92ECC172B00B71E89 /* BuildFile in Frameworks */,
@@ -2272,7 +2272,7 @@
 			);
 			name = OmniTAKMobile;
 			packageProductDependencies = (
-				7D6348C4CBB3428FBD5FF5CC /* MapLibre */,
+				7D6348C4CBB3428FBD5FF5CC /* MapboxMaps */,
 			);
 			productName = OmniTAKMobile;
 			productReference = A156DBDE2ED6E19C0021BAAF /* OmniTAKMobile.app */;
@@ -2311,7 +2311,7 @@
 			);
 			mainGroup = A1111111111111111111111100000071;
 			packageReferences = (
-				11568CD78DB24B0790FCA024 /* XCRemoteSwiftPackageReference "maplibre-gl-native-distribution" */,
+				11568CD78DB24B0790FCA024 /* XCRemoteSwiftPackageReference "mapbox-maps-ios" */,
 			);
 			productRefGroup = 0F7D455CCA5EFDEC5C816D72 /* Products */;
 			projectDirPath = "";
@@ -3029,21 +3029,21 @@
 /* End XCConfigurationList section */
 
 /* Begin XCRemoteSwiftPackageReference section */
-		11568CD78DB24B0790FCA024 /* XCRemoteSwiftPackageReference "maplibre-gl-native-distribution" */ = {
+		11568CD78DB24B0790FCA024 /* XCRemoteSwiftPackageReference "mapbox-maps-ios" */ = {
 			isa = XCRemoteSwiftPackageReference;
-			repositoryURL = "https://github.com/maplibre/maplibre-gl-native-distribution";
+			repositoryURL = "https://github.com/mapbox/mapbox-maps-ios";
 			requirement = {
 				kind = upToNextMajorVersion;
-				minimumVersion = 6.0.0;
+				minimumVersion = 11.0.0;
 			};
 		};
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
-		7D6348C4CBB3428FBD5FF5CC /* MapLibre */ = {
+		7D6348C4CBB3428FBD5FF5CC /* MapboxMaps */ = {
 			isa = XCSwiftPackageProductDependency;
-			package = 11568CD78DB24B0790FCA024 /* XCRemoteSwiftPackageReference "maplibre-gl-native-distribution" */;
-			productName = MapLibre;
+			package = 11568CD78DB24B0790FCA024 /* XCRemoteSwiftPackageReference "mapbox-maps-ios" */;
+			productName = MapboxMaps;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};
