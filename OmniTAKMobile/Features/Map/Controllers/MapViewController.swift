@@ -1001,6 +1001,7 @@ struct ATAKMapView: View {
                 lineDrawings: drawingStore.lines,
                 circleDrawings: drawingStore.circles,
                 polygonDrawings: drawingStore.polygons,
+                rangeRings: measurementManager.rangeRings,
                 selfLocation: locationManager.location,
                 selfCallsign: userCallsign,
                 // Phase 3b — saved distance / area measurements mirrored
@@ -3588,6 +3589,7 @@ struct CesiumMainMap: UIViewRepresentable {
     let lineDrawings: [LineDrawing]
     let circleDrawings: [CircleDrawing]
     let polygonDrawings: [PolygonDrawing]
+    let rangeRings: [RangeRing]
     let selfLocation: CLLocation?
     let selfCallsign: String
     // Phase 3b — measurement sessions to mirror as dashed polylines with
@@ -3727,6 +3729,25 @@ struct CesiumMainMap: UIViewRepresentable {
             ))
         }
 
+        // Range rings reuse the circle bridge path — same (center, edge)
+        // shape, different uid namespace so an operator's range rings
+        // can't collide with their drawing circles or the in-progress
+        // measurement.
+        for ring in rangeRings where ring.isVisible {
+            let center = ring.center
+            let edge = CesiumMainMap.edgePoint(from: center, eastMetres: ring.radiusMeters)
+            all.append(BridgeDrawing(
+                uid: "rring-\(ring.id.uuidString)",
+                kind: "circle",
+                coords: [
+                    [center.longitude, center.latitude],
+                    [edge.longitude, edge.latitude],
+                ],
+                color: CesiumMainMap.hex(forUIColor: ring.color),
+                width: 2
+            ))
+        }
+
         guard let data = try? JSONEncoder().encode(all),
               let str = String(data: data, encoding: .utf8) else { return "[]" }
         return str
@@ -3758,6 +3779,9 @@ struct CesiumMainMap: UIViewRepresentable {
         case .white:  return "#FFFFFF"
         }
     }
+
+    // (hex(forUIColor:) is defined later in this file alongside the
+    // measurement encoder — reuse it for range rings.)
 
     private struct BridgeEntity: Encodable {
         let uid: String
