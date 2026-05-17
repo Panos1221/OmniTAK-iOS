@@ -1,5 +1,7 @@
 import SwiftUI
 import MapKit
+import WebKit
+import CoreLocation
 
 // MARK: - ATAK Tools Menu View
 // Comprehensive tools menu with 5x4 grid layout matching ATAK interface
@@ -138,8 +140,12 @@ struct ATAKToolsView: View {
             BloodhoundSheetView()
         }
         .sheet(isPresented: $show3DView) {
-            // Use new MapLibre-based 3D terrain view
-            MapLibre3DSettingsView(service: MapLibreService.shared)
+            // CesiumJS scene with Google Photorealistic 3D Tiles + Cesium
+            // World Terrain, served from the cesium.com CDN. Replaces the
+            // previous MapLibre flat-3D modal — Cesium gives true 3D globe
+            // + atmosphere + photoreal cities, none of which the Mapbox
+            // mobile SDK can match today.
+            CesiumScenePresenter()
         }
         .sheet(isPresented: $showDigitalPointer) {
             DigitalPointerControlPanel()
@@ -450,3 +456,94 @@ struct BloodhoundSheetView: View {
 
 // MARK: - Color Extension
 // Color extension with hex initializer is defined in SharedUIComponents.swift
+
+// MARK: - Cesium 3D Scene presenter
+
+/// Full-screen wrapper around a WKWebView hosting CesiumJS with Google
+/// Photorealistic 3D Tiles + Cesium World Terrain. The HTML loads
+/// Cesium from cesium.com's CDN so we don't have to bundle the SDK.
+struct CesiumScenePresenter: View {
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        ZStack(alignment: .topTrailing) {
+            CesiumWebView()
+                .ignoresSafeArea()
+
+            Button {
+                dismiss()
+            } label: {
+                Image(systemName: "xmark.circle.fill")
+                    .font(.system(size: 32))
+                    .foregroundStyle(.white, .black.opacity(0.6))
+                    .padding(16)
+            }
+            .accessibilityLabel("Close 3D scene")
+        }
+        .background(Color.black)
+    }
+}
+
+private struct CesiumWebView: UIViewRepresentable {
+    func makeUIView(context: Context) -> WKWebView {
+        let config = WKWebViewConfiguration()
+        config.allowsInlineMediaPlayback = true
+        config.defaultWebpagePreferences.allowsContentJavaScript = true
+
+        let webView = WKWebView(frame: .zero, configuration: config)
+        webView.isOpaque = false
+        webView.backgroundColor = .black
+        webView.scrollView.backgroundColor = .black
+        webView.scrollView.bounces = false
+
+        webView.loadHTMLString(Self.html, baseURL: URL(string: "https://cesium.com/"))
+        return webView
+    }
+
+    func updateUIView(_ webView: WKWebView, context: Context) {}
+
+    private static let cesiumIonToken =
+        "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqdGkiOiI3NDUwNGNjMy05ZGM2LTRhNjgtYWY1ZS0xNjdjMTI0OTYxMjYiLCJpZCI6NDMyNTU0LCJpc3MiOiJodHRwczovL2lvbi5jZXNpdW0uY29tIiwiYXVkIjoidW5kZWZpbmVkX2RlZmF1bHQiLCJpYXQiOjE3Nzg5OTYwNzd9.4MTmIKjioTboeXn02fm7i7Ftude-JVIg3RYW4jgIZ48"
+
+    private static var html: String {
+        """
+        <!DOCTYPE html><html lang=\"en\"><head>
+        <meta charset=\"utf-8\">
+        <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover\">
+        <link href=\"https://cesium.com/downloads/cesiumjs/releases/1.124/Build/Cesium/Widgets/widgets.css\" rel=\"stylesheet\">
+        <style>
+          html,body{margin:0;padding:0;height:100%;width:100%;overflow:hidden;background:#000;color:#fff;font-family:-apple-system,BlinkMacSystemFont,sans-serif}
+          #cesiumContainer{position:absolute;inset:0}
+          #loading{position:absolute;top:50%;left:0;right:0;text-align:center;transform:translateY(-50%);z-index:10;pointer-events:none}
+          .dot{display:inline-block;width:12px;height:12px;border-radius:50%;background:#FFCC00;margin:0 4px;animation:p 1.4s infinite}
+          .dot:nth-child(2){animation-delay:.2s}.dot:nth-child(3){animation-delay:.4s}
+          @keyframes p{0%,80%,100%{opacity:.3}40%{opacity:1}}
+          .label{margin-top:16px;font-size:14px;opacity:.7}
+          .cesium-viewer-bottom{display:none!important}
+        </style></head><body>
+        <div id=\"loading\"><span class=\"dot\"></span><span class=\"dot\"></span><span class=\"dot\"></span><div class=\"label\">Loading 3D world…</div></div>
+        <div id=\"cesiumContainer\"></div>
+        <script src=\"https://cesium.com/downloads/cesiumjs/releases/1.124/Build/Cesium/Cesium.js\"></script>
+        <script>
+          Cesium.Ion.defaultAccessToken='\(cesiumIonToken)';
+          (async()=>{
+            const v=new Cesium.Viewer('cesiumContainer',{
+              terrain:Cesium.Terrain.fromWorldTerrain(),
+              animation:false,timeline:false,baseLayerPicker:false,geocoder:false,
+              homeButton:false,sceneModePicker:false,navigationHelpButton:false,
+              fullscreenButton:false,infoBox:false,selectionIndicator:false,
+              creditContainer:document.createElement('div')
+            });
+            v.scene.skyAtmosphere.show=true;v.scene.globe.enableLighting=true;
+            try{const t=await Cesium.createGooglePhotorealistic3DTileset();v.scene.primitives.add(t);}catch(e){console.warn('Photoreal unavailable:',e);}
+            v.camera.flyTo({
+              destination:Cesium.Cartesian3.fromDegrees(-77.0365,38.8977,5000),
+              orientation:{heading:0,pitch:Cesium.Math.toRadians(-30),roll:0},
+              duration:1.5,
+              complete:()=>{const el=document.getElementById('loading');if(el)el.style.display='none';}
+            });
+          })().catch(e=>{const el=document.getElementById('loading');if(el)el.innerHTML='<div class=\"label\">3D scene failed: '+(e&&e.message?e.message:'unknown')+'</div>';});
+        </script></body></html>
+        """
+    }
+}
