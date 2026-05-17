@@ -3708,8 +3708,12 @@ struct CesiumMainMap: UIViewRepresentable {
         <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover\">
         <link href=\"https://cesium.com/downloads/cesiumjs/releases/1.124/Build/Cesium/Widgets/widgets.css\" rel=\"stylesheet\">
         <style>
-          html,body{margin:0;padding:0;height:100%;width:100%;overflow:hidden;background:#000;color:#fff;font-family:-apple-system,BlinkMacSystemFont,sans-serif}
-          #cesiumContainer{position:absolute;inset:0}
+          /* Pin to viewport in pixels via JS — see _fitViewport. Android
+             WebView (after loadDataWithBaseURL) resolves 100%/100vh to 0,
+             and Cesium captures that as canvas size at construction.
+             Same fix on iOS is a no-op but keeps the HTML platform-shared. */
+          html,body{margin:0;padding:0;overflow:hidden;background:#000;color:#fff;font-family:-apple-system,BlinkMacSystemFont,sans-serif}
+          #cesiumContainer{position:fixed;top:0;left:0}
           #loading{position:absolute;top:50%;left:0;right:0;text-align:center;transform:translateY(-50%);z-index:10;pointer-events:none}
           .dot{display:inline-block;width:12px;height:12px;border-radius:50%;background:#FFCC00;margin:0 4px;animation:p 1.4s infinite}
           .dot:nth-child(2){animation-delay:.2s}.dot:nth-child(3){animation-delay:.4s}
@@ -3723,6 +3727,15 @@ struct CesiumMainMap: UIViewRepresentable {
         <script>
           Cesium.Ion.defaultAccessToken='\(cesiumIonToken)';
           const _state={ready:false,viewer:null,entities:new Map(),billboardCache:new Map()};
+          function _fitViewport(){
+            const w=window.innerWidth,h=window.innerHeight;
+            document.body.style.width=w+'px';document.body.style.height=h+'px';
+            const c=document.getElementById('cesiumContainer');
+            if(c){c.style.width=w+'px';c.style.height=h+'px';}
+            if(_state.viewer){_state.viewer.resize();_state.viewer.scene.requestRender();}
+          }
+          window.addEventListener('resize',_fitViewport);
+          document.addEventListener('DOMContentLoaded',_fitViewport);
           function _color(a){return a==='f'?'#4ADE80':a==='h'?'#F44336':a==='n'?'#FFC107':'#B39DDB'}
           function _billboard(a,k){
             const key=a+'|'+(k||'');if(_state.billboardCache.has(key))return _state.billboardCache.get(key);
@@ -3764,8 +3777,9 @@ struct CesiumMainMap: UIViewRepresentable {
             ping(){return _state.ready?'pong':'loading'}
           };
           (async()=>{
+            _fitViewport();
             const v=new Cesium.Viewer('cesiumContainer',{terrain:Cesium.Terrain.fromWorldTerrain(),animation:false,timeline:false,baseLayerPicker:false,geocoder:false,homeButton:false,sceneModePicker:false,navigationHelpButton:false,fullscreenButton:false,infoBox:false,selectionIndicator:false,creditContainer:document.createElement('div')});
-            v.scene.skyAtmosphere.show=true;v.scene.globe.enableLighting=true;_state.viewer=v;
+            v.scene.skyAtmosphere.show=true;v.scene.globe.enableLighting=true;_state.viewer=v;_fitViewport();
             try{const t=await Cesium.createGooglePhotorealistic3DTileset();v.scene.primitives.add(t);}catch(e){console.warn('Photoreal unavailable:',e);}
             v.camera.flyTo({destination:Cesium.Cartesian3.fromDegrees(-77.0365,38.8977,5000),orientation:{heading:0,pitch:Cesium.Math.toRadians(-30),roll:0},duration:1.5,complete:()=>{const el=document.getElementById('loading');if(el)el.style.display='none';}});
             _signalReady();
