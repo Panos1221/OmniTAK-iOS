@@ -1006,9 +1006,9 @@ struct ATAKMapView: View {
             )
             .ignoresSafeArea()
             statusIndicators
-            engineToggleFAB
-                .padding(.leading, 16)
-                .padding(.bottom, 110)
+            // Engine toggle lives in the Tools sheet (id: "engine") rather
+            // than a standalone FAB — operators expect mode toggles in the
+            // Tools tray, and we keep the map chrome uncluttered.
         }
     }
 
@@ -1023,11 +1023,6 @@ struct ATAKMapView: View {
             mapOverlayComponents
             interactiveOverlays
             gpsFollowButton
-            engineToggleFAB
-                .padding(.leading, 16)
-                .padding(.bottom, 130)
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
-                .zIndex(1008)
 
             // Compact measurement overlay (ATAK-style)
             if showMeasurement {

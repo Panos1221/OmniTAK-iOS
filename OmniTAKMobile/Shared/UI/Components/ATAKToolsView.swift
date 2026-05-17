@@ -45,6 +45,10 @@ struct ATAKToolsView: View {
     @StateObject private var trackRecordingService = TrackRecordingService()
     @ObservedObject private var pluginManager = PluginSettingsManager.shared
     @AppStorage("showDisabledTools") private var showDisabledTools: Bool = true
+    // Same key ATAKMapView reads — toggle from the Tools sheet flips the
+    // map engine for the whole app.
+    @AppStorage("mapEngine") private var mapEngineRaw: String = MapEngine.cesium3D.rawValue
+    private var mapEngine: MapEngine { MapEngine(rawValue: mapEngineRaw) ?? .cesium3D }
 
     let columns = Array(repeating: GridItem(.flexible(), spacing: 0), count: 5)
 
@@ -230,8 +234,15 @@ struct ATAKToolsView: View {
             showSPOTREP = true
 
         // Utilities
-        case "3dview":
-            show3DView = true
+        case "engine":
+            // Toggle main map between Cesium 3D and Mapbox 2D. The shared
+            // @AppStorage("mapEngine") key drives ATAKMapView's body
+            // branching, so flipping it re-renders the map without any
+            // further plumbing. Auto-dismiss the Tools sheet so the
+            // operator sees the new engine immediately.
+            let next: MapEngine = (mapEngine == .cesium3D) ? .mapbox2D : .cesium3D
+            mapEngineRaw = next.rawValue
+            isPresented = false
         case "brightness":
             showBrightnessControl = true
         case "plugins":
@@ -398,7 +409,7 @@ struct ATAKTool: Identifiable {
 
         // Row 4 - Utilities & Reports
         ATAKTool(id: "spotrep", displayName: "SPOTREP", iconName: "doc.text.fill", description: "Quick tactical spot report"),
-        ATAKTool(id: "3dview", displayName: "3D Terrain", iconName: "view.3d", description: "Real 3D terrain with MapLibre"),
+        ATAKTool(id: "engine", displayName: "Map Engine", iconName: "globe.americas.fill", description: "Toggle main map between 3D Cesium globe and 2D Mapbox (offline-friendly)"),
         ATAKTool(id: "turnbyturn", displayName: "Navigation", iconName: "location.north.line.fill", description: "Turn-by-turn voice navigation"),
         ATAKTool(id: "meshtastic", displayName: "Meshtastic", iconName: "dot.radiowaves.left.and.right", description: "Meshtastic mesh networking"),
 
