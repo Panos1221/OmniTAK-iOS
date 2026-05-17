@@ -78,6 +78,8 @@ struct ATAKMapView: View {
     // bottom-left corner or from Settings.
     @AppStorage("mapEngine") private var mapEngineRaw: String = MapEngine.cesium3D.rawValue
     private var mapEngine: MapEngine { MapEngine(rawValue: mapEngineRaw) ?? .cesium3D }
+    // (userCallsign is already declared further down; we reference it from
+    // cesium3DBody for the self-position label.)
 
     // Feature screen states
     @State private var showTeamManagement = false
@@ -993,12 +995,17 @@ struct ATAKMapView: View {
     @ViewBuilder
     private var cesium3DBody: some View {
         ZStack(alignment: .bottomLeading) {
-            CesiumMainMap()
-                .ignoresSafeArea()
+            CesiumMainMap(
+                contacts: cotMarkers,
+                aircraft: adsbService.settings.isEnabled ? adsbService.aircraft : [],
+                selfLocation: locationManager.location,
+                selfCallsign: userCallsign
+            )
+            .ignoresSafeArea()
             statusIndicators
             engineToggleFAB
                 .padding(.leading, 16)
-                .padding(.bottom, 110) // clear the floating LiquidGlass tab bar
+                .padding(.bottom, 110)
         }
     }
 
@@ -3552,18 +3559,25 @@ struct OverlayToggleButton: View {
     }
 }
 
-// MARK: - Cesium 3D main-map engine (Phase 1)
+// MARK: - Cesium 3D main-map engine (Phase 1 + Phase 2 bridge)
 
-/// Full-screen WKWebView hosting the Cesium 3D scene as the main map
-/// surface. Unlike `CesiumScenePresenter` (the Tools-launched modal),
-/// this view renders edge-to-edge with no close button — it IS the map.
-/// CoT entities, drawings, and other tactical layers will land via a
-/// JS bridge in Phase 2.
+/// Full-screen WKWebView hosting the Cesium 3D scene as the main map.
+/// Phase 2: a JS↔native bridge pushes CoT contacts, aircraft, and the
+/// operator's self-position into Cesium as `window.OmniBridge` entities
+/// at real altitude. The HTML is kept in lockstep with the Android
+/// `assets/cesium_scene.html` so both platforms render the same scene
+/// from the same bridge contract.
 struct CesiumMainMap: UIViewRepresentable {
+    let contacts: [CoTMarker]
+    let aircraft: [Aircraft]
+    let selfLocation: CLLocation?
+    let selfCallsign: String
+
     func makeUIView(context: Context) -> WKWebView {
         let config = WKWebViewConfiguration()
         config.allowsInlineMediaPlayback = true
         config.defaultWebpagePreferences.allowsContentJavaScript = true
+        config.userContentController.add(context.coordinator, name: "omniBridgeReady")
 
         let webView = WKWebView(frame: .zero, configuration: config)
         webView.isOpaque = false
@@ -3572,19 +3586,122 @@ struct CesiumMainMap: UIViewRepresentable {
         webView.scrollView.bounces = false
         webView.scrollView.contentInsetAdjustmentBehavior = .never
 
+        context.coordinator.webView = webView
         webView.loadHTMLString(CesiumMainMap.html, baseURL: URL(string: "https://cesium.com/"))
         return webView
     }
 
     func updateUIView(_ webView: WKWebView, context: Context) {
-        // Phase 1: no live updates. Phase 2 will eval JS here to push
-        // contact upserts / removes / camera-flyTo into the scene.
+        context.coordinator.parent = self
+        let payload = buildEntityJSON()
+        context.coordinator.lastSnapshot = payload
+        if context.coordinator.isReady {
+            webView.evaluateJavaScript("window.OmniBridge.setEntities(\(payload));", completionHandler: nil)
+        }
+    }
+
+    func makeCoordinator() -> Coordinator { Coordinator(self) }
+
+    class Coordinator: NSObject, WKScriptMessageHandler {
+        var parent: CesiumMainMap
+        weak var webView: WKWebView?
+        var isReady = false
+        var lastSnapshot: String = "[]"
+
+        init(_ parent: CesiumMainMap) {
+            self.parent = parent
+            super.init()
+        }
+
+        func userContentController(_ controller: WKUserContentController, didReceive message: WKScriptMessage) {
+            if message.name == "omniBridgeReady" {
+                isReady = true
+                // Drain the latest snapshot the moment the HTML signals it
+                // has the OmniBridge alive — anything queued during page
+                // load lands in one shot.
+                webView?.evaluateJavaScript(
+                    "window.OmniBridge.setEntities(\(lastSnapshot));",
+                    completionHandler: nil
+                )
+            }
+        }
+    }
+
+    private struct BridgeEntity: Encodable {
+        let uid: String
+        let lat: Double
+        let lon: Double
+        let hae: Double?
+        let callsign: String?
+        let affiliation: String
+        let kind: String
+    }
+
+    private func buildEntityJSON() -> String {
+        var all: [BridgeEntity] = []
+
+        if let loc = selfLocation {
+            all.append(BridgeEntity(
+                uid: "__self__",
+                lat: loc.coordinate.latitude,
+                lon: loc.coordinate.longitude,
+                hae: loc.altitude > 0 ? loc.altitude : nil,
+                callsign: selfCallsign,
+                affiliation: "f",
+                kind: "self"
+            ))
+        }
+
+        for c in contacts {
+            all.append(BridgeEntity(
+                uid: c.uid,
+                lat: c.coordinate.latitude,
+                lon: c.coordinate.longitude,
+                hae: nil, // Phase 2 has no HAE for contacts yet — clamps to ground
+                callsign: c.callsign,
+                affiliation: CesiumMainMap.affiliation(fromCoTType: c.type),
+                kind: "contact"
+            ))
+        }
+
+        for a in aircraft {
+            all.append(BridgeEntity(
+                uid: "ads-\(a.id)",
+                lat: a.coordinate.latitude,
+                lon: a.coordinate.longitude,
+                hae: a.onGround ? nil : a.altitude,
+                callsign: a.callsign,
+                affiliation: "n",
+                kind: "aircraft"
+            ))
+        }
+
+        guard let data = try? JSONEncoder().encode(all),
+              let str = String(data: data, encoding: .utf8) else { return "[]" }
+        return str
+    }
+
+    /// CoT type codes look like `a-f-G-U-C-I` — second token is the
+    /// affiliation character. Map to the single-letter codes the HTML
+    /// bridge consumes (f/h/n/u).
+    private static func affiliation(fromCoTType type: String) -> String {
+        let parts = type.split(separator: "-")
+        guard parts.count >= 2, let first = parts[1].first else { return "u" }
+        switch first {
+        case "f", "F": return "f"
+        case "h", "H": return "h"
+        case "n", "N": return "n"
+        default:       return "u"
+        }
     }
 
     private static let cesiumIonToken =
         "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqdGkiOiI3NDUwNGNjMy05ZGM2LTRhNjgtYWY1ZS0xNjdjMTI0OTYxMjYiLCJpZCI6NDMyNTU0LCJpc3MiOiJodHRwczovL2lvbi5jZXNpdW0uY29tIiwiYXVkIjoidW5kZWZpbmVkX2RlZmF1bHQiLCJpYXQiOjE3Nzg5OTYwNzd9.4MTmIKjioTboeXn02fm7i7Ftude-JVIg3RYW4jgIZ48"
 
-    private static var html: String {
+    /// HTML kept in lockstep with `OmniTAK-Android/app/src/main/assets/cesium_scene.html`.
+    /// When you change one, change both. Phase 4 will dedupe by bundling a
+    /// shared resource.
+    static var html: String {
         """
         <!DOCTYPE html><html lang=\"en\"><head>
         <meta charset=\"utf-8\">
@@ -3605,23 +3722,53 @@ struct CesiumMainMap: UIViewRepresentable {
         <script src=\"https://cesium.com/downloads/cesiumjs/releases/1.124/Build/Cesium/Cesium.js\"></script>
         <script>
           Cesium.Ion.defaultAccessToken='\(cesiumIonToken)';
+          const _state={ready:false,viewer:null,entities:new Map(),billboardCache:new Map()};
+          function _color(a){return a==='f'?'#4ADE80':a==='h'?'#F44336':a==='n'?'#FFC107':'#B39DDB'}
+          function _billboard(a,k){
+            const key=a+'|'+(k||'');if(_state.billboardCache.has(key))return _state.billboardCache.get(key);
+            const c=document.createElement('canvas');c.width=56;c.height=56;const ctx=c.getContext('2d');
+            const color=_color(a);ctx.lineWidth=4;ctx.strokeStyle=color;ctx.fillStyle=color+'55';
+            if(a==='f'){ctx.beginPath();ctx.arc(28,28,22,0,Math.PI*2);ctx.fill();ctx.stroke();}
+            else if(a==='h'){ctx.beginPath();ctx.moveTo(28,4);ctx.lineTo(52,28);ctx.lineTo(28,52);ctx.lineTo(4,28);ctx.closePath();ctx.fill();ctx.stroke();}
+            else if(a==='n'){ctx.fillRect(8,8,40,40);ctx.strokeRect(8,8,40,40);}
+            else{ctx.beginPath();ctx.arc(20,28,10,0,Math.PI*2);ctx.arc(36,28,10,0,Math.PI*2);ctx.arc(28,20,10,0,Math.PI*2);ctx.arc(28,36,10,0,Math.PI*2);ctx.fill();ctx.stroke();}
+            ctx.fillStyle=color;ctx.beginPath();ctx.arc(28,28,3,0,Math.PI*2);ctx.fill();
+            const url=c.toDataURL('image/png');_state.billboardCache.set(key,url);return url;
+          }
+          function _parse(x){return typeof x==='string'?(()=>{try{return JSON.parse(x)}catch(e){return null}})():x}
+          function _signalReady(){
+            _state.ready=true;
+            try{if(window.webkit&&window.webkit.messageHandlers&&window.webkit.messageHandlers.omniBridgeReady)window.webkit.messageHandlers.omniBridgeReady.postMessage('ready')}catch(e){}
+            try{if(window.OmniBridgeNative&&window.OmniBridgeNative.onReady)window.OmniBridgeNative.onReady()}catch(e){}
+          }
+          window.OmniBridge={
+            upsertEntity(arg){const e=_parse(arg);if(!e||!e.uid||typeof e.lat!=='number'||typeof e.lon!=='number')return;const v=_state.viewer;if(!v)return;
+              const hae=(typeof e.hae==='number'&&isFinite(e.hae))?e.hae:0;const useGround=hae===0;
+              const pos=Cesium.Cartesian3.fromDegrees(e.lon,e.lat,hae);let entity=_state.entities.get(e.uid);
+              if(!entity){entity=v.entities.add({id:e.uid,position:pos,
+                billboard:{image:_billboard(e.affiliation||'u',e.kind),verticalOrigin:Cesium.VerticalOrigin.CENTER,heightReference:useGround?Cesium.HeightReference.CLAMP_TO_GROUND:Cesium.HeightReference.NONE,disableDepthTestDistance:Number.POSITIVE_INFINITY,scale:0.7},
+                label:e.callsign?{text:e.callsign,font:'12px -apple-system, sans-serif',fillColor:Cesium.Color.WHITE,outlineColor:Cesium.Color.BLACK,outlineWidth:2,style:Cesium.LabelStyle.FILL_AND_OUTLINE,pixelOffset:new Cesium.Cartesian2(0,-32),heightReference:useGround?Cesium.HeightReference.CLAMP_TO_GROUND:Cesium.HeightReference.NONE,disableDepthTestDistance:Number.POSITIVE_INFINITY}:undefined,
+              });_state.entities.set(e.uid,entity);}
+              else{entity.position=pos;entity.billboard.image=_billboard(e.affiliation||'u',e.kind);entity.billboard.heightReference=useGround?Cesium.HeightReference.CLAMP_TO_GROUND:Cesium.HeightReference.NONE;if(entity.label&&e.callsign)entity.label.text=e.callsign;}
+            },
+            setEntities(arg){const list=_parse(arg);if(!Array.isArray(list))return;const seen=new Set();
+              for(const e of list){if(e&&e.uid){seen.add(e.uid);window.OmniBridge.upsertEntity(e);}}
+              for(const uid of Array.from(_state.entities.keys()))if(!seen.has(uid))window.OmniBridge.removeEntity(uid);
+            },
+            removeEntity(uid){const v=_state.viewer;if(!v)return;const e=_state.entities.get(uid);if(e){v.entities.remove(e);_state.entities.delete(uid);}},
+            removeAll(){const v=_state.viewer;if(!v)return;v.entities.removeAll();_state.entities.clear();},
+            flyTo(arg){const e=_parse(arg);if(!e)return;const v=_state.viewer;if(!v)return;
+              v.camera.flyTo({destination:Cesium.Cartesian3.fromDegrees(e.lon,e.lat,(typeof e.range==='number')?e.range:5000),
+                orientation:{heading:Cesium.Math.toRadians(e.heading||0),pitch:Cesium.Math.toRadians(typeof e.pitch==='number'?e.pitch:-30),roll:0},duration:1.2});
+            },
+            ping(){return _state.ready?'pong':'loading'}
+          };
           (async()=>{
-            const v=new Cesium.Viewer('cesiumContainer',{
-              terrain:Cesium.Terrain.fromWorldTerrain(),
-              animation:false,timeline:false,baseLayerPicker:false,geocoder:false,
-              homeButton:false,sceneModePicker:false,navigationHelpButton:false,
-              fullscreenButton:false,infoBox:false,selectionIndicator:false,
-              creditContainer:document.createElement('div')
-            });
-            v.scene.skyAtmosphere.show=true;v.scene.globe.enableLighting=true;
+            const v=new Cesium.Viewer('cesiumContainer',{terrain:Cesium.Terrain.fromWorldTerrain(),animation:false,timeline:false,baseLayerPicker:false,geocoder:false,homeButton:false,sceneModePicker:false,navigationHelpButton:false,fullscreenButton:false,infoBox:false,selectionIndicator:false,creditContainer:document.createElement('div')});
+            v.scene.skyAtmosphere.show=true;v.scene.globe.enableLighting=true;_state.viewer=v;
             try{const t=await Cesium.createGooglePhotorealistic3DTileset();v.scene.primitives.add(t);}catch(e){console.warn('Photoreal unavailable:',e);}
-            v.camera.flyTo({
-              destination:Cesium.Cartesian3.fromDegrees(-77.0365,38.8977,5000),
-              orientation:{heading:0,pitch:Cesium.Math.toRadians(-30),roll:0},
-              duration:1.5,
-              complete:()=>{const el=document.getElementById('loading');if(el)el.style.display='none';}
-            });
-            // Phase 2 will install a window.OmniBridge here for CoT upserts.
+            v.camera.flyTo({destination:Cesium.Cartesian3.fromDegrees(-77.0365,38.8977,5000),orientation:{heading:0,pitch:Cesium.Math.toRadians(-30),roll:0},duration:1.5,complete:()=>{const el=document.getElementById('loading');if(el)el.style.display='none';}});
+            _signalReady();
           })().catch(e=>{const el=document.getElementById('loading');if(el)el.innerHTML='<div class=\"label\">3D scene failed: '+(e&&e.message?e.message:'unknown')+'</div>';});
         </script></body></html>
         """
