@@ -2217,9 +2217,15 @@ struct TacticalMapView: UIViewRepresentable {
             let zoomChanged = abs(cameraState.zoom - TacticalMapView.zoom(forSpan: region.span, mapHeight: mapView.bounds.height)) > 0.25
             if centerChanged || zoomChanged {
                 context.coordinator.isProgrammaticUpdate = true
+                // Explicitly preserve current pitch + bearing — MKCoordinateRegion
+                // has no concept of either, so a naïve CameraOptions(center:zoom:)
+                // would let Mapbox flatten the 3D camera back to top-down on every
+                // SwiftUI re-invalidation.
                 let opts = CameraOptions(
                     center: region.center,
-                    zoom: TacticalMapView.zoom(forSpan: region.span, mapHeight: mapView.bounds.height)
+                    zoom: TacticalMapView.zoom(forSpan: region.span, mapHeight: mapView.bounds.height),
+                    bearing: cameraState.bearing,
+                    pitch: cameraState.pitch
                 )
                 mapView.mapboxMap.setCamera(to: opts)
                 context.coordinator.isProgrammaticUpdate = false
@@ -2383,6 +2389,18 @@ struct TacticalMapView: UIViewRepresentable {
                 atmosphere.spaceColor = .constant(StyleColor(red: 0, green: 0, blue: 13, alpha: 1.0)!)
                 atmosphere.starIntensity = .constant(0.15)
                 try mapView.mapboxMap.setAtmosphere(atmosphere)
+
+                // Force the 3D camera back on after every style load. Mapbox
+                // Standard (and most v11 styles) reset pitch to whatever the
+                // style declares — usually 0° — when loadStyle resolves, even
+                // if MapInitOptions asked for 60°. Re-apply pitch (and bearing
+                // for consistency) once terrain is wired up so the operator
+                // actually sees the 3D tilt the engine swap was supposed to
+                // deliver.
+                let state = mapView.mapboxMap.cameraState
+                if state.pitch < 30 {
+                    mapView.mapboxMap.setCamera(to: CameraOptions(pitch: 60))
+                }
             } catch {
                 print("TacticalMapView: terrain/atmosphere setup failed — \(error)")
             }
