@@ -60,35 +60,22 @@ struct RootTabView: View {
         .overlay(alignment: .bottom) {
             CustomTabBar(
                 selectedTab: $selectedTab,
-                onToolsTap: { showToolsLauncher = true }
+                onToolsTap: { withAnimation(.spring(response: 0.32, dampingFraction: 0.85)) { showToolsLauncher = true } }
             )
         }
-        .sheet(isPresented: $showToolsLauncher) {
-            // iOS 16+ gets the short-detent treatment (map / current
-            // tab stays visible under the popup). iOS 15 falls back
-            // to a standard sheet — still functional, just bigger.
-            Group {
-                if #available(iOS 16.4, *) {
-                    ToolsLauncherSheet(
-                        onLasso: handleLasso,
-                        onFullTools: handleFullTools
-                    )
-                    .presentationDetents([.height(220), .medium])
-                    .presentationDragIndicator(.visible)
-                    .presentationBackgroundInteraction(.enabled(upThrough: .height(220)))
-                } else if #available(iOS 16.0, *) {
-                    ToolsLauncherSheet(
-                        onLasso: handleLasso,
-                        onFullTools: handleFullTools
-                    )
-                    .presentationDetents([.height(220), .medium])
-                    .presentationDragIndicator(.visible)
-                } else {
-                    ToolsLauncherSheet(
-                        onLasso: handleLasso,
-                        onFullTools: handleFullTools
-                    )
-                }
+        // Custom Tools popup overlay — replaces the native .sheet so we
+        // get tap-outside-to-dismiss (iOS sheets don't dismiss on a tap
+        // outside the panel; only swipe-down or programmatic). Also keeps
+        // the map fully interactive behind it.
+        .overlay {
+            if showToolsLauncher {
+                ToolsLauncherOverlay(
+                    onLasso: handleLasso,
+                    onFullTools: handleFullTools,
+                    onDismiss: { withAnimation(.spring(response: 0.28, dampingFraction: 0.85)) { showToolsLauncher = false } }
+                )
+                .transition(.move(edge: .bottom).combined(with: .opacity))
+                .zIndex(2000)
             }
         }
     }

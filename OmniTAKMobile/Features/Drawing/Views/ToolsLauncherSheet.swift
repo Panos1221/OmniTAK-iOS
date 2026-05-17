@@ -117,3 +117,63 @@ struct ToolsLauncherSheet_Previews: PreviewProvider {
     }
 }
 #endif
+
+// MARK: - Tap-outside-to-dismiss overlay wrapper
+
+/// Custom overlay that wraps `ToolsLauncherSheet` in a tap-dismissible
+/// scrim — iOS's native `.sheet` doesn't dismiss on outside taps (only
+/// swipe-down), and the operator-feedback fix is to make the dim area
+/// behind the panel a tap target. Also supports swipe-down on the panel
+/// itself so it feels like a sheet, just with extra dismiss affordances.
+struct ToolsLauncherOverlay: View {
+    let onLasso: () -> Void
+    let onFullTools: () -> Void
+    let onDismiss: () -> Void
+
+    @GestureState private var dragOffset: CGFloat = 0
+
+    var body: some View {
+        ZStack(alignment: .bottom) {
+            // Tap-outside-to-dismiss backdrop. Faint dim so the map +
+            // chrome stays readable behind the popup.
+            Color.black.opacity(0.18)
+                .ignoresSafeArea()
+                .contentShape(Rectangle())
+                .onTapGesture { onDismiss() }
+
+            // Panel — visually identical to the prior .sheet detent.
+            VStack(spacing: 0) {
+                // Grab handle, doubles as a swipe-down dismiss target.
+                Capsule()
+                    .fill(Color.white.opacity(0.35))
+                    .frame(width: 40, height: 5)
+                    .padding(.top, 8)
+                    .padding(.bottom, 4)
+
+                ToolsLauncherSheet(onLasso: onLasso, onFullTools: onFullTools)
+            }
+            .background(
+                RoundedRectangle(cornerRadius: 24, style: .continuous)
+                    .fill(.regularMaterial)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 24, style: .continuous)
+                    .stroke(Color.white.opacity(0.08), lineWidth: 1)
+            )
+            .padding(.horizontal, 8)
+            .padding(.bottom, 78) // clear the floating LiquidGlass tab bar
+            .offset(y: max(0, dragOffset))
+            .gesture(
+                DragGesture()
+                    .updating($dragOffset) { value, state, _ in
+                        state = value.translation.height
+                    }
+                    .onEnded { value in
+                        if value.translation.height > 60 || value.predictedEndTranslation.height > 140 {
+                            onDismiss()
+                        }
+                    }
+            )
+        }
+    }
+}
