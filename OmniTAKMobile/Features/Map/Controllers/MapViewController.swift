@@ -1394,8 +1394,26 @@ struct ATAKMapView: View {
     // the operator can hit Edit/Delete/etc. (CoT contact edit flows
     // through `.radialMenuEditMarker`, same as Mapbox.) Single tap on
     // empty map is a no-op to match Mapbox's default.
+    // Persisted Cesium camera pose so an engine toggle (3D Cesium →
+    // 2D Mapbox → back) restores the operator's last view instead of
+    // snapping to the hardcoded DC default. Defaults seed Washington DC
+    // tilted 30°. Phase 4c will mirror these into the 2D Mapbox path's
+    // mapRegion so cross-engine continuity is fully bidirectional.
+    @AppStorage("cesium.lastLat")     private var cesiumLastLat: Double = 38.8977
+    @AppStorage("cesium.lastLon")     private var cesiumLastLon: Double = -77.0365
+    @AppStorage("cesium.lastHeight")  private var cesiumLastHeight: Double = 5000
+    @AppStorage("cesium.lastHeading") private var cesiumLastHeading: Double = 0
+    @AppStorage("cesium.lastPitch")   private var cesiumLastPitch: Double = -30
+
     private func handleCesiumMapEvent(_ event: CesiumMapEvent) {
         switch event.kind {
+        case .cameraChanged:
+            guard let cam = event.camera else { return }
+            cesiumLastLat = event.coordinate.latitude
+            cesiumLastLon = event.coordinate.longitude
+            cesiumLastHeight = cam.height
+            cesiumLastHeading = cam.heading
+            cesiumLastPitch = cam.pitch
         case .longpress:
             // Phase 4b will refine entity-targeted long-press into a
             // dedicated marker-context menu. For now, both empty-map
@@ -3652,7 +3670,7 @@ struct OverlayToggleButton: View {
 /// struct so the SwiftUI shell can drive the radial menu and contact
 /// edit flows the same way the 2D Mapbox path does.
 struct CesiumMapEvent {
-    enum Kind { case tap, longpress }
+    enum Kind { case tap, longpress, cameraChanged }
     let kind: Kind
     let coordinate: CLLocationCoordinate2D
     let screenPoint: CGPoint
@@ -3660,6 +3678,15 @@ struct CesiumMapEvent {
     /// empty-map gesture. Matches the uid we ship to `setEntities` —
     /// `__self__`, raw CoT uids, `ads-<id>`, `line-…`, etc.
     let entityUid: String?
+    /// Camera state, only populated for `.cameraChanged` events.
+    let camera: CameraState?
+
+    struct CameraState {
+        let height: Double      // metres above ellipsoid
+        let heading: Double     // degrees CW from north
+        let pitch: Double       // degrees (negative = looking down)
+        let zoom: Double        // Mapbox-style zoom, derived from height
+    }
 }
 
 struct CesiumMainMap: UIViewRepresentable {
@@ -3763,6 +3790,24 @@ struct CesiumMainMap: UIViewRepresentable {
                     "window.OmniBridge.setTrails(\(lastTrailsSnapshot));",
                     completionHandler: nil
                 )
+                // Restore the operator's last Cesium camera pose so an
+                // engine toggle (3D → 2D → back) doesn't snap to the
+                // hardcoded DC default. Reads UserDefaults directly
+                // because the Coordinator isn't a SwiftUI view (can't
+                // use @AppStorage). Keys match the ones ATAKMapView
+                // writes from handleCesiumMapEvent.
+                let d = UserDefaults.standard
+                if d.object(forKey: "cesium.lastLat") != nil {
+                    let lat = d.double(forKey: "cesium.lastLat")
+                    let lon = d.double(forKey: "cesium.lastLon")
+                    let h   = d.double(forKey: "cesium.lastHeight")
+                    let hd  = d.double(forKey: "cesium.lastHeading")
+                    let pt  = d.double(forKey: "cesium.lastPitch")
+                    webView?.evaluateJavaScript(
+                        "window.OmniBridge.flyTo({lat:\(lat),lon:\(lon),range:\(h),heading:\(hd),pitch:\(pt)});",
+                        completionHandler: nil
+                    )
+                }
             case "omniMapEvent":
                 // Body arrives as a JSON string from the HTML. Tolerate
                 // a dictionary body too in case a future WK build relaxes
@@ -3782,13 +3827,23 @@ struct CesiumMainMap: UIViewRepresentable {
                 switch payload.event {
                 case "tap": kind = .tap
                 case "longpress": kind = .longpress
+                case "camerachanged": kind = .cameraChanged
                 default: return
+                }
+                let cameraState: CesiumMapEvent.CameraState?
+                if kind == .cameraChanged,
+                   let h = payload.height, let hd = payload.heading,
+                   let pt = payload.pitch, let zm = payload.zoom {
+                    cameraState = .init(height: h, heading: hd, pitch: pt, zoom: zm)
+                } else {
+                    cameraState = nil
                 }
                 let event = CesiumMapEvent(
                     kind: kind,
                     coordinate: CLLocationCoordinate2D(latitude: payload.lat, longitude: payload.lon),
-                    screenPoint: CGPoint(x: payload.screenX, y: payload.screenY),
-                    entityUid: payload.uid
+                    screenPoint: CGPoint(x: payload.screenX ?? 0, y: payload.screenY ?? 0),
+                    entityUid: payload.uid,
+                    camera: cameraState
                 )
                 parent.onMapEvent?(event)
             default:
@@ -3805,9 +3860,14 @@ struct CesiumMainMap: UIViewRepresentable {
             let lat: Double
             let lon: Double
             let hae: Double?
-            let screenX: Double
-            let screenY: Double
+            let screenX: Double?     // absent for camerachanged
+            let screenY: Double?
             let uid: String?
+            // Camera fields — only present for "camerachanged"
+            let height: Double?
+            let heading: Double?
+            let pitch: Double?
+            let zoom: Double?
         }
     }
 
@@ -4198,7 +4258,11 @@ struct CesiumMainMap: UIViewRepresentable {
           }
           function _pickedUid(viewer,pos){const p=viewer.scene.pick(pos);return(p&&p.id&&typeof p.id.id==='string')?p.id.id:null}
           function _cartoFor(viewer,pos){let c=viewer.scene.pickPosition(pos);if(!Cesium.defined(c))c=viewer.camera.pickEllipsoid(pos,viewer.scene.globe.ellipsoid);if(!Cesium.defined(c))return null;const cc=Cesium.Cartographic.fromCartesian(c);return{lat:Cesium.Math.toDegrees(cc.latitude),lon:Cesium.Math.toDegrees(cc.longitude),hae:cc.height}}
+          function _zoomFromHeight(h,latRad){const c=Math.max(Math.cos(latRad||0),0.01),mpp=(h*256)/1000.0,z=Math.log2(40075017*c/Math.max(mpp,1));return Math.max(0,Math.min(22,z))}
+          function _postCameraChanged(v){const cam=v.camera,carto=cam.positionCartographic;if(!carto)return;const r=cam.computeViewRectangle(v.scene.globe.ellipsoid);
+            _postMapEvent({event:'camerachanged',lat:Cesium.Math.toDegrees(carto.latitude),lon:Cesium.Math.toDegrees(carto.longitude),height:carto.height,heading:Cesium.Math.toDegrees(cam.heading),pitch:Cesium.Math.toDegrees(cam.pitch),zoom:_zoomFromHeight(carto.height,carto.latitude),bounds:r?{north:Cesium.Math.toDegrees(r.north),south:Cesium.Math.toDegrees(r.south),east:Cesium.Math.toDegrees(r.east),west:Cesium.Math.toDegrees(r.west)}:null})}
           function _installInputHandlers(viewer){
+            viewer.camera.moveEnd.addEventListener(function(){_postCameraChanged(viewer)});
             const h=new Cesium.ScreenSpaceEventHandler(viewer.scene.canvas);
             h.setInputAction(function(click){const p=_cartoFor(viewer,click.position);if(!p)return;_postMapEvent({event:'tap',lat:p.lat,lon:p.lon,hae:p.hae,screenX:click.position.x,screenY:click.position.y,uid:_pickedUid(viewer,click.position)})},Cesium.ScreenSpaceEventType.LEFT_CLICK);
             let pressTimer=null,pressStart=null;
