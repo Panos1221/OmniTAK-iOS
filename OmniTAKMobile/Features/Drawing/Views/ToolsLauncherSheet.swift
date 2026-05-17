@@ -74,10 +74,13 @@ struct ToolsLauncherSheet: View {
                 bold: false,
                 action: onFullTools
             )
-
-            Spacer(minLength: 0)
+            // Intentionally NO trailing Spacer — the panel sizes to its
+            // rows so the popup is only as tall as it needs. The old
+            // Spacer(minLength: 0) was a holdover from the .sheet detent
+            // and made the panel eat the lower half of the screen.
         }
         .padding(.top, 8)
+        .padding(.bottom, 12)
     }
 
     @ViewBuilder
