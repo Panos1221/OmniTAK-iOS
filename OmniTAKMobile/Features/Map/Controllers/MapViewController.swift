@@ -1020,10 +1020,22 @@ struct ATAKMapView: View {
                 // "#00FF00") — direct feed to the bridge. We deliberately
                 // skip PositionBroadcastService.teamColor here (it's a
                 // CoT color name like "Cyan", not hex).
-                breadcrumbTrailColor: BreadcrumbTrailService.shared.configuration.teamColor
+                breadcrumbTrailColor: BreadcrumbTrailService.shared.configuration.teamColor,
+                // Phase 4a — feed Cesium tap/long-press back into the
+                // same radial-menu coordinator the Mapbox path uses. The
+                // ZStack still owns the radial overlay, so the menu pops
+                // wherever the operator pressed.
+                onMapEvent: { event in
+                    handleCesiumMapEvent(event)
+                }
             )
             .ignoresSafeArea()
             statusIndicators
+            // Phase 4a — surface the same radial menu over the Cesium
+            // scene. `radialMenu` is the same view the 2D Mapbox path
+            // uses (interactiveOverlays group); reusing it keeps the
+            // look + executeAction wiring identical across engines.
+            radialMenu
             // Engine toggle lives in the Tools sheet (id: "engine") rather
             // than a standalone FAB — operators expect mode toggles in the
             // Tools tray, and we keep the map chrome uncluttered.
@@ -1371,6 +1383,57 @@ struct ATAKMapView: View {
         // Then handle drawing tool taps
         if drawingManager.isDrawingActive {
             drawingManager.handleMapTap(at: coordinate)
+        }
+    }
+
+    // MARK: - Phase 4a — Cesium → native event dispatch
+    //
+    // Map the bridged tap/long-press events onto the same radial-menu
+    // surface the 2D Mapbox path uses. Empty-map long-press opens the
+    // map-context menu; entity tap surfaces the marker-context menu so
+    // the operator can hit Edit/Delete/etc. (CoT contact edit flows
+    // through `.radialMenuEditMarker`, same as Mapbox.) Single tap on
+    // empty map is a no-op to match Mapbox's default.
+    private func handleCesiumMapEvent(_ event: CesiumMapEvent) {
+        switch event.kind {
+        case .longpress:
+            // Phase 4b will refine entity-targeted long-press into a
+            // dedicated marker-context menu. For now, both empty-map
+            // and entity long-press fall through to the same
+            // map-context menu the Mapbox empty-map path produces.
+            radialMenuCoordinator.showContextMenu(
+                at: event.screenPoint,
+                for: event.coordinate,
+                menuType: .mapContext
+            )
+        case .tap:
+            guard let uid = event.entityUid else {
+                // Empty-map single tap mirrors the 2D Mapbox path —
+                // measurement / drawing tool consume the tap if active,
+                // otherwise it's a no-op.
+                handleMapTap(at: event.coordinate)
+                return
+            }
+            // The HTML emits `__self__` for the operator's own pip and
+            // namespaced uids (`ads-…`, `line-…`, `poly-…`, `circ-…`,
+            // `rring-…`, `meas-…`, `trail-…`, `:v<idx>` vertex labels)
+            // for non-contact entities. None of those have a CoT event
+            // behind them, so skip the marker-context menu for them.
+            if uid == "__self__" { return }
+            let nonContactPrefixes = ["ads-", "line-", "poly-", "circ-", "rring-", "meas-", "trail-"]
+            if nonContactPrefixes.contains(where: { uid.hasPrefix($0) }) { return }
+            if uid.contains(":v") { return }
+            // CoT contact match — open the marker-context radial menu
+            // anchored at the tap point. Edit/Delete on that menu post
+            // .radialMenuEditMarker etc., same as the Mapbox long-press
+            // path, so downstream wiring is shared.
+            if cotMarkers.contains(where: { $0.uid == uid }) {
+                radialMenuCoordinator.showContextMenu(
+                    at: event.screenPoint,
+                    for: event.coordinate,
+                    menuType: .markerContext
+                )
+            }
         }
     }
 
@@ -3583,6 +3646,22 @@ struct OverlayToggleButton: View {
 /// at real altitude. The HTML is kept in lockstep with the Android
 /// `assets/cesium_scene.html` so both platforms render the same scene
 /// from the same bridge contract.
+/// Phase 4a — bidirectional event from the Cesium scene back to native.
+/// The HTML posts `{event, lat, lon, hae, screenX, screenY, uid?}` via
+/// `window.webkit.messageHandlers.omniMapEvent`; we decode it into this
+/// struct so the SwiftUI shell can drive the radial menu and contact
+/// edit flows the same way the 2D Mapbox path does.
+struct CesiumMapEvent {
+    enum Kind { case tap, longpress }
+    let kind: Kind
+    let coordinate: CLLocationCoordinate2D
+    let screenPoint: CGPoint
+    /// Cesium Entity id that was picked under the cursor, or nil for an
+    /// empty-map gesture. Matches the uid we ship to `setEntities` —
+    /// `__self__`, raw CoT uids, `ads-<id>`, `line-…`, etc.
+    let entityUid: String?
+}
+
 struct CesiumMainMap: UIViewRepresentable {
     let contacts: [CoTMarker]
     let aircraft: [Aircraft]
@@ -3599,12 +3678,21 @@ struct CesiumMainMap: UIViewRepresentable {
     // `BreadcrumbTrailService.shared`). Empty array means "no trail".
     let breadcrumbTrailCoords: [CLLocationCoordinate2D]
     let breadcrumbTrailColor: String
+    /// Phase 4a — fired when the HTML posts a tap or long-press through
+    /// the `omniMapEvent` handler. Optional so older call sites still
+    /// compile while the parent wires the radial menu / edit sheet.
+    var onMapEvent: ((CesiumMapEvent) -> Void)?
 
     func makeUIView(context: Context) -> WKWebView {
         let config = WKWebViewConfiguration()
         config.allowsInlineMediaPlayback = true
         config.defaultWebpagePreferences.allowsContentJavaScript = true
         config.userContentController.add(context.coordinator, name: "omniBridgeReady")
+        // Phase 4a — second handler for tap/longpress events coming back
+        // from the Cesium scene. Body is a JSON string (the HTML uses
+        // `postMessage(JSON.stringify(payload))`), decoded in the
+        // coordinator.
+        config.userContentController.add(context.coordinator, name: "omniMapEvent")
 
         let webView = WKWebView(frame: .zero, configuration: config)
         webView.isOpaque = false
@@ -3653,7 +3741,8 @@ struct CesiumMainMap: UIViewRepresentable {
         }
 
         func userContentController(_ controller: WKUserContentController, didReceive message: WKScriptMessage) {
-            if message.name == "omniBridgeReady" {
+            switch message.name {
+            case "omniBridgeReady":
                 isReady = true
                 // Drain the latest snapshots the moment the HTML signals it
                 // has the OmniBridge alive — anything queued during page
@@ -3674,7 +3763,51 @@ struct CesiumMainMap: UIViewRepresentable {
                     "window.OmniBridge.setTrails(\(lastTrailsSnapshot));",
                     completionHandler: nil
                 )
+            case "omniMapEvent":
+                // Body arrives as a JSON string from the HTML. Tolerate
+                // a dictionary body too in case a future WK build relaxes
+                // the contract.
+                let data: Data?
+                if let s = message.body as? String {
+                    data = s.data(using: .utf8)
+                } else if let dict = message.body as? [String: Any] {
+                    data = try? JSONSerialization.data(withJSONObject: dict)
+                } else {
+                    data = nil
+                }
+                guard let bytes = data,
+                      let payload = try? JSONDecoder().decode(MapEventPayload.self, from: bytes)
+                else { return }
+                let kind: CesiumMapEvent.Kind
+                switch payload.event {
+                case "tap": kind = .tap
+                case "longpress": kind = .longpress
+                default: return
+                }
+                let event = CesiumMapEvent(
+                    kind: kind,
+                    coordinate: CLLocationCoordinate2D(latitude: payload.lat, longitude: payload.lon),
+                    screenPoint: CGPoint(x: payload.screenX, y: payload.screenY),
+                    entityUid: payload.uid
+                )
+                parent.onMapEvent?(event)
+            default:
+                break
             }
+        }
+
+        /// Wire-format mirror of the HTML payload (`{event, lat, lon, hae,
+        /// screenX, screenY, uid?}`). `hae` is accepted but unused on the
+        /// Swift side — the radial menu / contact lookup only needs the
+        /// 2D coordinate.
+        private struct MapEventPayload: Decodable {
+            let event: String
+            let lat: Double
+            let lon: Double
+            let hae: Double?
+            let screenX: Double
+            let screenY: Double
+            let uid: String?
         }
     }
 
@@ -4055,6 +4188,24 @@ struct CesiumMainMap: UIViewRepresentable {
             try{if(window.webkit&&window.webkit.messageHandlers&&window.webkit.messageHandlers.omniBridgeReady)window.webkit.messageHandlers.omniBridgeReady.postMessage('ready')}catch(e){}
             try{if(window.OmniBridgeNative&&window.OmniBridgeNative.onReady)window.OmniBridgeNative.onReady()}catch(e){}
           }
+          // Phase 4a — Cesium → native event bridge. Posts tap + longpress
+          // events with {event, lat, lon, hae, screenX, screenY, uid?} so
+          // the native shell can drive radial-menu / contact-edit-sheet
+          // workflows the same way the 2D Mapbox path does.
+          function _postMapEvent(p){const j=JSON.stringify(p);
+            try{if(window.webkit&&window.webkit.messageHandlers&&window.webkit.messageHandlers.omniMapEvent)window.webkit.messageHandlers.omniMapEvent.postMessage(j)}catch(e){}
+            try{if(window.OmniBridgeNative&&window.OmniBridgeNative.onMapEvent)window.OmniBridgeNative.onMapEvent(j)}catch(e){}
+          }
+          function _pickedUid(viewer,pos){const p=viewer.scene.pick(pos);return(p&&p.id&&typeof p.id.id==='string')?p.id.id:null}
+          function _cartoFor(viewer,pos){let c=viewer.scene.pickPosition(pos);if(!Cesium.defined(c))c=viewer.camera.pickEllipsoid(pos,viewer.scene.globe.ellipsoid);if(!Cesium.defined(c))return null;const cc=Cesium.Cartographic.fromCartesian(c);return{lat:Cesium.Math.toDegrees(cc.latitude),lon:Cesium.Math.toDegrees(cc.longitude),hae:cc.height}}
+          function _installInputHandlers(viewer){
+            const h=new Cesium.ScreenSpaceEventHandler(viewer.scene.canvas);
+            h.setInputAction(function(click){const p=_cartoFor(viewer,click.position);if(!p)return;_postMapEvent({event:'tap',lat:p.lat,lon:p.lon,hae:p.hae,screenX:click.position.x,screenY:click.position.y,uid:_pickedUid(viewer,click.position)})},Cesium.ScreenSpaceEventType.LEFT_CLICK);
+            let pressTimer=null,pressStart=null;
+            h.setInputAction(function(down){pressStart=down.position;if(pressTimer)clearTimeout(pressTimer);pressTimer=setTimeout(function(){if(!pressStart)return;const p=_cartoFor(viewer,pressStart);if(!p)return;_postMapEvent({event:'longpress',lat:p.lat,lon:p.lon,hae:p.hae,screenX:pressStart.x,screenY:pressStart.y,uid:_pickedUid(viewer,pressStart)});pressStart=null},500)},Cesium.ScreenSpaceEventType.LEFT_DOWN);
+            h.setInputAction(function(){if(pressTimer){clearTimeout(pressTimer);pressTimer=null}pressStart=null},Cesium.ScreenSpaceEventType.LEFT_UP);
+            h.setInputAction(function(m){if(!pressStart)return;const dx=m.endPosition.x-pressStart.x,dy=m.endPosition.y-pressStart.y;if(Math.hypot(dx,dy)>8&&pressTimer){clearTimeout(pressTimer);pressTimer=null;pressStart=null}},Cesium.ScreenSpaceEventType.MOUSE_MOVE);
+          }
           window.OmniBridge={
             upsertEntity(arg){const e=_parse(arg);if(!e||!e.uid||typeof e.lat!=='number'||typeof e.lon!=='number')return;const v=_state.viewer;if(!v)return;
               const hae=(typeof e.hae==='number'&&isFinite(e.hae))?e.hae:0;const useGround=hae===0;
@@ -4130,7 +4281,7 @@ struct CesiumMainMap: UIViewRepresentable {
           (async()=>{
             _fitViewport();
             const v=new Cesium.Viewer('cesiumContainer',{terrain:Cesium.Terrain.fromWorldTerrain(),animation:false,timeline:false,baseLayerPicker:false,geocoder:false,homeButton:false,sceneModePicker:false,navigationHelpButton:false,fullscreenButton:false,infoBox:false,selectionIndicator:false,creditContainer:document.createElement('div')});
-            v.scene.skyAtmosphere.show=true;v.scene.globe.enableLighting=true;_state.viewer=v;_fitViewport();
+            v.scene.skyAtmosphere.show=true;v.scene.globe.enableLighting=true;_state.viewer=v;_fitViewport();_installInputHandlers(v);
             try{const t=await Cesium.createGooglePhotorealistic3DTileset();v.scene.primitives.add(t);}catch(e){console.warn('Photoreal unavailable:',e);}
             v.camera.flyTo({destination:Cesium.Cartesian3.fromDegrees(-77.0365,38.8977,5000),orientation:{heading:0,pitch:Cesium.Math.toRadians(-30),roll:0},duration:1.5,complete:()=>{const el=document.getElementById('loading');if(el)el.style.display='none';}});
             _signalReady();
