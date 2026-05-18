@@ -663,11 +663,25 @@ class ADSBTrafficService: ObservableObject {
 
     private func getSearchCenter() -> CLLocationCoordinate2D? {
         if settings.useCurrentLocation {
-            return LocationManager.shared.location?.coordinate
+            if let coord = LocationManager.shared.location?.coordinate {
+                return coord
+            }
+            // Bootstrap: pre-permission / pre-GPS-fix on first launch, fall
+            // back to KJFK so the user immediately sees busy airspace on the
+            // 3D globe instead of an empty map + "Unable to determine
+            // location" error. Switches to real GPS the moment a fix lands.
+            return CLLocationCoordinate2D(latitude: 40.6413, longitude: -73.7781)
         } else if let lat = settings.customLatitude, let lon = settings.customLongitude {
             return CLLocationCoordinate2D(latitude: lat, longitude: lon)
         }
         return nil
+    }
+
+    /// Public exposure of the ADSB search center for the Cesium 3D bridge
+    /// to align its camera with where aircraft are being fetched from —
+    /// keeps the pill count and the on-screen entities in sync.
+    func searchCenterForBridge() -> CLLocationCoordinate2D? {
+        getSearchCenter()
     }
 
     // MARK: - Settings Persistence

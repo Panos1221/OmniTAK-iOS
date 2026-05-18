@@ -275,7 +275,10 @@ enum OpenSkyState: Codable {
 // MARK: - Traffic Settings
 
 struct ADSBTrafficSettings: Codable {
-    var isEnabled: Bool = false
+    // Default ON: new users land on the 3D globe with live aircraft already
+    // flying. They can turn it off from the ADSB tool if they want a quieter
+    // view. Free-tier OpenSky needs no API key.
+    var isEnabled: Bool = true
     var radiusNM: Double = 50  // Nautical miles
     var useCurrentLocation: Bool = true
     var customZipCode: String = ""

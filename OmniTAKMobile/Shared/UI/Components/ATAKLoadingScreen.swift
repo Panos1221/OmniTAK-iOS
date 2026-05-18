@@ -302,13 +302,29 @@ struct CallsignDisplay: View {
     let speed: String // e.g., "0 MPH"
     let heading: String? // e.g., "157°M"
     let accuracy: String // e.g., "+/- 5m"
+    /// Optional dismiss callback — when set, an X close button renders in
+    /// the card's top-right corner so the operator can hide the card
+    /// directly without having to dig through the Layers panel.
+    var onDismiss: (() -> Void)? = nil
 
     var body: some View {
         VStack(alignment: .leading, spacing: 3) {
-            // Callsign in green (ATAK style)
-            Text("Callsign: \(callsign)")
-                .font(.system(size: 13, weight: .semibold))
-                .foregroundColor(.green)
+            // Callsign in green (ATAK style) — with optional close button
+            HStack(spacing: 8) {
+                Text("Callsign: \(callsign)")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundColor(.green)
+                if let onDismiss {
+                    Spacer(minLength: 4)
+                    Button(action: onDismiss) {
+                        Image(systemName: "xmark.circle.fill")
+                            .font(.system(size: 14))
+                            .foregroundColor(.white.opacity(0.6))
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Hide callsign card")
+                }
+            }
 
             // MGRS Coordinates
             Text(coordinates)

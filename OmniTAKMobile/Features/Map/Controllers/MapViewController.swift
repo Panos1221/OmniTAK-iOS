@@ -409,6 +409,38 @@ struct ATAKMapView: View {
             // GPS status indicator removed - GPS lock button at bottom left serves this purpose
             callsignDisplay
             geofenceAlert
+            adsbStatusPill
+        }
+    }
+
+    @ViewBuilder
+    private var adsbStatusPill: some View {
+        if adsbService.settings.isEnabled {
+            VStack {
+                HStack {
+                    HStack(spacing: 6) {
+                        Image(systemName: "airplane")
+                            .font(.system(size: 11, weight: .semibold))
+                        Text("\(adsbService.aircraft.count)")
+                            .font(.system(size: 12, weight: .semibold))
+                            .monospacedDigit()
+                    }
+                    .foregroundColor(Color(hex: "#FFFC00"))
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 5)
+                    .background(Color.black.opacity(0.55))
+                    .clipShape(Capsule())
+                    .overlay(
+                        Capsule().stroke(Color(hex: "#FFFC00").opacity(0.4), lineWidth: 1)
+                    )
+                    .padding(.leading, 16)
+                    .padding(.top, 60)
+                    Spacer()
+                }
+                Spacer()
+            }
+            .allowsHitTesting(false)
+            .zIndex(1002)
         }
     }
 
@@ -425,7 +457,12 @@ struct ATAKMapView: View {
                         altitude: formatAltitude(location.altitude),
                         speed: formatSpeed(location.speed),
                         heading: formatHeading(locationManager.heading),
-                        accuracy: "+/- \(Int(location.horizontalAccuracy))m"
+                        accuracy: "+/- \(Int(location.horizontalAccuracy))m",
+                        onDismiss: {
+                            withAnimation(.easeInOut(duration: 0.2)) {
+                                showCallsignPanel = false
+                            }
+                        }
                     )
                     .padding(.trailing, 16)
                     .padding(.bottom, 120)
@@ -981,9 +1018,29 @@ struct ATAKMapView: View {
     }
 
     var body: some View {
-        switch mapEngine {
-        case .cesium3D: cesium3DBody
-        case .mapbox2D: mapbox2DBody
+        // Modal sheets / error overlays / lifecycle + radial-menu observers
+        // attach here at the body level so they're mounted on BOTH engines.
+        // They used to be chained on mapbox2DBody's ZStack, which meant
+        // every radial-menu action (Layers, Drawings, Lasso, etc.) silently
+        // no-op'd on Cesium 3D — the notification fired but no subscriber.
+        Group {
+            switch mapEngine {
+            case .cesium3D: cesium3DBody
+            case .mapbox2D: mapbox2DBody
+            }
+        }
+        .background(modalSheets)
+        .background(errorOverlays)
+        .background(lifecycleHandlers)
+        .onReceive(NotificationCenter.default.publisher(for: .radialMenuEditMarker)) { notification in
+            if let marker = notification.userInfo?["marker"] as? PointMarker {
+                editingPointMarkerID = marker.id
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .radialMenuEditDrawing)) { notification in
+            if let drawingId = notification.userInfo?["drawingId"] as? UUID {
+                drawingManager.pendingRenameID = drawingId
+            }
         }
     }
 
@@ -994,7 +1051,12 @@ struct ATAKMapView: View {
     /// objects at real altitude.
     @ViewBuilder
     private var cesium3DBody: some View {
-        ZStack(alignment: .bottomLeading) {
+        // Default ZStack alignment (.center) — matches mapbox2DBody so the
+        // side panels' inner HStack { panel; Spacer() } gets full width to
+        // push the panel against the leading edge. With .bottomLeading
+        // alignment the HStack collapsed to content size and the Layers
+        // panel never appeared even though showLayersPanel was true.
+        ZStack {
             CesiumMainMap(
                 contacts: cotMarkers,
                 aircraft: adsbService.settings.isEnabled ? adsbService.aircraft : [],
@@ -1031,6 +1093,14 @@ struct ATAKMapView: View {
             )
             .ignoresSafeArea()
             statusIndicators
+            // Side panels (Layers / Drawing Tools / Drawing List). Without
+            // this, the radial menu's "Layers" / "Drawings" entries silently
+            // flipped their state booleans on Cesium 3D but no panel ever
+            // appeared. Some toggles inside the layers panel (satellite /
+            // hybrid / standard base layers) don't apply to the 3D engine,
+            // but the affiliation, overlay, and ADSB toggles all bridge
+            // through to the Cesium scene.
+            sidePanels
             // Phase 4a — surface the same radial menu over the Cesium
             // scene. `radialMenu` is the same view the 2D Mapbox path
             // uses (interactiveOverlays group); reusing it keeps the
@@ -1076,23 +1146,9 @@ struct ATAKMapView: View {
             }
             .zIndex(1100)
         }
-        .background(modalSheets)
-        .background(errorOverlays)
-        .background(lifecycleHandlers)
-        .onReceive(NotificationCenter.default.publisher(for: .radialMenuEditMarker)) { notification in
-            if let marker = notification.userInfo?["marker"] as? PointMarker {
-                editingPointMarkerID = marker.id
-            }
-        }
-        // Radial Edit on a drawing shape (marker/line/circle/polygon) posts
-        // .radialMenuEditDrawing with the drawingId. DrawingPropertiesView
-        // already handles every shape type by id — reuse the #38 sheet by
-        // pushing the id through drawingManager.pendingRenameID.
-        .onReceive(NotificationCenter.default.publisher(for: .radialMenuEditDrawing)) { notification in
-            if let drawingId = notification.userInfo?["drawingId"] as? UUID {
-                drawingManager.pendingRenameID = drawingId
-            }
-        }
+        // Modal sheets, error overlays, lifecycle handlers, and the radial-
+        // menu .onReceive observers used to chain here but moved up to the
+        // body switch so they fire on both engines (Cesium 3D + Mapbox 2D).
     }
 
     private var modalSheets: some View {
@@ -1399,11 +1455,14 @@ struct ATAKMapView: View {
     // snapping to the hardcoded DC default. Defaults seed Washington DC
     // tilted 30°. Phase 4c will mirror these into the 2D Mapbox path's
     // mapRegion so cross-engine continuity is fully bidirectional.
-    @AppStorage("cesium.lastLat")     private var cesiumLastLat: Double = 38.8977
-    @AppStorage("cesium.lastLon")     private var cesiumLastLon: Double = -77.0365
-    @AppStorage("cesium.lastHeight")  private var cesiumLastHeight: Double = 5000
+    // Defaults match the bootstrap flyTo (KJFK at 50km, -60° pitch) so an
+    // engine-toggle on first launch doesn't snap the camera somewhere
+    // unrelated. Updated on every Cesium camera-changed event.
+    @AppStorage("cesium.lastLat")     private var cesiumLastLat: Double = 40.6413
+    @AppStorage("cesium.lastLon")     private var cesiumLastLon: Double = -73.7781
+    @AppStorage("cesium.lastHeight")  private var cesiumLastHeight: Double = 50000
     @AppStorage("cesium.lastHeading") private var cesiumLastHeading: Double = 0
-    @AppStorage("cesium.lastPitch")   private var cesiumLastPitch: Double = -30
+    @AppStorage("cesium.lastPitch")   private var cesiumLastPitch: Double = -60
 
     private func handleCesiumMapEvent(_ event: CesiumMapEvent) {
         switch event.kind {
@@ -3790,23 +3849,39 @@ struct CesiumMainMap: UIViewRepresentable {
                     "window.OmniBridge.setTrails(\(lastTrailsSnapshot));",
                     completionHandler: nil
                 )
-                // Restore the operator's last Cesium camera pose so an
-                // engine toggle (3D → 2D → back) doesn't snap to the
-                // hardcoded DC default. Reads UserDefaults directly
-                // because the Coordinator isn't a SwiftUI view (can't
-                // use @AppStorage). Keys match the ones ATAKMapView
-                // writes from handleCesiumMapEvent.
-                let d = UserDefaults.standard
-                if d.object(forKey: "cesium.lastLat") != nil {
-                    let lat = d.double(forKey: "cesium.lastLat")
-                    let lon = d.double(forKey: "cesium.lastLon")
-                    let h   = d.double(forKey: "cesium.lastHeight")
-                    let hd  = d.double(forKey: "cesium.lastHeading")
-                    let pt  = d.double(forKey: "cesium.lastPitch")
+                // Align Cesium camera with the ADSB search center on
+                // bridge-ready so the aircraft pill count and the entities
+                // on-screen always match — first-launch users never see
+                // "I have 41 aircraft tracked but the map is empty"
+                // because the camera was over DC and the planes are over
+                // KJFK. ADSB's `getSearchCenter()` returns the user's GPS
+                // (real device) or the KJFK fallback (no fix yet); pre-
+                // existing persisted camera state in cesium.lastLat etc.
+                // is intentionally ignored for this initial alignment.
+                if let center = ADSBTrafficService.shared.searchCenterForBridge() {
+                    let h = max(20000.0, UserDefaults.standard.double(forKey: "cesium.lastHeight"))
+                    let hd = UserDefaults.standard.double(forKey: "cesium.lastHeading")
+                    let pt = UserDefaults.standard.object(forKey: "cesium.lastPitch") as? Double ?? -60
                     webView?.evaluateJavaScript(
-                        "window.OmniBridge.flyTo({lat:\(lat),lon:\(lon),range:\(h),heading:\(hd),pitch:\(pt)});",
+                        "window.OmniBridge.flyTo({lat:\(center.latitude),lon:\(center.longitude),range:\(h),heading:\(hd),pitch:\(pt)});",
                         completionHandler: nil
                     )
+                } else {
+                    // No ADSB center available — restore last camera pose
+                    // (engine toggle 3D → 2D → back) so we don't snap to
+                    // the bootstrap default.
+                    let d = UserDefaults.standard
+                    if d.object(forKey: "cesium.lastLat") != nil {
+                        let lat = d.double(forKey: "cesium.lastLat")
+                        let lon = d.double(forKey: "cesium.lastLon")
+                        let h   = d.double(forKey: "cesium.lastHeight")
+                        let hd  = d.double(forKey: "cesium.lastHeading")
+                        let pt  = d.double(forKey: "cesium.lastPitch")
+                        webView?.evaluateJavaScript(
+                            "window.OmniBridge.flyTo({lat:\(lat),lon:\(lon),range:\(h),heading:\(hd),pitch:\(pt)});",
+                            completionHandler: nil
+                        )
+                    }
                 }
             case "omniMapEvent":
                 // Body arrives as a JSON string from the HTML. Tolerate
@@ -4200,7 +4275,12 @@ struct CesiumMainMap: UIViewRepresentable {
              WebView (after loadDataWithBaseURL) resolves 100%/100vh to 0,
              and Cesium captures that as canvas size at construction.
              Same fix on iOS is a no-op but keeps the HTML platform-shared. */
-          html,body{margin:0;padding:0;overflow:hidden;background:#000;color:#fff;font-family:-apple-system,BlinkMacSystemFont,sans-serif}
+          /* Kill iOS WKWebView's default text-selection callout (Copy /
+             Translate / Copy Link with Highlight) on long-press over the
+             3D map — it otherwise stacks on top of our radial menu. Apply
+             on body only so Cesium's canvas-bound long-press JS still
+             fires (the universal `*` form blocked pointer events). */
+          html,body{margin:0;padding:0;overflow:hidden;background:#000;color:#fff;font-family:-apple-system,BlinkMacSystemFont,sans-serif;-webkit-touch-callout:none;-webkit-user-select:none;user-select:none}
           #cesiumContainer{position:fixed;top:0;left:0}
           #loading{position:absolute;top:50%;left:0;right:0;text-align:center;transform:translateY(-50%);z-index:10;pointer-events:none}
           .dot{display:inline-block;width:12px;height:12px;border-radius:50%;background:#FFCC00;margin:0 4px;animation:p 1.4s infinite}
@@ -4243,8 +4323,15 @@ struct CesiumMainMap: UIViewRepresentable {
             const url=c.toDataURL('image/png');_state.billboardCache.set(key,url);return url;
           }
           function _parse(x){return typeof x==='string'?(()=>{try{return JSON.parse(x)}catch(e){return null}})():x}
+          function _hideLoading(){const el=document.getElementById('loading');if(el)el.style.display='none';}
           function _signalReady(){
             _state.ready=true;
+            // Hide the spinner here too: the bootstrap flyTo's `complete`
+            // callback used to be the only place that hid it, but the
+            // native side immediately re-flies to a restored camera pose,
+            // interrupting the bootstrap flyTo so its complete never
+            // fires. Hide unconditionally once the viewer is ready.
+            _hideLoading();
             try{if(window.webkit&&window.webkit.messageHandlers&&window.webkit.messageHandlers.omniBridgeReady)window.webkit.messageHandlers.omniBridgeReady.postMessage('ready')}catch(e){}
             try{if(window.OmniBridgeNative&&window.OmniBridgeNative.onReady)window.OmniBridgeNative.onReady()}catch(e){}
           }
@@ -4277,7 +4364,7 @@ struct CesiumMainMap: UIViewRepresentable {
               const rot=(typeof e.heading==='number')?-e.heading*Math.PI/180:0;
               let entity=_state.entities.get(e.uid);
               if(!entity){entity=v.entities.add({id:e.uid,position:pos,
-                billboard:{image:_billboard(e.affiliation||'u',e.kind,e.sidc),verticalOrigin:Cesium.VerticalOrigin.CENTER,heightReference:useGround?Cesium.HeightReference.CLAMP_TO_GROUND:Cesium.HeightReference.NONE,disableDepthTestDistance:Number.POSITIVE_INFINITY,scale:e.kind==='aircraft'?0.85:0.7,rotation:rot},
+                billboard:{image:_billboard(e.affiliation||'u',e.kind,e.sidc),verticalOrigin:Cesium.VerticalOrigin.CENTER,heightReference:useGround?Cesium.HeightReference.CLAMP_TO_GROUND:Cesium.HeightReference.NONE,disableDepthTestDistance:Number.POSITIVE_INFINITY,scale:e.kind==='aircraft'?1.5:0.7,rotation:rot},
                 label:e.callsign?{text:e.callsign,font:'12px -apple-system, sans-serif',fillColor:Cesium.Color.WHITE,outlineColor:Cesium.Color.BLACK,outlineWidth:2,style:Cesium.LabelStyle.FILL_AND_OUTLINE,pixelOffset:new Cesium.Cartesian2(0,-32),heightReference:useGround?Cesium.HeightReference.CLAMP_TO_GROUND:Cesium.HeightReference.NONE,disableDepthTestDistance:Number.POSITIVE_INFINITY}:undefined,
               });_state.entities.set(e.uid,entity);}
               else{entity.position=pos;entity.billboard.image=_billboard(e.affiliation||'u',e.kind,e.sidc);entity.billboard.heightReference=useGround?Cesium.HeightReference.CLAMP_TO_GROUND:Cesium.HeightReference.NONE;entity.billboard.rotation=rot;if(entity.label&&e.callsign)entity.label.text=e.callsign;}
@@ -4347,7 +4434,12 @@ struct CesiumMainMap: UIViewRepresentable {
             const v=new Cesium.Viewer('cesiumContainer',{terrain:Cesium.Terrain.fromWorldTerrain(),animation:false,timeline:false,baseLayerPicker:false,geocoder:false,homeButton:false,sceneModePicker:false,navigationHelpButton:false,fullscreenButton:false,infoBox:false,selectionIndicator:false,creditContainer:document.createElement('div')});
             v.scene.skyAtmosphere.show=true;v.scene.globe.enableLighting=true;_state.viewer=v;_fitViewport();_installInputHandlers(v);
             try{const t=await Cesium.createGooglePhotorealistic3DTileset();v.scene.primitives.add(t);}catch(e){console.warn('Photoreal unavailable:',e);}
-            v.camera.flyTo({destination:Cesium.Cartesian3.fromDegrees(-77.0365,38.8977,5000),orientation:{heading:0,pitch:Cesium.Math.toRadians(-30),roll:0},duration:1.5,complete:()=>{const el=document.getElementById('loading');if(el)el.style.display='none';}});
+            // Bootstrap camera over KJFK to match the ADSB pre-GPS
+            // fallback — first-launch users land on a scene where the
+            // aircraft data they're seeing in the pill actually appears
+            // around them. 50km altitude with a steep look-down so a
+            // whole metropolitan area's traffic fits in frame.
+            v.camera.flyTo({destination:Cesium.Cartesian3.fromDegrees(-73.7781,40.6413,50000),orientation:{heading:0,pitch:Cesium.Math.toRadians(-60),roll:0},duration:1.5,complete:_hideLoading});
             _signalReady();
           })().catch(e=>{const el=document.getElementById('loading');if(el)el.innerHTML='<div class=\"label\">3D scene failed: '+(e&&e.message?e.message:'unknown')+'</div>';});
         </script></body></html>
