@@ -38,6 +38,33 @@ class PositionBroadcastService: ObservableObject {
         }
     }
 
+    // MARK: - OTS Interop: Auto-PPLI
+    //
+    // TAK protocol requires every connected EUD to send a periodic self-position
+    // (PPLI) CoT so the server knows the client is alive and can display it to
+    // other users.  ATAK/iTAK default to 1–2 s.  Some servers enforce a short
+    // idle timeout and will drop the connection if no CoT arrives within that
+    // window.  Auto-PPLI fires independently of the user-visible PLI broadcast
+    // interval so the connection stays warm even when the user sets a slow PLI
+    // rate (e.g. 30 s to conserve bandwidth on low-data links).
+    //
+    // The timer starts when the TAK connection is established and stops when it
+    // is torn down.  If the device has no GPS fix at tick time, the tick is
+    // silently skipped — the next tick will retry.
+
+    @Published var autoPPLIEnabled: Bool = true {
+        didSet { saveBroadcastSettings() }
+    }
+
+    @Published var autoPPLIInterval: TimeInterval = 1.0 {
+        didSet {
+            if ppliTimer != nil {
+                startAutoPPLI()   // restart with new interval
+            }
+            saveBroadcastSettings()
+        }
+    }
+
     @Published var staleTime: TimeInterval = 180.0 {
         didSet {
             saveBroadcastSettings()
@@ -73,6 +100,8 @@ class PositionBroadcastService: ObservableObject {
     // MARK: - Private Properties
 
     private var broadcastTimer: Timer?
+    private var ppliTimer: DispatchSourceTimer?
+    private let ppliQueue = DispatchQueue(label: "com.omnitak.ppli", qos: .utility)
     private var takService: TAKService?
     private var locationManager: LocationManager?
     private var cancellables = Set<AnyCancellable>()
@@ -113,12 +142,15 @@ class PositionBroadcastService: ObservableObject {
 
         print("📡 PositionBroadcastService.configure() called - isEnabled: \(isEnabled), hasTimer: \(broadcastTimer != nil)")
 
-        // Auto-start if enabled
+        // Auto-start user-visible PLI broadcast if enabled
         if isEnabled && broadcastTimer == nil {
             startBroadcasting()
         } else if !isEnabled {
             print("⚠️ Position broadcasting is disabled - enable in Settings")
         }
+
+        // Always start the auto-PPLI keepalive when a connection is configured
+        startAutoPPLI()
     }
 
     // MARK: - Broadcasting Control
@@ -153,6 +185,48 @@ class PositionBroadcastService: ObservableObject {
         if isEnabled {
             startBroadcasting()
         }
+    }
+
+    // MARK: - OTS Interop: Auto-PPLI Control
+
+    /// Start the high-frequency PPLI keepalive timer.
+    /// Called by TAKService immediately after a connection is established.
+    /// Safe to call multiple times — cancels any existing timer first.
+    func startAutoPPLI() {
+        guard autoPPLIEnabled else { return }
+        guard takService != nil else { return }
+
+        stopAutoPPLI()
+
+        let source = DispatchSource.makeTimerSource(queue: ppliQueue)
+        let interval = autoPPLIInterval
+        source.schedule(deadline: .now() + interval, repeating: interval, leeway: .milliseconds(100))
+        source.setEventHandler { [weak self] in
+            self?.sendAutoPPLITick()
+        }
+        source.resume()
+        ppliTimer = source
+
+        print("📡 Auto-PPLI started — interval: \(interval)s")
+    }
+
+    /// Stop the PPLI keepalive timer.
+    /// Called by TAKService when the connection is torn down.
+    func stopAutoPPLI() {
+        ppliTimer?.cancel()
+        ppliTimer = nil
+        print("📡 Auto-PPLI stopped")
+    }
+
+    private func sendAutoPPLITick() {
+        guard let takService = takService else { return }
+        guard let location = locationManager?.location else {
+            // No GPS fix yet — skip this tick rather than sending stale zeros.
+            return
+        }
+
+        let cotXML = generateSelfSACoT(location: location)
+        let _ = takService.sendCoT(xml: cotXML)
     }
 
     // MARK: - Position Broadcast
@@ -298,6 +372,8 @@ class PositionBroadcastService: ObservableObject {
         UserDefaults.standard.set(userCallsign, forKey: "userCallsign")
         UserDefaults.standard.set(teamColor, forKey: "teamColor")
         UserDefaults.standard.set(teamRole, forKey: "teamRole")
+        UserDefaults.standard.set(autoPPLIEnabled, forKey: "autoPPLIEnabled")
+        UserDefaults.standard.set(autoPPLIInterval, forKey: "autoPPLIInterval")
     }
 
     private func loadBroadcastSettings() {
@@ -328,6 +404,15 @@ class PositionBroadcastService: ObservableObject {
 
         if let savedTeamRole = UserDefaults.standard.string(forKey: "teamRole") {
             teamRole = savedTeamRole
+        }
+
+        if UserDefaults.standard.object(forKey: "autoPPLIEnabled") != nil {
+            autoPPLIEnabled = UserDefaults.standard.bool(forKey: "autoPPLIEnabled")
+        }
+
+        let savedPPLIInterval = UserDefaults.standard.double(forKey: "autoPPLIInterval")
+        if savedPPLIInterval > 0 {
+            autoPPLIInterval = savedPPLIInterval
         }
     }
 
@@ -418,5 +503,6 @@ class PositionBroadcastService: ObservableObject {
 
     deinit {
         stopBroadcasting()
+        stopAutoPPLI()
     }
 }

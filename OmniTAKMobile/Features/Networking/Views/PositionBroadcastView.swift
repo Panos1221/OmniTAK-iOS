@@ -38,6 +38,7 @@ struct PositionBroadcastView: View {
                         // Advanced Settings
                         if showAdvancedSettings {
                             advancedCard
+                            otsInteropCard
                         }
                     }
                     .padding()
@@ -406,6 +407,70 @@ struct PositionBroadcastView: View {
         .padding()
         .background(Color(hex: "#2A2A2A"))
         .cornerRadius(12)
+    }
+
+    // MARK: - OTS Interop Card
+
+    // Shown inside the advanced section when toggled on.
+    // TAK protocol requires periodic PPLI so the server knows the EUD is alive
+    // and can display it on the common operating picture.  ATAK/iTAK default to
+    // 1 s.  This setting is independent of the user-visible PLI broadcast rate.
+    private var otsInteropCard: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Text("OTS INTEROP")
+                    .font(.system(size: 11, weight: .bold))
+                    .foregroundColor(.gray)
+                Spacer()
+                Toggle("", isOn: $broadcastService.autoPPLIEnabled)
+                    .labelsHidden()
+            }
+
+            Text("Sends a keepalive self-position (PPLI) at the interval below while connected. Matches ATAK default (1 s). Required for servers with short idle timeouts.")
+                .font(.system(size: 11))
+                .foregroundColor(.gray)
+
+            if broadcastService.autoPPLIEnabled {
+                Divider()
+                    .background(Color.gray.opacity(0.3))
+
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack {
+                        Text("PPLI Interval")
+                            .font(.system(size: 14))
+                            .foregroundColor(.white)
+                        Spacer()
+                        Text(String(format: "%.1f s", broadcastService.autoPPLIInterval))
+                            .font(.system(size: 14, weight: .bold))
+                            .foregroundColor(Color(hex: "#FFFC00"))
+                    }
+
+                    Slider(value: $broadcastService.autoPPLIInterval, in: 0.5...5.0, step: 0.5)
+                        .accentColor(Color(hex: "#FFFC00"))
+
+                    HStack {
+                        Text("0.5 s")
+                            .font(.system(size: 10))
+                            .foregroundColor(.gray)
+                        Spacer()
+                        Text("ATAK default: 1 s")
+                            .font(.system(size: 10))
+                            .foregroundColor(.gray)
+                        Spacer()
+                        Text("5 s")
+                            .font(.system(size: 10))
+                            .foregroundColor(.gray)
+                    }
+                }
+            }
+        }
+        .padding()
+        .background(Color(hex: "#2A2A2A"))
+        .cornerRadius(12)
+        .overlay(
+            RoundedRectangle(cornerRadius: 12)
+                .stroke(Color.orange.opacity(0.4), lineWidth: 1)
+        )
     }
 
     // MARK: - Helpers

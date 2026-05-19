@@ -1443,6 +1443,12 @@ class TAKService: ObservableObject {
         isConnected = false
         connectionStatus = "Disconnected"
         connectionState = .disconnected
+
+        // Stop the auto-PPLI keepalive — no connection, no heartbeat needed
+        DispatchQueue.main.async {
+            PositionBroadcastService.shared.stopAutoPPLI()
+        }
+
         #if DEBUG
         print("🔌 Disconnected from all TAK servers")
         #endif
