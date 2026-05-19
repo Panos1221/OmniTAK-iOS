@@ -1,0 +1,15 @@
+// Copy this file to `Config.xcconfig` (gitignored) and fill in real values.
+// Xcode auto-loads Config.xcconfig as the baseConfigurationReference for
+// Debug + Release; the values are substituted into Info.plist at build time
+// via `$(SETTING_NAME)` references.
+//
+// New devs / CI: see CONTRIBUTING.md "Mapbox token" section.
+
+// Mapbox public access token (pk.*). Bundle-id restricted in Mapbox console.
+// Get yours at https://account.mapbox.com/access-tokens/
+MBX_ACCESS_TOKEN = pk.REPLACE_ME
+
+// Optional: default password used when extracting .p12 from imported TAK
+// data packages. Most public TAK servers use the well-known default "atakatak".
+// Leave blank to require explicit password every time.
+DEFAULT_P12_PASSWORD =
