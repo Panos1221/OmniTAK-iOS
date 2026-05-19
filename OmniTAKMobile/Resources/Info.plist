@@ -4,6 +4,8 @@
 <dict>
 	<key>DefaultP12Password</key>
 	<string>$(DEFAULT_P12_PASSWORD)</string>
+	<key>MBXAccessToken</key>
+	<string>$(MBX_ACCESS_TOKEN)</string>
 	<key>BGTaskSchedulerPermittedIdentifiers</key>
 	<array>
 		<string>com.engindearing.omnitak.mobile.refresh</string>

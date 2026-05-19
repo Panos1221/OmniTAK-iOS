@@ -70,6 +70,7 @@ fastlane/test_output
 .env.local
 .env.*.local
 ExportOptions*.plist
+Config.xcconfig
 
 # Build artifacts
 dSYMs/
