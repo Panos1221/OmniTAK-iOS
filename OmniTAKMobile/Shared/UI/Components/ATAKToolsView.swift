@@ -40,6 +40,7 @@ struct ATAKToolsView: View {
     @State private var showElevationProfile = false
     @State private var showLineOfSight = false
     @State private var showEchelonHierarchy = false
+    @State private var showKMLOverlays = false
 
     @ObservedObject private var chatManager = ChatManager.shared
     @StateObject private var trackRecordingService = TrackRecordingService()
@@ -181,6 +182,9 @@ struct ATAKToolsView: View {
         .sheet(isPresented: $showEchelonHierarchy) {
             EchelonHierarchyView()
         }
+        .sheet(isPresented: $showKMLOverlays) {
+            KMLOverlaysPanel()
+        }
     }
 
     private func handleToolSelection(_ tool: ATAKTool) {
@@ -260,6 +264,8 @@ struct ATAKToolsView: View {
             showLineOfSight = true
         case "echelon":
             showEchelonHierarchy = true
+        case "kml":
+            showKMLOverlays = true
 
         default:
             // Unknown tool ids are a no-op — there is no fallback detail view.
@@ -387,6 +393,7 @@ struct ATAKTool: Identifiable {
         ATAKTool(id: "data", displayName: "Data Packages", iconName: "shippingbox.fill", description: "Manage data packages"),
         ATAKTool(id: "video", displayName: "Video", iconName: "video.fill", description: "Video streaming (Beta - requires TAK server)"),
         ATAKTool(id: "offline", displayName: "Offline Maps", iconName: "arrow.down.doc.fill", description: "Download maps for offline use"),
+        ATAKTool(id: "kml", displayName: "Map Overlays", iconName: "square.3.layers.3d", description: "Import & toggle KML/KMZ overlays (handles huge files)"),
         ATAKTool(id: "drawing", displayName: "Drawing", iconName: "pencil.tip.crop.circle", description: "Draw on map"),
         ATAKTool(id: "measure", displayName: "Measure", iconName: "ruler", description: "Distance and area measurement"),
         ATAKTool(id: "lasso", displayName: "Select", iconName: "lasso", description: "Multi-select features in a freehand region (long-press + drag)"),

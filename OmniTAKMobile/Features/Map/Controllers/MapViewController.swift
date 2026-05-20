@@ -1410,6 +1410,21 @@ struct ATAKMapView: View {
                     : mapRegion.center
                 dropMarkerAtLocation(coordinate: center, affiliation: .friendly)
             }
+            // Frame a KML overlay's bounds. Overlays render on the 2D engine,
+            // so switch to it first.
+            .onReceive(NotificationCenter.default.publisher(for: .kmlZoomToOverlay)) { note in
+                guard let id = note.userInfo?["id"] as? String,
+                      let o = KMLVectorOverlayStore.shared.overlays.first(where: { $0.id == id })
+                else { return }
+                mapEngineRaw = MapEngine.mapbox2D.rawValue
+                let latSpan = max((o.maxLat - o.minLat) * 1.3, 0.02)
+                let lonSpan = max((o.maxLon - o.minLon) * 1.3, 0.02)
+                mapRegion = MKCoordinateRegion(
+                    center: CLLocationCoordinate2D(latitude: (o.minLat + o.maxLat) / 2,
+                                                   longitude: (o.minLon + o.maxLon) / 2),
+                    span: MKCoordinateSpan(latitudeDelta: latSpan, longitudeDelta: lonSpan)
+                )
+            }
             .sheet(isPresented: $showAppModePicker) {
                 AppModePickerView()
             }
@@ -2365,6 +2380,7 @@ struct TacticalMapView: UIViewRepresentable {
     @ObservedObject var mapStateManager: MapStateManager
     @ObservedObject var measurementManager: MeasurementManager
     @ObservedObject var lassoService: LassoSelectionService = LassoSelectionService.shared
+    @ObservedObject var kmlVectorStore: KMLVectorOverlayStore = KMLVectorOverlayStore.shared
     let onMapTap: (CLLocationCoordinate2D) -> Void
 
     // MARK: - UIViewRepresentable
@@ -2722,6 +2738,93 @@ struct TacticalMapView: UIViewRepresentable {
             refreshRangeBearing()
             refreshBreadcrumbTrail()
             refreshLassoHighlightRings()
+            refreshKMLVectorOverlays()
+        }
+
+        // MARK: - Large-KML vector overlays (GeoJSONSource + line/fill/circle)
+        //
+        // Unlike the per-feature annotation managers above, imported KML
+        // overlays render through a single Mapbox GeoJSONSource per overlay
+        // (data loaded natively from the on-disk .geojson) plus shared
+        // line / fill / circle layers. This is what lets a 50,000-trail
+        // import render + toggle smoothly where the annotation path (and
+        // competitors) crash. Toggling is a layer-visibility flip.
+        private var installedKMLOverlayIDs = Set<String>()
+
+        func refreshKMLVectorOverlays() {
+            guard let mapView = mapView else { return }
+            let map: MapboxMap = mapView.mapboxMap
+            guard map.isStyleLoaded else { return }
+            let overlays = parent.kmlVectorStore.overlays
+            let wanted = Set(overlays.map { $0.id })
+
+            // Tear down overlays that are gone.
+            for id in installedKMLOverlayIDs where !wanted.contains(id) {
+                for layerID in kmlLayerIDs(id) where map.layerExists(withId: layerID) {
+                    try? map.removeLayer(withId: layerID)
+                }
+                let sourceID = "kmlsrc-\(id)"
+                if map.sourceExists(withId: sourceID) { try? map.removeSource(withId: sourceID) }
+            }
+            installedKMLOverlayIDs = wanted
+
+            for overlay in overlays {
+                let sourceID = "kmlsrc-\(overlay.id)"
+                let color = UIColor(Color(hex: overlay.colorHex))
+                if !map.sourceExists(withId: sourceID) {
+                    addKMLOverlayLayers(map: map, overlay: overlay, sourceID: sourceID, color: color)
+                }
+                let visValue = overlay.visible ? "visible" : "none"
+                for layerID in kmlLayerIDs(overlay.id) where map.layerExists(withId: layerID) {
+                    try? map.setLayerProperty(for: layerID, property: "visibility", value: visValue)
+                }
+            }
+        }
+
+        private func kmlLayerIDs(_ overlayID: String) -> [String] {
+            ["kmlfill-\(overlayID)", "kmlline-\(overlayID)", "kmlpt-\(overlayID)"]
+        }
+
+        private func addKMLOverlayLayers(map: MapboxMap, overlay: KMLVectorOverlay, sourceID: String, color: UIColor) {
+            var source = GeoJSONSource(id: sourceID)
+            // Load the parsed GeoJSON natively from disk (Mapbox parses +
+            // tiles it off the main thread — no giant in-memory feature list).
+            source.data = .url(parent.kmlVectorStore.fileURL(overlay))
+            // Douglas-Peucker simplification during tiling — drops redundant
+            // vertices on dense trail geometry without a visible change.
+            source.tolerance = 1.0
+            do { try map.addSource(source) } catch { return }
+
+            // Polygon fill (translucent) — beneath lines.
+            var fill = FillLayer(id: "kmlfill-\(overlay.id)", source: sourceID)
+            fill.fillColor = .constant(StyleColor(color.withAlphaComponent(0.18)))
+            fill.fillOutlineColor = .constant(StyleColor(color))
+            try? map.addLayer(fill)
+
+            // Lines + polygon outlines — width interpolates with zoom so the
+            // overlay reads as fine lines when zoomed out and bolder when in.
+            var line = LineLayer(id: "kmlline-\(overlay.id)", source: sourceID)
+            line.lineColor = .constant(StyleColor(color))
+            line.lineCap = .constant(.round)
+            line.lineJoin = .constant(.round)
+            line.lineWidth = .expression(
+                Exp(.interpolate) {
+                    Exp(.linear)
+                    Exp(.zoom)
+                    6.0; 0.6
+                    12.0; 1.6
+                    16.0; 3.0
+                }
+            )
+            try? map.addLayer(line)
+
+            // Points.
+            var circle = CircleLayer(id: "kmlpt-\(overlay.id)", source: sourceID)
+            circle.circleColor = .constant(StyleColor(color))
+            circle.circleRadius = .constant(3.0)
+            circle.circleStrokeColor = .constant(StyleColor(.white))
+            circle.circleStrokeWidth = .constant(1.0)
+            try? map.addLayer(circle)
         }
 
         // Lazy-attach helpers — one per annotation kind. Mapbox v11

@@ -291,9 +291,11 @@ struct DocumentPicker: UIViewControllerRepresentable {
                 // Copy to temp
                 try FileManager.default.copyItem(at: url, to: tempURL)
 
-                // Import from temp
+                // Import from temp via the robust vector path (single
+                // GeoJSONSource per overlay) so large files (tens of
+                // thousands of features) render + toggle without crashing.
                 Task {
-                    await kmlManager.importKMLFile(from: tempURL)
+                    await KMLVectorOverlayStore.shared.importKML(from: tempURL)
 
                     // Clean up temp file
                     try? FileManager.default.removeItem(at: tempURL)
