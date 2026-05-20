@@ -103,6 +103,29 @@ struct SettingsView: View {
                     }
                 }
 
+                // Customizable bottom toolbar
+                Section("Toolbar") {
+                    Button {
+                        dismiss()
+                        NotificationCenter.default.post(name: .enterToolbarEditMode, object: nil)
+                    } label: {
+                        HStack {
+                            Image(systemName: "slider.horizontal.3")
+                                .foregroundColor(Color(hex: "#FFCC00"))
+                                .frame(width: 24)
+                            Text("Customize Toolbar")
+                                .foregroundColor(.primary)
+                            Spacer()
+                            Text("Build your own")
+                                .font(.system(size: 12))
+                                .foregroundColor(.gray)
+                            Image(systemName: "chevron.right")
+                                .font(.system(size: 12, weight: .semibold))
+                                .foregroundColor(.gray.opacity(0.5))
+                        }
+                    }
+                }
+
 
                 // Map Overlay Settings
                 Section(loc.t("settings.section.mapOverlays")) {

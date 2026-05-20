@@ -181,6 +181,22 @@ struct OnboardingPage {
                 "onboarding.page4.feature3",
                 "onboarding.page4.feature4"
             ]
+        ),
+        // Customizable toolbar. Uses literal strings (not localization keys)
+        // — LocalizationManager.t() returns its input verbatim when a key is
+        // missing, so these render as English in every language until proper
+        // translations are added.
+        OnboardingPage(
+            icon: "slider.horizontal.3",
+            titleKey: "Make It Yours",
+            descKey: "The bottom toolbar is fully customizable — put the tools you actually use up front.",
+            color: Color(hex: "#FFCC00"),
+            featureKeys: [
+                "Press & hold the bar to start editing",
+                "Drag icons to reorder, tap − to remove",
+                "Tap + to add Drop Pin, Measure, Routes & more",
+                "Reopen any time via Settings ▸ Customize Toolbar"
+            ]
         )
     ]
 }
