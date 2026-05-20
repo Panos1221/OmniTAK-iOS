@@ -2770,14 +2770,12 @@ struct TacticalMapView: UIViewRepresentable {
 
             for overlay in overlays {
                 let sourceID = "kmlsrc-\(overlay.id)"
-                let color = UIColor(Color(hex: overlay.colorHex))
                 if !map.sourceExists(withId: sourceID) {
-                    addKMLOverlayLayers(map: map, overlay: overlay, sourceID: sourceID, color: color)
+                    addKMLOverlayLayers(map: map, overlay: overlay, sourceID: sourceID)
                 }
-                let visValue = overlay.visible ? "visible" : "none"
-                for layerID in kmlLayerIDs(overlay.id) where map.layerExists(withId: layerID) {
-                    try? map.setLayerProperty(for: layerID, property: "visibility", value: visValue)
-                }
+                // Re-apply styling every refresh so edits (color / opacity /
+                // line width / visibility) take effect live without a reload.
+                styleKMLLayers(map: map, overlay: overlay)
             }
         }
 
@@ -2785,7 +2783,7 @@ struct TacticalMapView: UIViewRepresentable {
             ["kmlfill-\(overlayID)", "kmlline-\(overlayID)", "kmlpt-\(overlayID)"]
         }
 
-        private func addKMLOverlayLayers(map: MapboxMap, overlay: KMLVectorOverlay, sourceID: String, color: UIColor) {
+        private func addKMLOverlayLayers(map: MapboxMap, overlay: KMLVectorOverlay, sourceID: String) {
             var source = GeoJSONSource(id: sourceID)
             // Load the parsed GeoJSON natively from disk (Mapbox parses +
             // tiles it off the main thread — no giant in-memory feature list).
@@ -2795,36 +2793,42 @@ struct TacticalMapView: UIViewRepresentable {
             source.tolerance = 1.0
             do { try map.addSource(source) } catch { return }
 
-            // Polygon fill (translucent) — beneath lines.
-            var fill = FillLayer(id: "kmlfill-\(overlay.id)", source: sourceID)
-            fill.fillColor = .constant(StyleColor(color.withAlphaComponent(0.18)))
-            fill.fillOutlineColor = .constant(StyleColor(color))
+            let fill = FillLayer(id: "kmlfill-\(overlay.id)", source: sourceID)
             try? map.addLayer(fill)
-
-            // Lines + polygon outlines — width interpolates with zoom so the
-            // overlay reads as fine lines when zoomed out and bolder when in.
             var line = LineLayer(id: "kmlline-\(overlay.id)", source: sourceID)
-            line.lineColor = .constant(StyleColor(color))
             line.lineCap = .constant(.round)
             line.lineJoin = .constant(.round)
-            line.lineWidth = .expression(
-                Exp(.interpolate) {
-                    Exp(.linear)
-                    Exp(.zoom)
-                    6.0; 0.6
-                    12.0; 1.6
-                    16.0; 3.0
-                }
-            )
             try? map.addLayer(line)
-
-            // Points.
             var circle = CircleLayer(id: "kmlpt-\(overlay.id)", source: sourceID)
-            circle.circleColor = .constant(StyleColor(color))
-            circle.circleRadius = .constant(3.0)
             circle.circleStrokeColor = .constant(StyleColor(.white))
             circle.circleStrokeWidth = .constant(1.0)
             try? map.addLayer(circle)
+        }
+
+        /// Apply the overlay's color / opacity / line width / visibility to its
+        /// layers. Idempotent — safe to call on every refresh.
+        private func styleKMLLayers(map: MapboxMap, overlay: KMLVectorOverlay) {
+            let hex = overlay.colorHex
+            let vis = overlay.visible ? "visible" : "none"
+            let m = overlay.lineWidth
+            // Width interpolates with zoom (fine when out, bolder when in),
+            // scaled by the per-overlay line-width multiplier.
+            let widthExpr: [Any] = ["interpolate", ["linear"], ["zoom"],
+                                    6.0, 0.6 * m, 12.0, 1.6 * m, 16.0, 3.0 * m]
+            let fillID = "kmlfill-\(overlay.id)"
+            try? map.setLayerProperty(for: fillID, property: "visibility", value: vis)
+            try? map.setLayerProperty(for: fillID, property: "fill-color", value: hex)
+            try? map.setLayerProperty(for: fillID, property: "fill-outline-color", value: hex)
+            try? map.setLayerProperty(for: fillID, property: "fill-opacity", value: overlay.opacity * 0.25)
+            let lineID = "kmlline-\(overlay.id)"
+            try? map.setLayerProperty(for: lineID, property: "visibility", value: vis)
+            try? map.setLayerProperty(for: lineID, property: "line-color", value: hex)
+            try? map.setLayerProperty(for: lineID, property: "line-opacity", value: overlay.opacity)
+            try? map.setLayerProperty(for: lineID, property: "line-width", value: widthExpr)
+            let ptID = "kmlpt-\(overlay.id)"
+            try? map.setLayerProperty(for: ptID, property: "visibility", value: vis)
+            try? map.setLayerProperty(for: ptID, property: "circle-color", value: hex)
+            try? map.setLayerProperty(for: ptID, property: "circle-opacity", value: overlay.opacity)
         }
 
         // Lazy-attach helpers — one per annotation kind. Mapbox v11

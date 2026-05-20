@@ -36,6 +36,38 @@ struct KMLVectorOverlay: Codable, Identifiable, Equatable {
     var minLon: Double
     var maxLat: Double
     var maxLon: Double
+    /// Stroke/fill opacity (0…1).
+    var opacity: Double
+    /// Base line width multiplier.
+    var lineWidth: Double
+    var createdAt: Date
+
+    init(id: String, name: String, fileName: String, colorHex: String, visible: Bool,
+         featureCount: Int, minLat: Double, minLon: Double, maxLat: Double, maxLon: Double,
+         opacity: Double = 0.9, lineWidth: Double = 1.4, createdAt: Date = Date()) {
+        self.id = id; self.name = name; self.fileName = fileName; self.colorHex = colorHex
+        self.visible = visible; self.featureCount = featureCount
+        self.minLat = minLat; self.minLon = minLon; self.maxLat = maxLat; self.maxLon = maxLon
+        self.opacity = opacity; self.lineWidth = lineWidth; self.createdAt = createdAt
+    }
+
+    // Backward-compatible decode — older overlays.json lacks the styling fields.
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(String.self, forKey: .id)
+        name = try c.decode(String.self, forKey: .name)
+        fileName = try c.decode(String.self, forKey: .fileName)
+        colorHex = try c.decode(String.self, forKey: .colorHex)
+        visible = try c.decode(Bool.self, forKey: .visible)
+        featureCount = try c.decode(Int.self, forKey: .featureCount)
+        minLat = try c.decode(Double.self, forKey: .minLat)
+        minLon = try c.decode(Double.self, forKey: .minLon)
+        maxLat = try c.decode(Double.self, forKey: .maxLat)
+        maxLon = try c.decode(Double.self, forKey: .maxLon)
+        opacity = try c.decodeIfPresent(Double.self, forKey: .opacity) ?? 0.9
+        lineWidth = try c.decodeIfPresent(Double.self, forKey: .lineWidth) ?? 1.4
+        createdAt = try c.decodeIfPresent(Date.self, forKey: .createdAt) ?? Date()
+    }
 }
 
 // MARK: - Streaming KML → GeoJSON exporter
@@ -247,10 +279,35 @@ final class KMLVectorOverlayStore: ObservableObject {
         persist()
     }
 
+    func rename(_ id: String, to name: String) {
+        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty, let idx = overlays.firstIndex(where: { $0.id == id }) else { return }
+        overlays[idx].name = trimmed
+        persist()
+    }
+
+    func setOpacity(_ id: String, _ value: Double) {
+        guard let idx = overlays.firstIndex(where: { $0.id == id }) else { return }
+        overlays[idx].opacity = min(max(value, 0.05), 1.0)
+        persist()
+    }
+
+    func setLineWidth(_ id: String, _ value: Double) {
+        guard let idx = overlays.firstIndex(where: { $0.id == id }) else { return }
+        overlays[idx].lineWidth = min(max(value, 0.5), 6.0)
+        persist()
+    }
+
     func remove(_ id: String) {
         guard let idx = overlays.firstIndex(where: { $0.id == id }) else { return }
         try? FileManager.default.removeItem(at: fileURL(overlays[idx]))
         overlays.remove(at: idx)
+        persist()
+    }
+
+    func removeAll() {
+        for overlay in overlays { try? FileManager.default.removeItem(at: fileURL(overlay)) }
+        overlays.removeAll()
         persist()
     }
 
