@@ -110,6 +110,16 @@ enum KMLGeoJSONExporter {
         }
         func coord(_ p: KMLPoint) -> String { "[\(fmt(p.longitude)),\(fmt(p.latitude))]" }
 
+        // Real-world KML often carries junk coordinates — missing values that
+        // serialize as (0,0) "Null Island", or out-of-range / NaN values. A
+        // single 0,0 blows the bounding box up to half the planet, so
+        // "zoom to overlay" frames the whole globe. Drop them.
+        func isValid(_ p: KMLPoint) -> Bool {
+            p.latitude.isFinite && p.longitude.isFinite &&
+            abs(p.latitude) <= 90 && abs(p.longitude) <= 180 &&
+            !(abs(p.latitude) < 0.0001 && abs(p.longitude) < 0.0001)
+        }
+
         func writeFeatureHeader(_ name: String) {
             if count > 0 { emit(",") }
             emit("{\"type\":\"Feature\",\"properties\":{\"name\":\(jsonString(name))},\"geometry\":")
@@ -118,32 +128,37 @@ enum KMLGeoJSONExporter {
         func write(_ geometry: KMLGeometry, name: String) {
             switch geometry {
             case .point(let pt):
+                guard isValid(pt) else { return }
                 writeFeatureHeader(name)
                 emit("{\"type\":\"Point\",\"coordinates\":\(coord(pt))}}")
                 track(pt.latitude, pt.longitude)
                 count += 1
             case .lineString(let line):
-                guard line.coordinates.count >= 2 else { return }
+                let pts = line.coordinates.filter(isValid)
+                guard pts.count >= 2 else { return }
                 writeFeatureHeader(name)
                 emit("{\"type\":\"LineString\",\"coordinates\":[")
-                for (i, pt) in line.coordinates.enumerated() {
+                for (i, pt) in pts.enumerated() {
                     if i > 0 { emit(",") }
                     emit(coord(pt)); track(pt.latitude, pt.longitude)
                 }
                 emit("]}}")
                 count += 1
             case .polygon(let poly):
-                guard poly.outerBoundary.count >= 3 else { return }
+                let outer = poly.outerBoundary.filter(isValid)
+                guard outer.count >= 3 else { return }
                 writeFeatureHeader(name)
                 emit("{\"type\":\"Polygon\",\"coordinates\":[[")
-                for (i, pt) in poly.outerBoundary.enumerated() {
+                for (i, pt) in outer.enumerated() {
                     if i > 0 { emit(",") }
                     emit(coord(pt)); track(pt.latitude, pt.longitude)
                 }
                 emit("]")
-                for ring in poly.innerBoundaries where ring.count >= 3 {
+                for ring in poly.innerBoundaries {
+                    let inner = ring.filter(isValid)
+                    guard inner.count >= 3 else { continue }
                     emit(",[")
-                    for (i, pt) in ring.enumerated() {
+                    for (i, pt) in inner.enumerated() {
                         if i > 0 { emit(",") }
                         emit(coord(pt))
                     }

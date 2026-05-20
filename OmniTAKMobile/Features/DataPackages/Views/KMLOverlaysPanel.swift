@@ -138,9 +138,19 @@ struct KMLOverlaysPanel: View {
                     .font(.caption).foregroundColor(.secondary)
             }
             Spacer()
-            Image(systemName: overlay.visible ? "eye" : "eye.slash")
-                .foregroundColor(.secondary)
-                .font(.footnote)
+            // Tap to enable/disable the overlay without opening the editor.
+            // Borderless so it's independently tappable inside the row's
+            // NavigationLink (tapping the row still opens the editor).
+            Button {
+                store.setVisible(overlay.id, !overlay.visible)
+            } label: {
+                Image(systemName: overlay.visible ? "eye.fill" : "eye.slash")
+                    .foregroundColor(overlay.visible ? .accentColor : .secondary)
+                    .font(.body)
+                    .frame(width: 44, height: 44)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.borderless)
         }
     }
 }
