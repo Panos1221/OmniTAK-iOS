@@ -49,6 +49,7 @@ struct ToolSheetHost: ViewModifier {
         case "los":          LineOfSightView()
         case "missionsync":  MissionPackageSyncView()
         case "plugins":      PluginsListView()
+        case "kml":          KMLOverlaysPanel()
         case "pointer":
             PointDropperSheetView(isPresented: Binding(
                 get: { active != nil },

@@ -64,6 +64,11 @@ struct ToolsLauncherSheet: View {
 
                 Divider().padding(.leading, 70)
 
+                quickTool(icon: "square.3.layers.3d", color: BarTint.purple, title: "Map Overlays",
+                          subtitle: "Import & toggle KML/KMZ overlays (handles huge files)", toolID: "kml")
+
+                Divider().padding(.leading, 70)
+
                 // Build-your-own-bar entry.
                 row(icon: "slider.horizontal.3", iconColor: BarTint.tools, title: "Customize Toolbar",
                     subtitle: "Pick and arrange your own bottom-bar shortcuts",

@@ -86,6 +86,11 @@ struct KMLOverlaysPanel: View {
         Task {
             await store.importKML(from: tmp)
             try? FileManager.default.removeItem(at: tmp)
+            // Jump the map to the freshly imported overlay so it's immediately
+            // visible (large overlays are often far from the current view).
+            if let last = store.overlays.last {
+                NotificationCenter.default.post(name: .kmlZoomToOverlay, object: nil, userInfo: ["id": last.id])
+            }
         }
     }
 
