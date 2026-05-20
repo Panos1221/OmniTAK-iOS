@@ -1064,6 +1064,9 @@ struct ATAKMapView: View {
                 circleDrawings: drawingStore.circles,
                 polygonDrawings: drawingStore.polygons,
                 rangeRings: measurementManager.rangeRings,
+                // Dropped pins — same source the 2D Mapbox path reads, so
+                // a pin shows on whichever engine is active.
+                pointMarkers: pointDropperService.markers,
                 selfLocation: locationManager.location,
                 selfCallsign: userCallsign,
                 // Phase 3b — saved distance / area measurements mirrored
@@ -1398,6 +1401,15 @@ struct ATAKMapView: View {
                     showLayersPanel.toggle()
                 }
             }
+            // Customizable bar "Drop Pin" shortcut — drop a marker at the
+            // current map center on whichever engine is active. Cesium uses
+            // its persisted camera center; Mapbox uses the tracked region.
+            .onReceive(NotificationCenter.default.publisher(for: .barDropPin)) { _ in
+                let center: CLLocationCoordinate2D = mapEngine == .cesium3D
+                    ? CLLocationCoordinate2D(latitude: cesiumLastLat, longitude: cesiumLastLon)
+                    : mapRegion.center
+                dropMarkerAtLocation(coordinate: center, affiliation: .friendly)
+            }
             .sheet(isPresented: $showAppModePicker) {
                 AppModePickerView()
             }
@@ -1474,10 +1486,11 @@ struct ATAKMapView: View {
             cesiumLastHeading = cam.heading
             cesiumLastPitch = cam.pitch
         case .longpress:
-            // Phase 4b will refine entity-targeted long-press into a
-            // dedicated marker-context menu. For now, both empty-map
-            // and entity long-press fall through to the same
-            // map-context menu the Mapbox empty-map path produces.
+            // A long-press landing on a dropped pin opens the same
+            // point-marker menu (Edit/Delete/Share/Navigate) the 2D
+            // Mapbox long-press path produces. Empty-map and other
+            // entities fall through to the map-context menu.
+            if openCesiumPointMarkerMenu(uid: event.entityUid, at: event) { return }
             radialMenuCoordinator.showContextMenu(
                 at: event.screenPoint,
                 for: event.coordinate,
@@ -1491,6 +1504,10 @@ struct ATAKMapView: View {
                 handleMapTap(at: event.coordinate)
                 return
             }
+            // A tap on a dropped pin surfaces its radial menu so the
+            // operator can edit it without hunting for the long-press —
+            // the 3D engine has no MKMapView callout to lean on.
+            if openCesiumPointMarkerMenu(uid: uid, at: event) { return }
             // The HTML emits `__self__` for the operator's own pip and
             // namespaced uids (`ads-…`, `line-…`, `poly-…`, `circ-…`,
             // `rring-…`, `meas-…`, `trail-…`, `:v<idx>` vertex labels)
@@ -1512,6 +1529,22 @@ struct ATAKMapView: View {
                 )
             }
         }
+    }
+
+    /// If `uid` belongs to a dropped point marker, open the point-marker
+    /// radial menu anchored at the press and return true. Shared by the
+    /// Cesium tap + long-press paths so a pin is editable on the 3D engine
+    /// exactly like the 2D Mapbox long-press path (showPointMarkerMenu).
+    private func openCesiumPointMarkerMenu(uid: String?, at event: CesiumMapEvent) -> Bool {
+        guard let uid,
+              let pm = pointDropperService.markers.first(where: { $0.uid == uid })
+        else { return false }
+        radialMenuCoordinator.showPointMarkerMenu(
+            at: event.screenPoint,
+            coordinate: pm.coordinate,
+            marker: pm
+        )
+        return true
     }
 
     // MARK: - Marker Actions
@@ -3755,6 +3788,11 @@ struct CesiumMainMap: UIViewRepresentable {
     let circleDrawings: [CircleDrawing]
     let polygonDrawings: [PolygonDrawing]
     let rangeRings: [RangeRing]
+    // Dropped point markers (PointDropperService). The 2D Mapbox path
+    // renders these via refreshPointMarkers(); without this the 3D
+    // engine never saw a dropped pin and nothing appeared — the App
+    // Store "drop does nothing" regression.
+    let pointMarkers: [PointMarker]
     let selfLocation: CLLocation?
     let selfCallsign: String
     // Phase 3b — measurement sessions to mirror as dashed polylines with
@@ -4124,6 +4162,26 @@ struct CesiumMainMap: UIViewRepresentable {
                 // HTML _billboard() function ignores sidc when kind ==
                 // "aircraft" so the directional arrow wins.
                 sidc: nil
+            ))
+        }
+
+        // Dropped point markers. The 2D Mapbox path renders these via
+        // refreshPointMarkers(); the Cesium bridge never received them, so
+        // dropping a pin produced "no pin, no icon, no info" on the 3D
+        // engine. Reuse the contact SIDC mapping so a pin reads identically
+        // across engines; nil sidc falls back to the affiliation-shape
+        // billboard in the HTML.
+        for pm in pointMarkers {
+            all.append(BridgeEntity(
+                uid: pm.uid,
+                lat: pm.coordinate.latitude,
+                lon: pm.coordinate.longitude,
+                hae: pm.altitude,
+                callsign: pm.name,
+                affiliation: CesiumMainMap.affiliation(fromCoTType: pm.cotType),
+                kind: "marker",
+                heading: nil,
+                sidc: MilStdIconService.shared.getSIDC(for: pm.cotType)
             ))
         }
 
