@@ -442,13 +442,15 @@ struct DataPackageSheetView: View {
 struct PointDropperSheetView: View {
     @Binding var isPresented: Bool
     @StateObject private var service = PointDropperService()
+    @ObservedObject private var location = LocationManager.shared
+    @ObservedObject private var mapCenterStore = MapCenterStore.shared
 
     var body: some View {
         PointDropperView(
             service: service,
             isPresented: $isPresented,
-            currentLocation: nil,
-            mapCenter: nil
+            currentLocation: location.location?.coordinate,
+            mapCenter: mapCenterStore.center
         )
     }
 }

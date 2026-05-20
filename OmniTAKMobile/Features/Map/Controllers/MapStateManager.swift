@@ -310,12 +310,14 @@ class MapStateManager: ObservableObject {
 
     func updateMapCenter(_ coordinate: CLLocationCoordinate2D) {
         mapCenter = coordinate
+        MapCenterStore.shared.center = coordinate
         updateFormattedCoordinates()
     }
 
     func updateMapRegion(_ region: MKCoordinateRegion) {
         mapRegion = region
         mapCenter = region.center
+        MapCenterStore.shared.center = region.center
         updateFormattedCoordinates()
     }
 
@@ -479,4 +481,13 @@ extension MapStateManager {
             }
         }
     }
+}
+
+/// Lightweight shared holder for the live map center so map-overlay sheets
+/// (e.g. the Point Dropper) can read where the map is currently aimed without
+/// owning the map. Updated by MapStateManager whenever the region changes.
+final class MapCenterStore: ObservableObject {
+    static let shared = MapCenterStore()
+    @Published var center: CLLocationCoordinate2D?
+    private init() {}
 }

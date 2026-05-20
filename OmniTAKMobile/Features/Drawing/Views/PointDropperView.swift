@@ -104,6 +104,9 @@ struct PointDropperView: View {
         .sheet(isPresented: $showMarkerList) {
             MarkerListView(service: service)
         }
+        // Present as a draggable bottom sheet so the map stays visible (and
+        // pannable) above — drop a point while still seeing where it lands.
+        .mapPreservingDetents()
     }
 
     // MARK: - Quick Drop Section
@@ -239,9 +242,9 @@ struct PointDropperView: View {
             if let location = currentLocation ?? mapCenter {
                 VStack(spacing: 4) {
                     HStack {
-                        Image(systemName: "location.fill")
+                        Image(systemName: currentLocation != nil ? "location.fill" : "scope")
                             .foregroundColor(.cyan)
-                        Text("Current Position")
+                        Text(currentLocation != nil ? "Your Position" : "Map Center — pan map to aim")
                             .font(.system(size: 14, weight: .semibold))
                             .foregroundColor(.white)
                         Spacer()
@@ -861,5 +864,27 @@ struct PointDropperView_Previews: PreviewProvider {
             currentLocation: CLLocationCoordinate2D(latitude: 38.8977, longitude: -77.0365),
             mapCenter: nil
         )
+    }
+}
+
+extension View {
+    /// Present a sheet as a draggable bottom sheet that keeps the map visible
+    /// and interactive above it. A compact detent shows the Quick-Drop row +
+    /// drop button; drag up for the full form. Background interaction lets the
+    /// operator pan/zoom the map (so the live map center updates) without
+    /// dismissing the sheet. Falls back gracefully on older iOS.
+    @ViewBuilder
+    func mapPreservingDetents() -> some View {
+        if #available(iOS 16.4, *) {
+            self.presentationDetents([.height(380), .large])
+                .presentationDragIndicator(.visible)
+                .presentationBackgroundInteraction(.enabled(upThrough: .height(380)))
+                .presentationContentInteraction(.scrolls)
+        } else if #available(iOS 16.0, *) {
+            self.presentationDetents([.height(380), .large])
+                .presentationDragIndicator(.visible)
+        } else {
+            self
+        }
     }
 }
