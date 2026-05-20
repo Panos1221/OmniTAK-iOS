@@ -2952,7 +2952,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 2.25.0;
+				MARKETING_VERSION = 2.24.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.engindearing.omnitak.mobile;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
@@ -3001,7 +3001,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 2.25.0;
+				MARKETING_VERSION = 2.24.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.engindearing.omnitak.mobile;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
