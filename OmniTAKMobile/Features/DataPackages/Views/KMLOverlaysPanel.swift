@@ -53,7 +53,7 @@ struct KMLOverlaysPanel: View {
                     Section("Overlays") {
                         ForEach(store.overlays) { overlay in
                             NavigationLink {
-                                KMLOverlayDetailView(overlayID: overlay.id)
+                                KMLOverlayDetailView(overlayID: overlay.id, onRequestClose: { dismiss() })
                             } label: {
                                 row(overlay)
                             }
@@ -150,6 +150,9 @@ struct KMLOverlaysPanel: View {
 struct KMLOverlayDetailView: View {
     @ObservedObject private var store = KMLVectorOverlayStore.shared
     let overlayID: String
+    /// Closes the entire Map Overlays sheet (not just this detail view) so the
+    /// map is visible after a zoom-to. Provided by the parent panel.
+    var onRequestClose: () -> Void = {}
     @Environment(\.dismiss) private var dismiss
     @State private var nameField = ""
     @State private var showDelete = false
@@ -208,7 +211,9 @@ struct KMLOverlayDetailView: View {
                     infoRow("Bounds", String(format: "%.3f, %.3f → %.3f, %.3f", o.minLat, o.minLon, o.maxLat, o.maxLon))
                     Button {
                         NotificationCenter.default.post(name: .kmlZoomToOverlay, object: nil, userInfo: ["id": o.id])
-                        dismiss()
+                        // Close the whole sheet (not just pop this view) so the
+                        // map — now flying to the overlay — is actually visible.
+                        onRequestClose()
                     } label: {
                         Label("Zoom to overlay", systemImage: "scope")
                     }
