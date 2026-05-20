@@ -85,5 +85,68 @@
 	<false/>
 	<key>UILaunchScreen</key>
 	<dict/>
+	<key>UIFileSharingEnabled</key>
+	<true/>
+	<key>LSSupportsOpeningDocumentsInPlace</key>
+	<true/>
+	<key>UTImportedTypeDeclarations</key>
+	<array>
+		<dict>
+			<key>UTTypeIdentifier</key>
+			<string>com.google.earth.kml</string>
+			<key>UTTypeConformsTo</key>
+			<array>
+				<string>public.xml</string>
+			</array>
+			<key>UTTypeDescription</key>
+			<string>Keyhole Markup Language</string>
+			<key>UTTypeTagSpecification</key>
+			<dict>
+				<key>public.filename-extension</key>
+				<array>
+					<string>kml</string>
+				</array>
+				<key>public.mime-type</key>
+				<array>
+					<string>application/vnd.google-earth.kml+xml</string>
+				</array>
+			</dict>
+		</dict>
+		<dict>
+			<key>UTTypeIdentifier</key>
+			<string>com.google.earth.kmz</string>
+			<key>UTTypeConformsTo</key>
+			<array>
+				<string>public.zip-archive</string>
+			</array>
+			<key>UTTypeDescription</key>
+			<string>Compressed KML</string>
+			<key>UTTypeTagSpecification</key>
+			<dict>
+				<key>public.filename-extension</key>
+				<array>
+					<string>kmz</string>
+				</array>
+				<key>public.mime-type</key>
+				<array>
+					<string>application/vnd.google-earth.kmz</string>
+				</array>
+			</dict>
+		</dict>
+	</array>
+	<key>CFBundleDocumentTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleTypeName</key>
+			<string>KML/KMZ Map Overlay</string>
+			<key>LSHandlerRank</key>
+			<string>Alternate</string>
+			<key>LSItemContentTypes</key>
+			<array>
+				<string>com.google.earth.kml</string>
+				<string>com.google.earth.kmz</string>
+			</array>
+		</dict>
+	</array>
 </dict>
 </plist>

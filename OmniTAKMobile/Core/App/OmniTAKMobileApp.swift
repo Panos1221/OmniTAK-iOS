@@ -47,6 +47,20 @@ struct OmniTAKMobileApp: App {
                         // Auto-import any TAK data package staged in
                         // Documents/import/ — simulator / CI interop only.
                         await DataPackageBootstrap.runIfNeeded()
+                        // Same for a staged KML/KMZ — lets us exercise the
+                        // real on-device import + render path with large
+                        // files in the sim/CI without the document picker.
+                        if await KMLVectorOverlayStore.shared.overlays.isEmpty {
+                            let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+                            let importDir = docs.appendingPathComponent("import")
+                            if let files = try? FileManager.default.contentsOfDirectory(at: importDir, includingPropertiesForKeys: nil),
+                               let kml = files.first(where: { ["kml", "kmz"].contains($0.pathExtension.lowercased()) }) {
+                                await KMLVectorOverlayStore.shared.importKML(from: kml)
+                                if let last = await KMLVectorOverlayStore.shared.overlays.last {
+                                    NotificationCenter.default.post(name: .kmlZoomToOverlay, object: nil, userInfo: ["id": last.id])
+                                }
+                            }
+                        }
                     }
                     #endif
 
@@ -77,8 +91,14 @@ struct OmniTAKMobileApp: App {
                 }
             }
             .onOpenURL { url in
-                // Handle tak:// deep links (QR code enrollment)
-                deepLinkHandler.handleURL(url)
+                // KML/KMZ opened from Files / Mail / AirDrop / "Open with
+                // OmniTAK" → import through the robust vector overlay path.
+                if url.isFileURL, ["kml", "kmz"].contains(url.pathExtension.lowercased()) {
+                    importOpenedKML(url)
+                } else {
+                    // Handle tak:// deep links (QR code enrollment)
+                    deepLinkHandler.handleURL(url)
+                }
             }
             .fullScreenCover(isPresented: Binding(
                 get: { !hasCompletedOnboarding },
@@ -92,6 +112,29 @@ struct OmniTAKMobileApp: App {
             // Inject the localization manager app-wide so any view can
             // observe it and re-render the instant the language changes.
             .environmentObject(LocalizationManager.shared)
+        }
+    }
+
+    /// Copy an opened KML/KMZ to a temp file and import it through the robust
+    /// vector overlay store (off-thread parse → GeoJSON → GPU render), then
+    /// frame it on the map.
+    private func importOpenedKML(_ url: URL) {
+        let scoped = url.startAccessingSecurityScopedResource()
+        let tmp = FileManager.default.temporaryDirectory.appendingPathComponent(url.lastPathComponent)
+        try? FileManager.default.removeItem(at: tmp)
+        do {
+            try FileManager.default.copyItem(at: url, to: tmp)
+        } catch {
+            if scoped { url.stopAccessingSecurityScopedResource() }
+            return
+        }
+        if scoped { url.stopAccessingSecurityScopedResource() }
+        Task {
+            await KMLVectorOverlayStore.shared.importKML(from: tmp)
+            try? FileManager.default.removeItem(at: tmp)
+            if let last = await KMLVectorOverlayStore.shared.overlays.last {
+                NotificationCenter.default.post(name: .kmlZoomToOverlay, object: nil, userInfo: ["id": last.id])
+            }
         }
     }
 }
