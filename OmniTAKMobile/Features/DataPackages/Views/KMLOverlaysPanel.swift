@@ -78,12 +78,21 @@ struct KMLOverlaysPanel: View {
                     if !rasterStore.overlays.isEmpty {
                         Section("Imagery") {
                             ForEach(rasterStore.overlays) { overlay in
-                                rasterRow(overlay)
-                                    .swipeActions(edge: .trailing) {
-                                        Button(role: .destructive) { rasterStore.remove(overlay.id) } label: {
-                                            Label("Delete", systemImage: "trash")
-                                        }
+                                NavigationLink {
+                                    RasterOverlayDetailView(overlayID: overlay.id, onRequestClose: { dismiss() })
+                                } label: {
+                                    rasterRow(overlay)
+                                }
+                                .swipeActions(edge: .trailing) {
+                                    Button(role: .destructive) { rasterStore.remove(overlay.id) } label: {
+                                        Label("Delete", systemImage: "trash")
                                     }
+                                }
+                                .swipeActions(edge: .leading) {
+                                    Button { rasterStore.setVisible(overlay.id, !overlay.visible) } label: {
+                                        Label(overlay.visible ? "Hide" : "Show", systemImage: overlay.visible ? "eye.slash" : "eye")
+                                    }.tint(.indigo)
+                                }
                             }
                         }
                     }
@@ -91,12 +100,21 @@ struct KMLOverlaysPanel: View {
                     if !mbtilesStore.overlays.isEmpty {
                         Section("Tiles (MBTiles)") {
                             ForEach(mbtilesStore.overlays) { overlay in
-                                mbtilesRow(overlay)
-                                    .swipeActions(edge: .trailing) {
-                                        Button(role: .destructive) { mbtilesStore.remove(overlay.id) } label: {
-                                            Label("Delete", systemImage: "trash")
-                                        }
+                                NavigationLink {
+                                    MBTilesOverlayDetailView(overlayID: overlay.id, onRequestClose: { dismiss() })
+                                } label: {
+                                    mbtilesRow(overlay)
+                                }
+                                .swipeActions(edge: .trailing) {
+                                    Button(role: .destructive) { mbtilesStore.remove(overlay.id) } label: {
+                                        Label("Delete", systemImage: "trash")
                                     }
+                                }
+                                .swipeActions(edge: .leading) {
+                                    Button { mbtilesStore.setVisible(overlay.id, !overlay.visible) } label: {
+                                        Label(overlay.visible ? "Hide" : "Show", systemImage: overlay.visible ? "eye.slash" : "eye")
+                                    }.tint(.indigo)
+                                }
                             }
                         }
                     }
@@ -176,64 +194,50 @@ struct KMLOverlaysPanel: View {
 
     @ViewBuilder
     private func rasterRow(_ overlay: RasterOverlay) -> some View {
-        Button {
-            NotificationCenter.default.post(name: .kmlZoomToOverlay, object: nil, userInfo: ["id": overlay.id])
-            dismiss()
-        } label: {
-            HStack(spacing: 12) {
-                Image(systemName: "photo.on.rectangle.angled")
-                    .foregroundColor(.teal)
-                    .opacity(overlay.visible ? 1 : 0.35)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(overlay.name).lineLimit(1).foregroundColor(.primary)
-                    Text("Image overlay · \(Int(overlay.opacity * 100))%")
-                        .font(.caption).foregroundColor(.secondary)
-                }
-                Spacer()
-                Button {
-                    rasterStore.setVisible(overlay.id, !overlay.visible)
-                } label: {
-                    Image(systemName: overlay.visible ? "eye.fill" : "eye.slash")
-                        .foregroundColor(overlay.visible ? .accentColor : .secondary)
-                        .frame(width: 44, height: 44)
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(.borderless)
+        HStack(spacing: 12) {
+            Image(systemName: "photo.on.rectangle.angled")
+                .foregroundColor(.teal)
+                .opacity(overlay.visible ? 1 : 0.35)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(overlay.name).lineLimit(1)
+                Text("Image overlay · \(Int(overlay.opacity * 100))%")
+                    .font(.caption).foregroundColor(.secondary)
             }
+            Spacer()
+            Button {
+                rasterStore.setVisible(overlay.id, !overlay.visible)
+            } label: {
+                Image(systemName: overlay.visible ? "eye.fill" : "eye.slash")
+                    .foregroundColor(overlay.visible ? .accentColor : .secondary)
+                    .frame(width: 44, height: 44)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.borderless)
         }
-        .buttonStyle(.plain)
     }
 
     @ViewBuilder
     private func mbtilesRow(_ overlay: MBTilesOverlay) -> some View {
-        Button {
-            if overlay.hasBounds {
-                NotificationCenter.default.post(name: .kmlZoomToOverlay, object: nil, userInfo: ["id": overlay.id])
-                dismiss()
+        HStack(spacing: 12) {
+            Image(systemName: "square.stack.3d.up.fill")
+                .foregroundColor(.orange)
+                .opacity(overlay.visible ? 1 : 0.35)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(overlay.name).lineLimit(1)
+                Text("Tiles z\(overlay.minZoom)–\(overlay.maxZoom) · \(Int(overlay.opacity * 100))%")
+                    .font(.caption).foregroundColor(.secondary)
             }
-        } label: {
-            HStack(spacing: 12) {
-                Image(systemName: "square.stack.3d.up.fill")
-                    .foregroundColor(.orange)
-                    .opacity(overlay.visible ? 1 : 0.35)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(overlay.name).lineLimit(1).foregroundColor(.primary)
-                    Text("Tiles z\(overlay.minZoom)–\(overlay.maxZoom) · \(Int(overlay.opacity * 100))%")
-                        .font(.caption).foregroundColor(.secondary)
-                }
-                Spacer()
-                Button {
-                    mbtilesStore.setVisible(overlay.id, !overlay.visible)
-                } label: {
-                    Image(systemName: overlay.visible ? "eye.fill" : "eye.slash")
-                        .foregroundColor(overlay.visible ? .accentColor : .secondary)
-                        .frame(width: 44, height: 44)
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(.borderless)
+            Spacer()
+            Button {
+                mbtilesStore.setVisible(overlay.id, !overlay.visible)
+            } label: {
+                Image(systemName: overlay.visible ? "eye.fill" : "eye.slash")
+                    .foregroundColor(overlay.visible ? .accentColor : .secondary)
+                    .frame(width: 44, height: 44)
+                    .contentShape(Rectangle())
             }
+            .buttonStyle(.borderless)
         }
-        .buttonStyle(.plain)
     }
 
     @ViewBuilder
@@ -375,6 +379,116 @@ struct KMLOverlayDetailView: View {
         var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
         ui.getRed(&r, green: &g, blue: &b, alpha: &a)
         return String(format: "#%02X%02X%02X", Int(r * 255), Int(g * 255), Int(b * 255))
+    }
+}
+
+// MARK: - Imagery (raster image) editor
+
+struct RasterOverlayDetailView: View {
+    @ObservedObject private var store = RasterOverlayStore.shared
+    let overlayID: String
+    var onRequestClose: () -> Void = {}
+    @Environment(\.dismiss) private var dismiss
+    @State private var nameField = ""
+    @State private var showDelete = false
+
+    private var overlay: RasterOverlay? { store.overlays.first { $0.id == overlayID } }
+
+    var body: some View {
+        Form {
+            if let o = overlay {
+                Section("Name") {
+                    TextField("Overlay name", text: $nameField).submitLabel(.done)
+                        .onSubmit { store.rename(o.id, to: nameField) }
+                }
+                Section("Appearance") {
+                    Toggle("Visible", isOn: Binding(get: { o.visible }, set: { store.setVisible(o.id, $0) }))
+                    VStack(alignment: .leading) {
+                        Text("Opacity — \(Int(o.opacity * 100))%").font(.subheadline)
+                        Slider(value: Binding(get: { o.opacity }, set: { store.setOpacity(o.id, $0) }), in: 0.05...1.0)
+                    }
+                }
+                Section("Info") {
+                    infoRow("Imported", o.createdAt.formatted(date: .abbreviated, time: .shortened))
+                    infoRow("Bounds", String(format: "%.3f, %.3f → %.3f, %.3f", o.south, o.west, o.north, o.east))
+                    Button {
+                        NotificationCenter.default.post(name: .kmlZoomToOverlay, object: nil, userInfo: ["id": o.id])
+                        onRequestClose()
+                    } label: { Label("Zoom to overlay", systemImage: "scope") }
+                }
+                Section {
+                    Button(role: .destructive) { showDelete = true } label: { Label("Delete overlay", systemImage: "trash") }
+                }
+            } else { Text("Overlay removed.").foregroundColor(.secondary) }
+        }
+        .navigationTitle(overlay?.name ?? "Imagery")
+        .navigationBarTitleDisplayMode(.inline)
+        .onAppear { nameField = overlay?.name ?? "" }
+        .onDisappear { if let o = overlay, nameField != o.name { store.rename(o.id, to: nameField) } }
+        .confirmationDialog("Delete this overlay?", isPresented: $showDelete, titleVisibility: .visible) {
+            Button("Delete", role: .destructive) { store.remove(overlayID); dismiss() }
+            Button("Cancel", role: .cancel) {}
+        }
+    }
+
+    @ViewBuilder private func infoRow(_ l: String, _ v: String) -> some View {
+        HStack { Text(l).foregroundColor(.secondary); Spacer(); Text(v).multilineTextAlignment(.trailing) }.font(.footnote)
+    }
+}
+
+// MARK: - MBTiles editor
+
+struct MBTilesOverlayDetailView: View {
+    @ObservedObject private var store = MBTilesOverlayStore.shared
+    let overlayID: String
+    var onRequestClose: () -> Void = {}
+    @Environment(\.dismiss) private var dismiss
+    @State private var nameField = ""
+    @State private var showDelete = false
+
+    private var overlay: MBTilesOverlay? { store.overlays.first { $0.id == overlayID } }
+
+    var body: some View {
+        Form {
+            if let o = overlay {
+                Section("Name") {
+                    TextField("Tile set name", text: $nameField).submitLabel(.done)
+                        .onSubmit { store.rename(o.id, to: nameField) }
+                }
+                Section("Appearance") {
+                    Toggle("Visible", isOn: Binding(get: { o.visible }, set: { store.setVisible(o.id, $0) }))
+                    VStack(alignment: .leading) {
+                        Text("Opacity — \(Int(o.opacity * 100))%").font(.subheadline)
+                        Slider(value: Binding(get: { o.opacity }, set: { store.setOpacity(o.id, $0) }), in: 0.05...1.0)
+                    }
+                }
+                Section("Info") {
+                    infoRow("Zoom", "z\(o.minZoom)–\(o.maxZoom)")
+                    if o.hasBounds {
+                        infoRow("Bounds", String(format: "%.3f, %.3f → %.3f, %.3f", o.south, o.west, o.north, o.east))
+                        Button {
+                            NotificationCenter.default.post(name: .kmlZoomToOverlay, object: nil, userInfo: ["id": o.id])
+                            onRequestClose()
+                        } label: { Label("Zoom to tiles", systemImage: "scope") }
+                    }
+                }
+                Section {
+                    Button(role: .destructive) { showDelete = true } label: { Label("Delete tile set", systemImage: "trash") }
+                }
+            } else { Text("Tile set removed.").foregroundColor(.secondary) }
+        }
+        .navigationTitle(overlay?.name ?? "MBTiles")
+        .navigationBarTitleDisplayMode(.inline)
+        .onAppear { nameField = overlay?.name ?? "" }
+        .onDisappear { if let o = overlay, nameField != o.name { store.rename(o.id, to: nameField) } }
+        .confirmationDialog("Delete this tile set?", isPresented: $showDelete, titleVisibility: .visible) {
+            Button("Delete", role: .destructive) { store.remove(overlayID); dismiss() }
+            Button("Cancel", role: .cancel) {}
+        }
+    }
+
+    @ViewBuilder private func infoRow(_ l: String, _ v: String) -> some View {
+        HStack { Text(l).foregroundColor(.secondary); Spacer(); Text(v).multilineTextAlignment(.trailing) }.font(.footnote)
     }
 }
 
