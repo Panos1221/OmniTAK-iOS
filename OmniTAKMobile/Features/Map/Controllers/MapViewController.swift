@@ -78,6 +78,7 @@ struct ATAKMapView: View {
     // bottom-left corner or from Settings.
     @AppStorage("mapEngine") private var mapEngineRaw: String = MapEngine.cesium3D.rawValue
     private var mapEngine: MapEngine { MapEngine(rawValue: mapEngineRaw) ?? .cesium3D }
+    @ObservedObject private var pointDropAim = PointDropUIState.shared
     // (userCallsign is already declared further down; we reference it from
     // cesium3DBody for the self-position label.)
 
@@ -1120,6 +1121,12 @@ struct ATAKMapView: View {
         ZStack {
             mainMapView
             gridOverlay
+            // Point Dropper aim crosshair — drop lands where this sits.
+            if pointDropAim.isAiming {
+                PointDropCrosshair()
+                    .allowsHitTesting(false)
+                    .zIndex(900)
+            }
             topToolbars
             sidePanels
             statusIndicators
@@ -2358,6 +2365,24 @@ class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
 
     func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
         print("[LocationManager] Location error: \(error.localizedDescription)")
+    }
+}
+
+// MARK: - Point Drop aim crosshair
+
+/// Center crosshair shown while the Point Dropper is open. The marker drops at
+/// the map center this marks — pan the map to aim, tap an affiliation to drop.
+private struct PointDropCrosshair: View {
+    var body: some View {
+        ZStack {
+            Circle().stroke(Color.white.opacity(0.9), lineWidth: 2).frame(width: 46, height: 46)
+            Rectangle().fill(Color.white.opacity(0.9)).frame(width: 2, height: 16).offset(y: -30)
+            Rectangle().fill(Color.white.opacity(0.9)).frame(width: 2, height: 16).offset(y: 30)
+            Rectangle().fill(Color.white.opacity(0.9)).frame(width: 16, height: 2).offset(x: -30)
+            Rectangle().fill(Color.white.opacity(0.9)).frame(width: 16, height: 2).offset(x: 30)
+            Circle().fill(Color.cyan).frame(width: 6, height: 6)
+        }
+        .shadow(color: .black.opacity(0.7), radius: 2)
     }
 }
 

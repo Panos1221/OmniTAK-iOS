@@ -25,6 +25,7 @@ struct PointDropperView: View {
     @State private var showSALUTEReport: Bool = false
     @State private var showMarkerList: Bool = false
     @State private var selectedMarkerForSALUTE: PointMarker?
+    @State private var showAdvanced: Bool = false
 
     var body: some View {
         NavigationView {
@@ -34,36 +35,46 @@ struct PointDropperView: View {
 
                 ScrollView {
                     VStack(spacing: 16) {
-                        // Quick Drop Section
+                        // Aim hint — drop lands at the map crosshair.
+                        HStack(spacing: 6) {
+                            Image(systemName: "scope").foregroundColor(.cyan)
+                            Text("Pan the map to aim, then tap a type to drop.")
+                                .font(.footnote).foregroundColor(.secondary)
+                            Spacer()
+                        }
+
+                        // The one-tap drop row (drops at the crosshair).
                         quickDropSection
 
-                        // Affiliation Selector
-                        affiliationSelector
+                        // Everything else is optional — collapsed by default.
+                        Button {
+                            withAnimation { showAdvanced.toggle() }
+                        } label: {
+                            HStack {
+                                Image(systemName: showAdvanced ? "chevron.down" : "chevron.right")
+                                Text(showAdvanced ? "Fewer options" : "More options (name, notes, broadcast)")
+                                Spacer()
+                            }
+                            .font(.subheadline)
+                            .foregroundColor(Color(hex: "#FFFC00"))
+                        }
 
-                        // Name Input
-                        nameInputSection
-
-                        // Remarks Section
-                        remarksSection
-
-                        // Location Info
-                        locationInfoSection
-
-                        // Options
-                        optionsSection
-
-                        // Drop Button
-                        dropButtonSection
-
-                        // Recent Markers
-                        recentMarkersSection
-
-                        // Statistics
-                        statisticsSection
+                        if showAdvanced {
+                            affiliationSelector
+                            nameInputSection
+                            remarksSection
+                            locationInfoSection
+                            optionsSection
+                            dropButtonSection
+                            recentMarkersSection
+                            statisticsSection
+                        }
                     }
                     .padding()
                 }
             }
+            .onAppear { PointDropUIState.shared.isAiming = true }
+            .onDisappear { PointDropUIState.shared.isAiming = false }
             .navigationTitle("Point Dropper")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -429,11 +440,14 @@ struct PointDropperView: View {
     // MARK: - Actions
 
     private func quickDrop(affiliation: MarkerAffiliation) {
-        guard let location = currentLocation ?? mapCenter else { return }
+        // Drop at the map crosshair (center) the operator aimed; fall back to
+        // GPS only if the map center isn't known yet.
+        guard let location = mapCenter ?? currentLocation else { return }
 
+        // Use the tapped affiliation (not whatever was last selected).
+        service.currentAffiliation = affiliation
         let marker = service.quickDrop(at: location, broadcast: broadcastImmediately)
 
-        // Haptic feedback
         let generator = UINotificationFeedbackGenerator()
         generator.notificationOccurred(.success)
 
@@ -876,12 +890,12 @@ extension View {
     @ViewBuilder
     func mapPreservingDetents() -> some View {
         if #available(iOS 16.4, *) {
-            self.presentationDetents([.height(380), .large])
+            self.presentationDetents([.height(330), .large])
                 .presentationDragIndicator(.visible)
-                .presentationBackgroundInteraction(.enabled(upThrough: .height(380)))
+                .presentationBackgroundInteraction(.enabled(upThrough: .height(330)))
                 .presentationContentInteraction(.scrolls)
         } else if #available(iOS 16.0, *) {
-            self.presentationDetents([.height(380), .large])
+            self.presentationDetents([.height(330), .large])
                 .presentationDragIndicator(.visible)
         } else {
             self

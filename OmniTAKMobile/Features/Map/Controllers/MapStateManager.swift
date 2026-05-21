@@ -491,3 +491,11 @@ final class MapCenterStore: ObservableObject {
     @Published var center: CLLocationCoordinate2D?
     private init() {}
 }
+
+/// True while the Point Dropper is open, so the map shows a center crosshair
+/// the operator aims by panning — tap an affiliation to drop there.
+final class PointDropUIState: ObservableObject {
+    static let shared = PointDropUIState()
+    @Published var isAiming = false
+    private init() {}
+}
