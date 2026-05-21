@@ -29,7 +29,7 @@ struct KMLOverlaysPanel: View {
                     Button {
                         showImporter = true
                     } label: {
-                        Label("Import KML / KMZ / GeoTIFF", systemImage: "square.and.arrow.down")
+                        Label("Import KML / KMZ / GeoTIFF / GeoPDF", systemImage: "square.and.arrow.down")
                     }
                     if store.isImporting {
                         HStack(spacing: 10) {
@@ -115,7 +115,7 @@ struct KMLOverlaysPanel: View {
 
     private var allowedTypes: [UTType] {
         var types: [UTType] = []
-        for ext in ["kml", "kmz", "tif", "tiff"] {
+        for ext in ["kml", "kmz", "tif", "tiff", "pdf"] {
             if let t = UTType(filenameExtension: ext) { types.append(t) }
         }
         return types.isEmpty ? [.data] : types
@@ -142,6 +142,9 @@ struct KMLOverlaysPanel: View {
             if ext == "tif" || ext == "tiff" || ext == "gtiff" {
                 // GeoTIFF imagery.
                 if await rasterStore.importGeoTIFF(from: tmp) { frame(rasterStore.overlays.last?.id) }
+            } else if ext == "pdf" {
+                // GeoPDF imagery.
+                if await rasterStore.importGeoPDF(from: tmp) { frame(rasterStore.overlays.last?.id) }
             } else if await rasterStore.importGroundOverlay(from: tmp) {
                 // KMZ/KML GroundOverlay imagery.
                 frame(rasterStore.overlays.last?.id)

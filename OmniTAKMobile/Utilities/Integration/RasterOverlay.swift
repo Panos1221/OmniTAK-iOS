@@ -223,6 +223,36 @@ final class RasterOverlayStore: ObservableObject {
         }
     }
 
+    /// Import a GeoPDF — parse the /VP /Measure /GPTS geo-registration for the
+    /// corner box and rasterize the page to PNG, registered as a raster
+    /// overlay. Returns false if the PDF isn't georeferenced.
+    @discardableResult
+    func importGeoPDF(from url: URL) async -> Bool {
+        isImporting = true; lastError = nil; importStatus = "Reading GeoPDF…"
+        guard let parsed = GeoPDFImporter.parse(url: url) else {
+            lastError = "That PDF isn't georeferenced (no GeoPDF /VP registration)."
+            importStatus = ""; isImporting = false
+            return false
+        }
+        let id = UUID().uuidString
+        let fileName = "\(id).png"
+        let outURL = dir.appendingPathComponent(fileName)
+        guard let dest = CGImageDestinationCreateWithURL(outURL as CFURL, UTType.png.identifier as CFString, 1, nil) else {
+            lastError = "GeoPDF import failed."; importStatus = ""; isImporting = false; return false
+        }
+        CGImageDestinationAddImage(dest, parsed.image, nil)
+        guard CGImageDestinationFinalize(dest) else {
+            lastError = "GeoPDF import failed."; importStatus = ""; isImporting = false; return false
+        }
+        overlays.append(RasterOverlay(
+            id: id, name: url.deletingPathExtension().lastPathComponent, fileName: fileName,
+            north: parsed.box.north, south: parsed.box.south, east: parsed.box.east, west: parsed.box.west
+        ))
+        persist()
+        importStatus = "Imported GeoPDF"; isImporting = false
+        return true
+    }
+
     func setVisible(_ id: String, _ visible: Bool) { mutate(id) { $0.visible = visible } }
     func setOpacity(_ id: String, _ value: Double) { mutate(id) { $0.opacity = min(max(value, 0.05), 1.0) } }
     func rename(_ id: String, to name: String) {
@@ -367,5 +397,74 @@ enum GeoTIFFImporter {
         guard abs(north) <= 90, abs(south) <= 90, abs(east) <= 180, abs(west) <= 180,
               north > south, east != west else { return nil }
         return Box(north: north, south: south, east: east, west: west)
+    }
+}
+
+// MARK: - GeoPDF reader
+
+/// Reads a georeferenced PDF (GeoPDF / ISO 32000 geospatial). Parses the
+/// page's /VP → /Measure → /GPTS (latitude/longitude corner pairs) for the
+/// WGS84 corner box, and rasterizes page 1 to a CGImage. Image is positioned
+/// by the GPTS bounds via the shared RasterOverlay / ImageSource path.
+enum GeoPDFImporter {
+    struct Box { let north: Double; let south: Double; let east: Double; let west: Double }
+
+    static func parse(url: URL) -> (box: Box, image: CGImage)? {
+        guard let doc = CGPDFDocument(url as CFURL), let page = doc.page(at: 1),
+              let box = geoBounds(doc: doc), let image = rasterize(page) else { return nil }
+        return (box, image)
+    }
+
+    private static func firstLeaf(_ node: CGPDFDictionaryRef) -> CGPDFDictionaryRef? {
+        var kids: CGPDFArrayRef?
+        if CGPDFDictionaryGetArray(node, "Kids", &kids), let kidsArr = kids, CGPDFArrayGetCount(kidsArr) > 0 {
+            var kid: CGPDFDictionaryRef?
+            if CGPDFArrayGetDictionary(kidsArr, 0, &kid), let k = kid { return firstLeaf(k) }
+        }
+        return node
+    }
+
+    static func geoBounds(doc: CGPDFDocument) -> Box? {
+        guard let catalog = doc.catalog else { return nil }
+        var pages: CGPDFDictionaryRef?
+        guard CGPDFDictionaryGetDictionary(catalog, "Pages", &pages), let pagesDict = pages,
+              let pageDict = firstLeaf(pagesDict) else { return nil }
+        var vp: CGPDFArrayRef?
+        guard CGPDFDictionaryGetArray(pageDict, "VP", &vp), let vpArr = vp, CGPDFArrayGetCount(vpArr) > 0 else { return nil }
+        var vp0: CGPDFDictionaryRef?
+        guard CGPDFArrayGetDictionary(vpArr, 0, &vp0), let vp0d = vp0 else { return nil }
+        var measure: CGPDFDictionaryRef?
+        guard CGPDFDictionaryGetDictionary(vp0d, "Measure", &measure), let m = measure else { return nil }
+        var gpts: CGPDFArrayRef?
+        guard CGPDFDictionaryGetArray(m, "GPTS", &gpts), let g = gpts else { return nil }
+        let n = CGPDFArrayGetCount(g)
+        guard n >= 4, n % 2 == 0 else { return nil }
+        var lats: [Double] = [], lons: [Double] = []
+        for i in stride(from: 0, to: n, by: 2) {
+            var lat: CGPDFReal = 0, lon: CGPDFReal = 0
+            CGPDFArrayGetNumber(g, i, &lat); CGPDFArrayGetNumber(g, i + 1, &lon)
+            lats.append(Double(lat)); lons.append(Double(lon))
+        }
+        guard let north = lats.max(), let south = lats.min(),
+              let east = lons.max(), let west = lons.min(),
+              abs(north) <= 90, abs(south) <= 90, abs(east) <= 180, abs(west) <= 180,
+              north > south, east != west else { return nil }
+        return Box(north: north, south: south, east: east, west: west)
+    }
+
+    static func rasterize(_ page: CGPDFPage) -> CGImage? {
+        let rect = page.getBoxRect(.mediaBox)
+        let scale: CGFloat = 2.0
+        let w = Int(rect.width * scale), h = Int(rect.height * scale)
+        guard w > 0, h > 0,
+              let ctx = CGContext(data: nil, width: w, height: h, bitsPerComponent: 8, bytesPerRow: 0,
+                                  space: CGColorSpaceCreateDeviceRGB(),
+                                  bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else { return nil }
+        ctx.setFillColor(CGColor(red: 1, green: 1, blue: 1, alpha: 1))
+        ctx.fill(CGRect(x: 0, y: 0, width: w, height: h))
+        ctx.scaleBy(x: scale, y: scale)
+        ctx.translateBy(x: -rect.origin.x, y: -rect.origin.y)
+        ctx.drawPDFPage(page)
+        return ctx.makeImage()
     }
 }
