@@ -29,7 +29,7 @@ struct KMLOverlaysPanel: View {
                     Button {
                         showImporter = true
                     } label: {
-                        Label("Import KML / KMZ", systemImage: "square.and.arrow.down")
+                        Label("Import KML / KMZ / GeoTIFF", systemImage: "square.and.arrow.down")
                     }
                     if store.isImporting {
                         HStack(spacing: 10) {
@@ -115,8 +115,9 @@ struct KMLOverlaysPanel: View {
 
     private var allowedTypes: [UTType] {
         var types: [UTType] = []
-        if let kml = UTType(filenameExtension: "kml") { types.append(kml) }
-        if let kmz = UTType(filenameExtension: "kmz") { types.append(kmz) }
+        for ext in ["kml", "kmz", "tif", "tiff"] {
+            if let t = UTType(filenameExtension: ext) { types.append(t) }
+        }
         return types.isEmpty ? [.data] : types
     }
 
@@ -131,19 +132,23 @@ struct KMLOverlaysPanel: View {
             store.lastError = "Couldn't read the selected file."
             return
         }
+        let ext = url.pathExtension.lowercased()
         Task {
-            // Try imagery (KMZ GroundOverlay) first; if it's not imagery, fall
-            // back to vector KML. Either way, frame the new overlay.
-            let isImagery = await rasterStore.importGroundOverlay(from: tmp)
-            if isImagery {
-                if let last = rasterStore.overlays.last {
-                    NotificationCenter.default.post(name: .kmlZoomToOverlay, object: nil, userInfo: ["id": last.id])
+            func frame(_ id: String?) {
+                if let id = id {
+                    NotificationCenter.default.post(name: .kmlZoomToOverlay, object: nil, userInfo: ["id": id])
                 }
+            }
+            if ext == "tif" || ext == "tiff" || ext == "gtiff" {
+                // GeoTIFF imagery.
+                if await rasterStore.importGeoTIFF(from: tmp) { frame(rasterStore.overlays.last?.id) }
+            } else if await rasterStore.importGroundOverlay(from: tmp) {
+                // KMZ/KML GroundOverlay imagery.
+                frame(rasterStore.overlays.last?.id)
             } else {
+                // Vector KML/KMZ.
                 await store.importKML(from: tmp)
-                if let last = store.overlays.last {
-                    NotificationCenter.default.post(name: .kmlZoomToOverlay, object: nil, userInfo: ["id": last.id])
-                }
+                frame(store.overlays.last?.id)
             }
             try? FileManager.default.removeItem(at: tmp)
         }
