@@ -19,6 +19,9 @@ private let SQLITE_TRANSIENT = unsafeBitCast(-1, to: sqlite3_destructor_type.sel
 
 final class MBTilesDB {
     private var db: OpaquePointer?
+    // The HTTP tile server handles requests on a concurrent queue and Mapbox
+    // fetches many tiles at once — serialize access to this one SQLite handle.
+    private let lock = NSLock()
     let minZoom: Int
     let maxZoom: Int
     /// north, south, east, west (WGS84) if the file declares bounds.
@@ -26,7 +29,7 @@ final class MBTilesDB {
     let format: String
 
     init?(path: String) {
-        guard sqlite3_open_v2(path, &db, SQLITE_OPEN_READONLY, nil) == SQLITE_OK else {
+        guard sqlite3_open_v2(path, &db, SQLITE_OPEN_READONLY | SQLITE_OPEN_FULLMUTEX, nil) == SQLITE_OK else {
             if db != nil { sqlite3_close(db) }
             return nil
         }
@@ -53,6 +56,8 @@ final class MBTilesDB {
     }
 
     func tile(z: Int, x: Int, y: Int) -> Data? {
+        lock.lock(); defer { lock.unlock() }
+        guard db != nil else { return nil }
         let tmsY = (1 << z) - 1 - y // XYZ → TMS row
         var stmt: OpaquePointer?
         guard sqlite3_prepare_v2(db, "SELECT tile_data FROM tiles WHERE zoom_level=? AND tile_column=? AND tile_row=?", -1, &stmt, nil) == SQLITE_OK else { return nil }
