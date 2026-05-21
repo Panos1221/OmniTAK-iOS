@@ -1427,6 +1427,8 @@ struct ATAKMapView: View {
                     box = (o.minLat, o.minLon, o.maxLat, o.maxLon)
                 } else if let r = RasterOverlayStore.shared.overlays.first(where: { $0.id == id }) {
                     box = (r.south, r.west, r.north, r.east)
+                } else if let m = MBTilesOverlayStore.shared.overlays.first(where: { $0.id == id }), m.hasBounds {
+                    box = (m.south, m.west, m.north, m.east)
                 } else {
                     box = nil
                 }
@@ -2415,6 +2417,7 @@ struct TacticalMapView: UIViewRepresentable {
     @ObservedObject var lassoService: LassoSelectionService = LassoSelectionService.shared
     @ObservedObject var kmlVectorStore: KMLVectorOverlayStore = KMLVectorOverlayStore.shared
     @ObservedObject var rasterStore: RasterOverlayStore = RasterOverlayStore.shared
+    @ObservedObject var mbtilesStore: MBTilesOverlayStore = MBTilesOverlayStore.shared
     let onMapTap: (CLLocationCoordinate2D) -> Void
 
     // MARK: - UIViewRepresentable
@@ -2774,6 +2777,7 @@ struct TacticalMapView: UIViewRepresentable {
             refreshLassoHighlightRings()
             refreshKMLVectorOverlays()
             refreshRasterOverlays()
+            refreshMBTilesOverlays()
         }
 
         // MARK: - Large-KML vector overlays (GeoJSONSource + line/fill/circle)
@@ -2899,6 +2903,45 @@ struct TacticalMapView: UIViewRepresentable {
                         [overlay.east, overlay.south], [overlay.west, overlay.south],
                     ]
                     source.url = parent.rasterStore.imageURL(overlay).absoluteString
+                    do { try map.addSource(source) } catch { continue }
+                    var layer = RasterLayer(id: layerID, source: sourceID)
+                    layer.rasterOpacity = .constant(overlay.opacity)
+                    try? map.addLayer(layer)
+                }
+                let vis = overlay.visible ? "visible" : "none"
+                try? map.setLayerProperty(for: layerID, property: "visibility", value: vis)
+                try? map.setLayerProperty(for: layerID, property: "raster-opacity", value: overlay.opacity)
+            }
+        }
+
+        // MARK: - MBTiles raster basemaps (RasterSource → local tile server)
+        private var installedMBTilesIDs = Set<String>()
+
+        func refreshMBTilesOverlays() {
+            guard let mapView = mapView else { return }
+            let map: MapboxMap = mapView.mapboxMap
+            guard map.isStyleLoaded else { return }
+            let overlays = parent.mbtilesStore.overlays
+            let wanted = Set(overlays.map { $0.id })
+
+            for id in installedMBTilesIDs where !wanted.contains(id) {
+                let layerID = "mbtileslyr-\(id)"
+                if map.layerExists(withId: layerID) { try? map.removeLayer(withId: layerID) }
+                let sourceID = "mbtilessrc-\(id)"
+                if map.sourceExists(withId: sourceID) { try? map.removeSource(withId: sourceID) }
+            }
+            installedMBTilesIDs = wanted
+
+            for overlay in overlays {
+                let sourceID = "mbtilessrc-\(overlay.id)"
+                let layerID = "mbtileslyr-\(overlay.id)"
+                if !map.sourceExists(withId: sourceID) {
+                    guard let template = parent.mbtilesStore.tileURLTemplate(overlay) else { continue }
+                    var source = RasterSource(id: sourceID)
+                    source.tiles = [template]
+                    source.tileSize = 256
+                    source.minzoom = Double(overlay.minZoom)
+                    source.maxzoom = Double(overlay.maxZoom)
                     do { try map.addSource(source) } catch { continue }
                     var layer = RasterLayer(id: layerID, source: sourceID)
                     layer.rasterOpacity = .constant(overlay.opacity)

@@ -18,6 +18,7 @@ import UniformTypeIdentifiers
 struct KMLOverlaysPanel: View {
     @ObservedObject private var store = KMLVectorOverlayStore.shared
     @ObservedObject private var rasterStore = RasterOverlayStore.shared
+    @ObservedObject private var mbtilesStore = MBTilesOverlayStore.shared
     @Environment(\.dismiss) private var dismiss
     @State private var showImporter = false
     @State private var showDeleteAll = false
@@ -29,7 +30,7 @@ struct KMLOverlaysPanel: View {
                     Button {
                         showImporter = true
                     } label: {
-                        Label("Import KML / KMZ / GeoTIFF / GeoPDF", systemImage: "square.and.arrow.down")
+                        Label("Import KML / KMZ / GeoTIFF / GeoPDF / MBTiles", systemImage: "square.and.arrow.down")
                     }
                     if store.isImporting {
                         HStack(spacing: 10) {
@@ -45,9 +46,9 @@ struct KMLOverlaysPanel: View {
                     Text("Imported overlays render as a single GPU vector layer — large files (tens of thousands of features) stay smooth. Tap an overlay to rename, recolor, or restyle it. Overlays show on the 2D map engine.")
                 }
 
-                if store.overlays.isEmpty && rasterStore.overlays.isEmpty {
+                if store.overlays.isEmpty && rasterStore.overlays.isEmpty && mbtilesStore.overlays.isEmpty {
                     Section {
-                        Text("No overlays yet. Import a KML/KMZ (vector) or a KMZ image overlay (imagery).")
+                        Text("No overlays yet. Import a KML/KMZ (vector), a KMZ/GeoTIFF/GeoPDF (imagery), or an MBTiles tile set.")
                             .font(.footnote).foregroundColor(.secondary)
                     }
                 } else {
@@ -87,6 +88,19 @@ struct KMLOverlaysPanel: View {
                         }
                     }
 
+                    if !mbtilesStore.overlays.isEmpty {
+                        Section("Tiles (MBTiles)") {
+                            ForEach(mbtilesStore.overlays) { overlay in
+                                mbtilesRow(overlay)
+                                    .swipeActions(edge: .trailing) {
+                                        Button(role: .destructive) { mbtilesStore.remove(overlay.id) } label: {
+                                            Label("Delete", systemImage: "trash")
+                                        }
+                                    }
+                            }
+                        }
+                    }
+
                     Section {
                         Button(role: .destructive) { showDeleteAll = true } label: {
                             Label("Delete All Overlays", systemImage: "trash")
@@ -105,7 +119,7 @@ struct KMLOverlaysPanel: View {
                 if case .success(let urls) = result, let url = urls.first { importPicked(url) }
             }
             .confirmationDialog("Delete all overlays?", isPresented: $showDeleteAll, titleVisibility: .visible) {
-                Button("Delete All", role: .destructive) { store.removeAll(); rasterStore.removeAll() }
+                Button("Delete All", role: .destructive) { store.removeAll(); rasterStore.removeAll(); mbtilesStore.removeAll() }
                 Button("Cancel", role: .cancel) {}
             } message: {
                 Text("This removes every imported overlay (vector and imagery). It can't be undone.")
@@ -115,7 +129,7 @@ struct KMLOverlaysPanel: View {
 
     private var allowedTypes: [UTType] {
         var types: [UTType] = []
-        for ext in ["kml", "kmz", "tif", "tiff", "pdf"] {
+        for ext in ["kml", "kmz", "tif", "tiff", "pdf", "mbtiles"] {
             if let t = UTType(filenameExtension: ext) { types.append(t) }
         }
         return types.isEmpty ? [.data] : types
@@ -139,7 +153,10 @@ struct KMLOverlaysPanel: View {
                     NotificationCenter.default.post(name: .kmlZoomToOverlay, object: nil, userInfo: ["id": id])
                 }
             }
-            if ext == "tif" || ext == "tiff" || ext == "gtiff" {
+            if ext == "mbtiles" {
+                // MBTiles raster tile pyramid.
+                if await mbtilesStore.importMBTiles(from: tmp) { frame(mbtilesStore.overlays.last?.id) }
+            } else if ext == "tif" || ext == "tiff" || ext == "gtiff" {
                 // GeoTIFF imagery.
                 if await rasterStore.importGeoTIFF(from: tmp) { frame(rasterStore.overlays.last?.id) }
             } else if ext == "pdf" {
@@ -175,6 +192,38 @@ struct KMLOverlaysPanel: View {
                 Spacer()
                 Button {
                     rasterStore.setVisible(overlay.id, !overlay.visible)
+                } label: {
+                    Image(systemName: overlay.visible ? "eye.fill" : "eye.slash")
+                        .foregroundColor(overlay.visible ? .accentColor : .secondary)
+                        .frame(width: 44, height: 44)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.borderless)
+            }
+        }
+        .buttonStyle(.plain)
+    }
+
+    @ViewBuilder
+    private func mbtilesRow(_ overlay: MBTilesOverlay) -> some View {
+        Button {
+            if overlay.hasBounds {
+                NotificationCenter.default.post(name: .kmlZoomToOverlay, object: nil, userInfo: ["id": overlay.id])
+                dismiss()
+            }
+        } label: {
+            HStack(spacing: 12) {
+                Image(systemName: "square.stack.3d.up.fill")
+                    .foregroundColor(.orange)
+                    .opacity(overlay.visible ? 1 : 0.35)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(overlay.name).lineLimit(1).foregroundColor(.primary)
+                    Text("Tiles z\(overlay.minZoom)–\(overlay.maxZoom) · \(Int(overlay.opacity * 100))%")
+                        .font(.caption).foregroundColor(.secondary)
+                }
+                Spacer()
+                Button {
+                    mbtilesStore.setVisible(overlay.id, !overlay.visible)
                 } label: {
                     Image(systemName: overlay.visible ? "eye.fill" : "eye.slash")
                         .foregroundColor(overlay.visible ? .accentColor : .secondary)
