@@ -30,7 +30,7 @@ struct KMLOverlaysPanel: View {
                     Button {
                         showImporter = true
                     } label: {
-                        Label("Import KML / KMZ / GeoTIFF / GeoPDF / MBTiles", systemImage: "square.and.arrow.down")
+                        Label("Import KML / KMZ / GeoTIFF / GeoPDF / MBTiles / GPKG", systemImage: "square.and.arrow.down")
                     }
                     if store.isImporting {
                         HStack(spacing: 10) {
@@ -147,7 +147,7 @@ struct KMLOverlaysPanel: View {
 
     private var allowedTypes: [UTType] {
         var types: [UTType] = []
-        for ext in ["kml", "kmz", "tif", "tiff", "pdf", "mbtiles"] {
+        for ext in ["kml", "kmz", "tif", "tiff", "pdf", "mbtiles", "gpkg"] {
             if let t = UTType(filenameExtension: ext) { types.append(t) }
         }
         return types.isEmpty ? [.data] : types
@@ -174,6 +174,9 @@ struct KMLOverlaysPanel: View {
             if ext == "mbtiles" {
                 // MBTiles raster tile pyramid.
                 if await mbtilesStore.importMBTiles(from: tmp) { frame(mbtilesStore.overlays.last?.id) }
+            } else if ext == "gpkg" {
+                // GeoPackage raster tiles.
+                if await mbtilesStore.importGPKG(from: tmp) { frame(mbtilesStore.overlays.last?.id) }
             } else if ext == "tif" || ext == "tiff" || ext == "gtiff" {
                 // GeoTIFF imagery.
                 if await rasterStore.importGeoTIFF(from: tmp) { frame(rasterStore.overlays.last?.id) }
