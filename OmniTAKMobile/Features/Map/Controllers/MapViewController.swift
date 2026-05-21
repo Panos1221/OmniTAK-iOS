@@ -1413,15 +1413,23 @@ struct ATAKMapView: View {
             // Frame a KML overlay's bounds. Overlays render on the 2D engine,
             // so switch to it first.
             .onReceive(NotificationCenter.default.publisher(for: .kmlZoomToOverlay)) { note in
-                guard let id = note.userInfo?["id"] as? String,
-                      let o = KMLVectorOverlayStore.shared.overlays.first(where: { $0.id == id })
-                else { return }
+                guard let id = note.userInfo?["id"] as? String else { return }
+                // Look the id up in either store — vector KML or raster imagery.
+                let box: (minLat: Double, minLon: Double, maxLat: Double, maxLon: Double)?
+                if let o = KMLVectorOverlayStore.shared.overlays.first(where: { $0.id == id }) {
+                    box = (o.minLat, o.minLon, o.maxLat, o.maxLon)
+                } else if let r = RasterOverlayStore.shared.overlays.first(where: { $0.id == id }) {
+                    box = (r.south, r.west, r.north, r.east)
+                } else {
+                    box = nil
+                }
+                guard let b = box else { return }
                 mapEngineRaw = MapEngine.mapbox2D.rawValue
-                let latSpan = max((o.maxLat - o.minLat) * 1.3, 0.02)
-                let lonSpan = max((o.maxLon - o.minLon) * 1.3, 0.02)
+                let latSpan = max((b.maxLat - b.minLat) * 1.3, 0.02)
+                let lonSpan = max((b.maxLon - b.minLon) * 1.3, 0.02)
                 mapRegion = MKCoordinateRegion(
-                    center: CLLocationCoordinate2D(latitude: (o.minLat + o.maxLat) / 2,
-                                                   longitude: (o.minLon + o.maxLon) / 2),
+                    center: CLLocationCoordinate2D(latitude: (b.minLat + b.maxLat) / 2,
+                                                   longitude: (b.minLon + b.maxLon) / 2),
                     span: MKCoordinateSpan(latitudeDelta: latSpan, longitudeDelta: lonSpan)
                 )
             }
@@ -2381,6 +2389,7 @@ struct TacticalMapView: UIViewRepresentable {
     @ObservedObject var measurementManager: MeasurementManager
     @ObservedObject var lassoService: LassoSelectionService = LassoSelectionService.shared
     @ObservedObject var kmlVectorStore: KMLVectorOverlayStore = KMLVectorOverlayStore.shared
+    @ObservedObject var rasterStore: RasterOverlayStore = RasterOverlayStore.shared
     let onMapTap: (CLLocationCoordinate2D) -> Void
 
     // MARK: - UIViewRepresentable
@@ -2739,6 +2748,7 @@ struct TacticalMapView: UIViewRepresentable {
             refreshBreadcrumbTrail()
             refreshLassoHighlightRings()
             refreshKMLVectorOverlays()
+            refreshRasterOverlays()
         }
 
         // MARK: - Large-KML vector overlays (GeoJSONSource + line/fill/circle)
@@ -2829,6 +2839,50 @@ struct TacticalMapView: UIViewRepresentable {
             try? map.setLayerProperty(for: ptID, property: "visibility", value: vis)
             try? map.setLayerProperty(for: ptID, property: "circle-color", value: hex)
             try? map.setLayerProperty(for: ptID, property: "circle-opacity", value: overlay.opacity)
+        }
+
+        // MARK: - Raster / imagery overlays (ImageSource + RasterLayer)
+        //
+        // Georeferenced single-image overlays (KMZ GroundOverlay now; GeoTIFF
+        // etc. later) render as a Mapbox ImageSource positioned by its corner
+        // box, with a RasterLayer on top. Opacity + visibility apply live.
+        private var installedRasterOverlayIDs = Set<String>()
+
+        func refreshRasterOverlays() {
+            guard let mapView = mapView else { return }
+            let map: MapboxMap = mapView.mapboxMap
+            guard map.isStyleLoaded else { return }
+            let overlays = parent.rasterStore.overlays
+            let wanted = Set(overlays.map { $0.id })
+
+            for id in installedRasterOverlayIDs where !wanted.contains(id) {
+                let layerID = "rasterlyr-\(id)"
+                if map.layerExists(withId: layerID) { try? map.removeLayer(withId: layerID) }
+                let sourceID = "rastersrc-\(id)"
+                if map.sourceExists(withId: sourceID) { try? map.removeSource(withId: sourceID) }
+            }
+            installedRasterOverlayIDs = wanted
+
+            for overlay in overlays {
+                let sourceID = "rastersrc-\(overlay.id)"
+                let layerID = "rasterlyr-\(overlay.id)"
+                if !map.sourceExists(withId: sourceID) {
+                    var source = ImageSource(id: sourceID)
+                    // Corner order: top-left, top-right, bottom-right, bottom-left.
+                    source.coordinates = [
+                        [overlay.west, overlay.north], [overlay.east, overlay.north],
+                        [overlay.east, overlay.south], [overlay.west, overlay.south],
+                    ]
+                    source.url = parent.rasterStore.imageURL(overlay).absoluteString
+                    do { try map.addSource(source) } catch { continue }
+                    var layer = RasterLayer(id: layerID, source: sourceID)
+                    layer.rasterOpacity = .constant(overlay.opacity)
+                    try? map.addLayer(layer)
+                }
+                let vis = overlay.visible ? "visible" : "none"
+                try? map.setLayerProperty(for: layerID, property: "visibility", value: vis)
+                try? map.setLayerProperty(for: layerID, property: "raster-opacity", value: overlay.opacity)
+            }
         }
 
         // Lazy-attach helpers — one per annotation kind. Mapbox v11

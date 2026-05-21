@@ -241,6 +241,7 @@
 		A7AC00010000000000B00002 /* ATAKPluginSerializer.swift in Sources */ = {isa = PBXBuildFile; fileRef = A7AC00010000000000A00002 /* ATAKPluginSerializer.swift */; };
 		A9321E0EC74569E8473691D6 /* CompassOverlayView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2D240A72682F8C0E3253BA1F /* CompassOverlayView.swift */; };
 		A9C171AE7DA5913A5B2D5C9C /* MGRSGridToggleView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A92EDCFDBF0D0ECD7A414CE6 /* MGRSGridToggleView.swift */; };
+		A9F13CD1E9534A25ECA3B7A9 /* RasterOverlay.swift in Sources */ = {isa = PBXBuildFile; fileRef = 097DAF0444ABFD1021CA104E /* RasterOverlay.swift */; };
 		AA0554C2EB313E2B73BE40C0 /* DrawingModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = FAA5EECEC92A0D864B030870 /* DrawingModels.swift */; };
 		AB00573C449D7F205F933A74 /* SFGPUCS----.svg in Resources */ = {isa = PBXBuildFile; fileRef = 3F47D2965604DA1214025ECE /* SFGPUCS----.svg */; };
 		AB23139DA76395747F6E4C71 /* PointDropperService.swift in Sources */ = {isa = PBXBuildFile; fileRef = D452667B584032AAC6C0C1FB /* PointDropperService.swift */; };
@@ -391,6 +392,7 @@
 		05AC64D605838B84290656CE /* SUSP-------.svg */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text; path = "SUSP-------.svg"; sourceTree = "<group>"; };
 		06968B4309853CB9BD15D16B /* MapOverlayCoordinator.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = MapOverlayCoordinator.swift; path = OmniTAKMobile/Features/Map/Controllers/MapOverlayCoordinator.swift; sourceTree = "<group>"; };
 		08B18AEA7E422F3C5717BF5B /* RemoteIdToPointMarkerConverter.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = RemoteIdToPointMarkerConverter.swift; path = OmniTAKMobile/Features/RemoteID/Services/RemoteIdToPointMarkerConverter.swift; sourceTree = "<group>"; };
+		097DAF0444ABFD1021CA104E /* RasterOverlay.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = RasterOverlay.swift; path = OmniTAKMobile/Utilities/Integration/RasterOverlay.swift; sourceTree = "<group>"; };
 		09DAC73D9366FC5CC53349A0 /* WaypointManager.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = WaypointManager.swift; path = OmniTAKMobile/Features/Navigation/Managers/WaypointManager.swift; sourceTree = "<group>"; };
 		0AE09A8DEEF0138AFC876D09 /* SFGPU------.svg */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text; path = "SFGPU------.svg"; sourceTree = "<group>"; };
 		0C27B3788362A7692A3F6B70 /* CertificateEnrollmentView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = CertificateEnrollmentView.swift; path = OmniTAKMobile/Features/Authentication/Views/CertificateEnrollmentView.swift; sourceTree = "<group>"; };
@@ -2035,6 +2037,7 @@
 				59B935421FA6C4E2152404D7 /* KMLMapIntegration.swift */,
 				D1F628D2ABD2498188D0EACD /* KMLOverlayManager.swift */,
 				BC4B8A5F29C10A6D8A88F3F9 /* KMLVectorOverlay.swift */,
+				097DAF0444ABFD1021CA104E /* RasterOverlay.swift */,
 			);
 			name = Integration;
 			sourceTree = "<group>";
@@ -2712,6 +2715,7 @@
 				42B40E22FFA4AE412996AE66 /* ToolbarAddPalette.swift in Sources */,
 				E955D31B3785A13C9CF3832E /* KMLVectorOverlay.swift in Sources */,
 				9F4D964068E0E91862AEE361 /* KMLOverlaysPanel.swift in Sources */,
+				A9F13CD1E9534A25ECA3B7A9 /* RasterOverlay.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

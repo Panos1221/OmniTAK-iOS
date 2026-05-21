@@ -17,6 +17,7 @@ import UniformTypeIdentifiers
 
 struct KMLOverlaysPanel: View {
     @ObservedObject private var store = KMLVectorOverlayStore.shared
+    @ObservedObject private var rasterStore = RasterOverlayStore.shared
     @Environment(\.dismiss) private var dismiss
     @State private var showImporter = false
     @State private var showDeleteAll = false
@@ -44,29 +45,44 @@ struct KMLOverlaysPanel: View {
                     Text("Imported overlays render as a single GPU vector layer — large files (tens of thousands of features) stay smooth. Tap an overlay to rename, recolor, or restyle it. Overlays show on the 2D map engine.")
                 }
 
-                if store.overlays.isEmpty {
+                if store.overlays.isEmpty && rasterStore.overlays.isEmpty {
                     Section {
-                        Text("No overlays yet. Import a KML or KMZ to draw it on the map.")
+                        Text("No overlays yet. Import a KML/KMZ (vector) or a KMZ image overlay (imagery).")
                             .font(.footnote).foregroundColor(.secondary)
                     }
                 } else {
-                    Section("Overlays") {
-                        ForEach(store.overlays) { overlay in
-                            NavigationLink {
-                                KMLOverlayDetailView(overlayID: overlay.id, onRequestClose: { dismiss() })
-                            } label: {
-                                row(overlay)
-                            }
-                            .swipeActions(edge: .trailing) {
-                                Button(role: .destructive) { store.remove(overlay.id) } label: {
-                                    Label("Delete", systemImage: "trash")
+                    if !store.overlays.isEmpty {
+                        Section("Vector (KML)") {
+                            ForEach(store.overlays) { overlay in
+                                NavigationLink {
+                                    KMLOverlayDetailView(overlayID: overlay.id, onRequestClose: { dismiss() })
+                                } label: {
+                                    row(overlay)
+                                }
+                                .swipeActions(edge: .trailing) {
+                                    Button(role: .destructive) { store.remove(overlay.id) } label: {
+                                        Label("Delete", systemImage: "trash")
+                                    }
+                                }
+                                .swipeActions(edge: .leading) {
+                                    Button { store.setVisible(overlay.id, !overlay.visible) } label: {
+                                        Label(overlay.visible ? "Hide" : "Show",
+                                              systemImage: overlay.visible ? "eye.slash" : "eye")
+                                    }.tint(.indigo)
                                 }
                             }
-                            .swipeActions(edge: .leading) {
-                                Button { store.setVisible(overlay.id, !overlay.visible) } label: {
-                                    Label(overlay.visible ? "Hide" : "Show",
-                                          systemImage: overlay.visible ? "eye.slash" : "eye")
-                                }.tint(.indigo)
+                        }
+                    }
+
+                    if !rasterStore.overlays.isEmpty {
+                        Section("Imagery") {
+                            ForEach(rasterStore.overlays) { overlay in
+                                rasterRow(overlay)
+                                    .swipeActions(edge: .trailing) {
+                                        Button(role: .destructive) { rasterStore.remove(overlay.id) } label: {
+                                            Label("Delete", systemImage: "trash")
+                                        }
+                                    }
                             }
                         }
                     }
@@ -89,10 +105,10 @@ struct KMLOverlaysPanel: View {
                 if case .success(let urls) = result, let url = urls.first { importPicked(url) }
             }
             .confirmationDialog("Delete all overlays?", isPresented: $showDeleteAll, titleVisibility: .visible) {
-                Button("Delete All", role: .destructive) { store.removeAll() }
+                Button("Delete All", role: .destructive) { store.removeAll(); rasterStore.removeAll() }
                 Button("Cancel", role: .cancel) {}
             } message: {
-                Text("This removes every imported overlay. It can't be undone.")
+                Text("This removes every imported overlay (vector and imagery). It can't be undone.")
             }
         }
     }
@@ -116,12 +132,51 @@ struct KMLOverlaysPanel: View {
             return
         }
         Task {
-            await store.importKML(from: tmp)
+            // Try imagery (KMZ GroundOverlay) first; if it's not imagery, fall
+            // back to vector KML. Either way, frame the new overlay.
+            let isImagery = await rasterStore.importGroundOverlay(from: tmp)
+            if isImagery {
+                if let last = rasterStore.overlays.last {
+                    NotificationCenter.default.post(name: .kmlZoomToOverlay, object: nil, userInfo: ["id": last.id])
+                }
+            } else {
+                await store.importKML(from: tmp)
+                if let last = store.overlays.last {
+                    NotificationCenter.default.post(name: .kmlZoomToOverlay, object: nil, userInfo: ["id": last.id])
+                }
+            }
             try? FileManager.default.removeItem(at: tmp)
-            if let last = store.overlays.last {
-                NotificationCenter.default.post(name: .kmlZoomToOverlay, object: nil, userInfo: ["id": last.id])
+        }
+    }
+
+    @ViewBuilder
+    private func rasterRow(_ overlay: RasterOverlay) -> some View {
+        Button {
+            NotificationCenter.default.post(name: .kmlZoomToOverlay, object: nil, userInfo: ["id": overlay.id])
+            dismiss()
+        } label: {
+            HStack(spacing: 12) {
+                Image(systemName: "photo.on.rectangle.angled")
+                    .foregroundColor(.teal)
+                    .opacity(overlay.visible ? 1 : 0.35)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(overlay.name).lineLimit(1).foregroundColor(.primary)
+                    Text("Image overlay · \(Int(overlay.opacity * 100))%")
+                        .font(.caption).foregroundColor(.secondary)
+                }
+                Spacer()
+                Button {
+                    rasterStore.setVisible(overlay.id, !overlay.visible)
+                } label: {
+                    Image(systemName: overlay.visible ? "eye.fill" : "eye.slash")
+                        .foregroundColor(overlay.visible ? .accentColor : .secondary)
+                        .frame(width: 44, height: 44)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.borderless)
             }
         }
+        .buttonStyle(.plain)
     }
 
     @ViewBuilder
