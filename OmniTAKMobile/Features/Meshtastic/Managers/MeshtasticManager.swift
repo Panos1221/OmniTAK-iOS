@@ -30,6 +30,11 @@ public class MeshtasticManager: ObservableObject {
     // BLE-specific properties
     @Published public var isScanning: Bool = false
     @Published public var discoveredBLEDevices: [DiscoveredBLEDevice] = []
+    /// Previously-paired radios available for one-tap reconnect (no scan).
+    @Published public var knownBLEDevices: [DiscoveredBLEDevice] = []
+    /// True when a connect failed on a stale iOS bond and the user needs to
+    /// Forget + re-pair in Settings.
+    @Published public var needsBluetoothRepair: Bool = false
     @Published public var bluetoothState: CBManagerState = .unknown
 
     // MARK: - Private Properties
@@ -206,6 +211,20 @@ public class MeshtasticManager: ObservableObject {
             }
             .store(in: &bleClientCancellables)
 
+        client.$knownDevices
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] (devices: [DiscoveredBLEDevice]) in
+                self?.knownBLEDevices = devices
+            }
+            .store(in: &bleClientCancellables)
+
+        client.$needsBluetoothRepair
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] (needsRepair: Bool) in
+                self?.needsBluetoothRepair = needsRepair
+            }
+            .store(in: &bleClientCancellables)
+
         client.$bluetoothState
             .receive(on: DispatchQueue.main)
             .sink { [weak self] (state: CBManagerState) in
@@ -265,6 +284,25 @@ public class MeshtasticManager: ObservableObject {
     public func stopBLEScanning() {
         guard #available(iOS 13.0, *) else { return }
         bleClient.stopScanning()
+    }
+
+    /// Refresh the list of previously-paired / system-known BLE radios
+    /// (no scan required).
+    public func refreshKnownBLEDevices() {
+        guard #available(iOS 13.0, *) else { return }
+        bleClient.refreshKnownDevices()
+    }
+
+    /// Reconnect to the most-recently-used BLE radio without scanning.
+    public func reconnectLastBLEDevice() {
+        guard #available(iOS 13.0, *) else { return }
+        bleClient.reconnectLastDevice()
+    }
+
+    /// Forget a previously-paired BLE radio.
+    public func forgetBLEDevice(id: UUID) {
+        guard #available(iOS 13.0, *) else { return }
+        bleClient.forgetDevice(id: id)
     }
 
     /// Connect to a discovered BLE device

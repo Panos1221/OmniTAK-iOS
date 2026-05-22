@@ -70,6 +70,11 @@ private struct BluetoothConnectionView: View {
             // Bluetooth Status Banner
             bluetoothStatusBanner
 
+            // Stale-pairing recovery guidance
+            if manager.needsBluetoothRepair {
+                pairingRepairBanner
+            }
+
             // Connected Device Card
             if manager.isConnected, let device = manager.connectedDevice, device.connectionType == .bluetooth {
                 connectedDeviceCard
@@ -78,6 +83,35 @@ private struct BluetoothConnectionView: View {
 
             // Device List
             List {
+                // Paired (known) devices — reconnect with no scan / re-pair.
+                if !manager.knownBLEDevices.isEmpty {
+                    Section {
+                        ForEach(manager.knownBLEDevices) { device in
+                            let isConn = manager.isConnected &&
+                                manager.connectedDevice?.devicePath == device.id.uuidString
+                            Button {
+                                manager.stopBLEScanning()
+                                manager.connectBLE(device: device)
+                            } label: {
+                                KnownDeviceRow(device: device, isConnected: isConn)
+                            }
+                            .buttonStyle(.plain)
+                            .disabled(isConn)
+                            .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                                Button(role: .destructive) {
+                                    manager.forgetBLEDevice(id: device.id)
+                                } label: {
+                                    Label("Forget", systemImage: "trash")
+                                }
+                            }
+                        }
+                    } header: {
+                        Text("Paired Devices")
+                    } footer: {
+                        Text("Tap to reconnect instantly — no scan or re-pairing needed.")
+                    }
+                }
+
                 // Scanning Section
                 Section {
                     if manager.isScanning {
@@ -144,14 +178,45 @@ private struct BluetoothConnectionView: View {
             .listStyle(.insetGrouped)
         }
         .onAppear {
-            // Auto-start scanning if Bluetooth is available
-            if manager.bluetoothState == .poweredOn && !manager.isConnected {
+            guard manager.bluetoothState == .poweredOn else { return }
+            // Surface previously-paired radios immediately, reconnect to the
+            // last one without a scan, then scan for anything new.
+            manager.refreshKnownBLEDevices()
+            if !manager.isConnected {
+                manager.reconnectLastBLEDevice()
                 manager.startBLEScanning()
             }
         }
         .onDisappear {
             manager.stopBLEScanning()
         }
+    }
+
+    private var pairingRepairBanner: some View {
+        HStack(alignment: .top, spacing: 10) {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .foregroundColor(.orange)
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Pairing out of sync")
+                    .font(.subheadline).fontWeight(.semibold)
+                Text("Open iOS Settings → Bluetooth, tap your Meshtastic device, choose “Forget This Device,” then reconnect here. You should only need to do this once.")
+                    .font(.caption)
+                    .fixedSize(horizontal: false, vertical: true)
+                Button {
+                    if let url = URL(string: UIApplication.openSettingsURLString) {
+                        UIApplication.shared.open(url)
+                    }
+                } label: {
+                    Label("Open Settings", systemImage: "gear")
+                        .font(.caption.weight(.semibold))
+                }
+                .padding(.top, 2)
+            }
+            Spacer()
+        }
+        .padding()
+        .background(Color.orange.opacity(0.15))
+        .foregroundColor(.orange)
     }
 
     private var bluetoothStatusBanner: some View {
@@ -302,6 +367,36 @@ private struct BLEDeviceRow: View {
         case -90..<(-70): return .orange
         default: return .red
         }
+    }
+}
+
+// MARK: - Known (Paired) Device Row
+
+private struct KnownDeviceRow: View {
+    let device: DiscoveredBLEDevice
+    let isConnected: Bool
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Image(systemName: "antenna.radiowaves.left.and.right")
+                .font(.system(size: 20))
+                .foregroundColor(isConnected ? .green : .blue)
+                .frame(width: 32)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(device.name)
+                    .font(.body)
+                Text(isConnected ? "Connected" : "Paired — tap to reconnect")
+                    .font(.caption)
+                    .foregroundColor(isConnected ? .green : .secondary)
+            }
+
+            Spacer()
+
+            Image(systemName: isConnected ? "checkmark.circle.fill" : "arrow.clockwise.circle")
+                .foregroundColor(isConnected ? .green : .blue)
+        }
+        .contentShape(Rectangle())
     }
 }
 

@@ -83,6 +83,13 @@ class MeshtasticBLEClient: NSObject, ObservableObject {
     @Published var connectionState: ConnectionState = .disconnected
     @Published var bluetoothState: CBManagerState = .unknown
     @Published var discoveredDevices: [DiscoveredBLEDevice] = []
+    /// Previously-paired / system-known Meshtastic radios, retrieved without
+    /// a scan so a known device is one tap (or an automatic reconnect) away.
+    @Published var knownDevices: [DiscoveredBLEDevice] = []
+    /// True when the last failure was a stale iOS bond ("peer removed pairing
+    /// information"). Only the user can clear it via Settings, so the UI shows
+    /// recovery steps instead of a cryptic error.
+    @Published var needsBluetoothRepair: Bool = false
     @Published var connectedPeripheral: CBPeripheral?
     @Published var myNodeNum: UInt32 = 0
     @Published var firmwareVersion: String = ""
@@ -114,6 +121,13 @@ class MeshtasticBLEClient: NSObject, ObservableObject {
 
     // Flag to prevent operations during shutdown
     private var isShuttingDown = false
+
+    // Persisted set of radios we've connected to before, so we can
+    // reconnect/auto-reconnect without re-scanning or re-pairing.
+    private let knownDevicesKey = "meshtastic_known_ble_devices"
+    // Set when the operator taps Disconnect — suppresses auto-reconnect so we
+    // don't immediately reconnect to a device they just chose to leave.
+    private var userDidDisconnect = false
 
     // Track if we're in the middle of draining the message queue
     private var isDrainingQueue = false
@@ -175,6 +189,10 @@ class MeshtasticBLEClient: NSObject, ObservableObject {
     func connect(to device: DiscoveredBLEDevice) {
         stopScanning()
 
+        // Operator chose to connect — re-enable auto-reconnect for this device
+        // and clear any stale-pairing warning from a prior attempt.
+        userDidDisconnect = false
+        DispatchQueue.main.async { self.needsBluetoothRepair = false }
         pendingPeripheral = device.peripheral
 
         DispatchQueue.main.async {
@@ -202,6 +220,9 @@ class MeshtasticBLEClient: NSObject, ObservableObject {
     func disconnect() {
         guard !isShuttingDown else { return }
 
+        // Operator-initiated leave — don't auto-reconnect to this device.
+        userDidDisconnect = true
+
         readTimer?.invalidate()
         readTimer = nil
 
@@ -228,6 +249,85 @@ class MeshtasticBLEClient: NSObject, ObservableObject {
 
         pendingPeripheral = nil
         print("Disconnected from Meshtastic device")
+    }
+
+    // MARK: - Known / Paired Devices
+
+    /// One persisted radio we've connected to before.
+    private struct KnownDevice: Codable {
+        let uuid: String
+        let name: String
+    }
+
+    private func loadKnownDeviceRecords() -> [KnownDevice] {
+        guard let data = UserDefaults.standard.data(forKey: knownDevicesKey),
+              let list = try? JSONDecoder().decode([KnownDevice].self, from: data) else { return [] }
+        return list
+    }
+
+    /// Remember a radio we just connected to (most-recent first, capped).
+    private func rememberDevice(_ peripheral: CBPeripheral) {
+        let uuid = peripheral.identifier.uuidString
+        var list = loadKnownDeviceRecords().filter { $0.uuid != uuid }
+        list.insert(KnownDevice(uuid: uuid, name: peripheral.name ?? "Meshtastic"), at: 0)
+        if list.count > 8 { list = Array(list.prefix(8)) }
+        if let data = try? JSONEncoder().encode(list) {
+            UserDefaults.standard.set(data, forKey: knownDevicesKey)
+        }
+    }
+
+    /// Forget a previously-paired radio so it no longer appears under
+    /// "Paired Devices" and won't be auto-reconnected.
+    func forgetDevice(id: UUID) {
+        let list = loadKnownDeviceRecords().filter { $0.uuid != id.uuidString }
+        if let data = try? JSONEncoder().encode(list) {
+            UserDefaults.standard.set(data, forKey: knownDevicesKey)
+        }
+        DispatchQueue.main.async {
+            self.knownDevices.removeAll { $0.id == id }
+        }
+    }
+
+    /// Populate `knownDevices` from radios iOS already knows about — ones we've
+    /// connected to before (`retrievePeripherals`) plus any currently connected
+    /// at the system level (`retrieveConnectedPeripherals`). No scan required,
+    /// so a previously-paired radio shows up instantly for one-tap reconnect.
+    func refreshKnownDevices() {
+        guard centralManager?.state == .poweredOn else { return }
+        var result: [DiscoveredBLEDevice] = []
+        var seen = Set<UUID>()
+
+        let records = loadKnownDeviceRecords()
+        let uuids = records.compactMap { UUID(uuidString: $0.uuid) }
+        if !uuids.isEmpty {
+            for p in centralManager.retrievePeripherals(withIdentifiers: uuids) where !seen.contains(p.identifier) {
+                seen.insert(p.identifier)
+                let stored = records.first { $0.uuid == p.identifier.uuidString }?.name
+                let name = p.name ?? stored ?? "Meshtastic"
+                result.append(DiscoveredBLEDevice(id: p.identifier, name: name, rssi: 0, peripheral: p))
+            }
+        }
+        for p in centralManager.retrieveConnectedPeripherals(withServices: [MeshtasticBLEUUID.service])
+        where !seen.contains(p.identifier) {
+            seen.insert(p.identifier)
+            result.append(DiscoveredBLEDevice(id: p.identifier, name: p.name ?? "Meshtastic", rssi: 0, peripheral: p))
+        }
+
+        DispatchQueue.main.async { self.knownDevices = result }
+    }
+
+    /// Reconnect to the most-recently-used radio without scanning. Returns true
+    /// if a reconnect was attempted. Skips when already connected or when the
+    /// operator explicitly disconnected this session.
+    @discardableResult
+    func reconnectLastDevice() -> Bool {
+        guard centralManager?.state == .poweredOn, !isConnected, !userDidDisconnect else { return false }
+        let records = loadKnownDeviceRecords()
+        guard let last = records.first, let uuid = UUID(uuidString: last.uuid),
+              let peripheral = centralManager.retrievePeripherals(withIdentifiers: [uuid]).first else { return false }
+        print("🔄 Auto-reconnecting to known Meshtastic device \(peripheral.name ?? last.name)")
+        connect(peripheral: peripheral)
+        return true
     }
 
     // MARK: - Sending Data
@@ -1011,6 +1111,11 @@ extension MeshtasticBLEClient: CBCentralManagerDelegate {
         switch central.state {
         case .poweredOn:
             print("Bluetooth is ready")
+            // Surface previously-paired radios immediately and reconnect to the
+            // last one (unless the operator explicitly disconnected), so a known
+            // device comes back without a scan or re-pair.
+            refreshKnownDevices()
+            reconnectLastDevice()
         case .poweredOff:
             DispatchQueue.main.async {
                 self.lastError = "Bluetooth is turned off"
@@ -1064,10 +1169,29 @@ extension MeshtasticBLEClient: CBCentralManagerDelegate {
         peripheral.discoverServices([MeshtasticBLEUUID.service])
     }
 
+    /// True when an error is the stale-bond case ("peer removed pairing
+    /// information", CBError code 14) — iOS holds pairing info the radio no
+    /// longer honours. Apps can't clear bonds, so the user must Forget +
+    /// re-pair in Settings.
+    private func isPairingError(_ error: Error?) -> Bool {
+        guard let error = error as NSError? else { return false }
+        if error.domain == CBErrorDomain,
+           error.code == CBError.Code.peerRemovedPairingInformation.rawValue { return true }
+        return error.localizedDescription.lowercased().contains("pairing")
+    }
+
     func centralManager(_ central: CBCentralManager, didFailToConnect peripheral: CBPeripheral, error: Error?) {
+        let pairing = isPairingError(error)
+        if pairing {
+            // Stale bond — don't auto-reconnect into a guaranteed-failing loop.
+            userDidDisconnect = true
+        }
         DispatchQueue.main.async {
             self.connectionState = .failed
-            self.lastError = error?.localizedDescription ?? "Failed to connect"
+            self.needsBluetoothRepair = pairing
+            self.lastError = pairing
+                ? "Bluetooth pairing is out of sync. In iOS Settings → Bluetooth, tap your Meshtastic device, choose “Forget This Device,” then reconnect here. You should only need to do this once."
+                : (error?.localizedDescription ?? "Failed to connect")
         }
 
         delegate?.bleClient(self, didDisconnect: peripheral, error: error)
@@ -1170,9 +1294,15 @@ extension MeshtasticBLEClient: CBPeripheralDelegate {
         if canSend && canReceive {
             print("✅ Ready to communicate with Meshtastic device")
 
+            // Remember this radio so it shows under "Paired Devices" and can
+            // be auto-reconnected next time without a scan.
+            rememberDevice(peripheral)
+            userDidDisconnect = false
+
             DispatchQueue.main.async {
                 self.isConnected = true
                 self.connectionState = .connected
+                self.needsBluetoothRepair = false
             }
 
             delegate?.bleClient(self, didConnect: peripheral)
