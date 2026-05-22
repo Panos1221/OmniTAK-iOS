@@ -441,7 +441,10 @@ struct DataPackageSheetView: View {
 
 struct PointDropperSheetView: View {
     @Binding var isPresented: Bool
-    @StateObject private var service = PointDropperService()
+    // Must observe the shared singleton the map renders from — newing up a
+    // fresh PointDropperService here dropped markers into a throwaway object
+    // the map never saw, so dropped points never appeared.
+    @ObservedObject private var service = PointDropperService.shared
     @ObservedObject private var location = LocationManager.shared
     @ObservedObject private var mapCenterStore = MapCenterStore.shared
 
