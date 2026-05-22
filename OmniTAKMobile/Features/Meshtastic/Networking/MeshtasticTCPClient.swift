@@ -225,13 +225,17 @@ class MeshtasticTCPClient: ObservableObject {
 
     private func parseFromRadio(_ data: Data) {
         // Parse FromRadio protobuf message
-        // Field numbers based on meshtastic.proto:
+        // Field numbers based on canonical Meshtastic mesh.proto:
         // 1: packet_id (uint32)
-        // 2: MeshPacket
-        // 5: MyNodeInfo
-        // 6: NodeInfo
-        // 7: Config
-        // 11: Metadata
+        // 2: MeshPacket (packet)
+        // 3: MyNodeInfo (my_info)
+        // 4: NodeInfo (node_info)
+        // 5: Config
+        // 7: config_complete_id
+        // 13: DeviceMetadata
+        // NOTE: my_info/node_info were previously (incorrectly) at 5/6, which
+        // silently skipped every real NodeInfo frame — bytes arrived but the
+        // node list stayed empty.
 
         guard !data.isEmpty else { return }
 
@@ -245,7 +249,7 @@ class MeshtasticTCPClient: ObservableObject {
             index += 1
 
             switch fieldNumber {
-            case 5: // my_info
+            case 3: // my_info (canonical FromRadio.my_info = 3)
                 if let (info, newIndex) = parseMyNodeInfo(data, from: index, wireType: wireType) {
                     index = newIndex
                     DispatchQueue.main.async {
@@ -257,7 +261,7 @@ class MeshtasticTCPClient: ObservableObject {
                     index = skipField(data, from: index, wireType: wireType)
                 }
 
-            case 6: // node_info
+            case 4: // node_info (canonical FromRadio.node_info = 4)
                 if let (node, newIndex) = parseNodeInfo(data, from: index, wireType: wireType) {
                     index = newIndex
                     DispatchQueue.main.async {
@@ -326,11 +330,16 @@ class MeshtasticTCPClient: ObservableObject {
         var longName = ""
         var snr: Double? = nil
         var lastHeard: Date? = nil
-        let position: MeshPosition? = nil
+        var position: MeshPosition? = nil
         var hopDistance: Int? = nil
+        var battery: Int? = nil
 
         var idx = lengthEnd
 
+        // NodeInfo field layout mirrors the canonical Meshtastic mesh.proto and
+        // the working Android parser. user lives at field 2 (legacy) or 4
+        // (modern); position is field 5; snr at 5(float)/7; last_heard 9;
+        // device_metrics (battery) 10; hops_away 11.
         while idx < messageEnd {
             guard idx < data.count else { break }
             let tag = data[idx]
@@ -339,48 +348,44 @@ class MeshtasticTCPClient: ObservableObject {
             idx += 1
 
             switch field {
-            case 1: // num
+            case 1: // num — varint (uint32) or fixed32 depending on firmware rev
                 if wire == 0, let (val, newIdx) = readVarint(data, from: idx) {
-                    nodeNum = UInt32(val)
+                    nodeNum = UInt32(truncatingIfNeeded: val)
                     idx = min(newIdx, messageEnd)
+                } else if wire == 5 && idx + 4 <= data.count {
+                    nodeNum = UInt32(data[idx]) | (UInt32(data[idx+1]) << 8) | (UInt32(data[idx+2]) << 16) | (UInt32(data[idx+3]) << 24)
+                    idx += 4
                 } else {
                     idx = skipField(data, from: idx, wireType: wire)
                 }
-            case 2: // user (sub-message)
+            case 2, 4: // user (sub-message) — field 2 (legacy) or 4 (modern)
                 if wire == 2, let (len, lenEnd) = readVarint(data, from: idx) {
                     let userEnd = min(lenEnd + Int(len), data.count)
-                    // Parse user sub-message for names
-                    var uIdx = lenEnd
-                    while uIdx < userEnd {
-                        guard uIdx < data.count else { break }
-                        let uTag = data[uIdx]
-                        let uField = (uTag >> 3)
-                        let uWire = (uTag & 0x07)
-                        uIdx += 1
-
-                        if uField == 2 && uWire == 2 { // long_name
-                            if let (str, newIdx) = readString(data, from: uIdx) {
-                                longName = str
-                                uIdx = min(newIdx, userEnd)
-                            } else {
-                                uIdx = skipField(data, from: uIdx, wireType: uWire)
-                            }
-                        } else if uField == 3 && uWire == 2 { // short_name
-                            if let (str, newIdx) = readString(data, from: uIdx) {
-                                shortName = str
-                                uIdx = min(newIdx, userEnd)
-                            } else {
-                                uIdx = skipField(data, from: uIdx, wireType: uWire)
-                            }
-                        } else {
-                            uIdx = skipField(data, from: uIdx, wireType: uWire)
-                        }
-                    }
+                    let (sn, ln) = parseUserSubmessage(data, from: lenEnd, end: userEnd)
+                    if !sn.isEmpty { shortName = sn }
+                    if !ln.isEmpty { longName = ln }
                     idx = userEnd
                 } else {
                     idx = skipField(data, from: idx, wireType: wire)
                 }
-            case 5: // snr
+            case 5: // position (length-delimited) OR snr (float) — disambiguate by wire type
+                if wire == 2, let (len, lenEnd) = readVarint(data, from: idx) {
+                    let posEnd = min(lenEnd + Int(len), data.count)
+                    if lenEnd <= posEnd {
+                        let posBytes = data.subdata(in: lenEnd..<posEnd)
+                        if let pos = parsePositionPayload(posBytes) {
+                            position = pos
+                        }
+                    }
+                    idx = posEnd
+                } else if wire == 5 && idx + 4 <= data.count {
+                    let floatBits = UInt32(data[idx]) | (UInt32(data[idx+1]) << 8) | (UInt32(data[idx+2]) << 16) | (UInt32(data[idx+3]) << 24)
+                    snr = Double(Float(bitPattern: floatBits))
+                    idx += 4
+                } else {
+                    idx = skipField(data, from: idx, wireType: wire)
+                }
+            case 7: // snr (float, alternate field)
                 if wire == 5 && idx + 4 <= data.count {
                     let floatBits = UInt32(data[idx]) | (UInt32(data[idx+1]) << 8) | (UInt32(data[idx+2]) << 16) | (UInt32(data[idx+3]) << 24)
                     snr = Double(Float(bitPattern: floatBits))
@@ -388,14 +393,26 @@ class MeshtasticTCPClient: ObservableObject {
                 } else {
                     idx = skipField(data, from: idx, wireType: wire)
                 }
-            case 6: // last_heard
-                if wire == 0, let (val, newIdx) = readVarint(data, from: idx) {
+            case 9: // last_heard — fixed32 (epoch secs) or varint
+                if wire == 5 && idx + 4 <= data.count {
+                    let raw = UInt32(data[idx]) | (UInt32(data[idx+1]) << 8) | (UInt32(data[idx+2]) << 16) | (UInt32(data[idx+3]) << 24)
+                    lastHeard = Date(timeIntervalSince1970: Double(raw))
+                    idx += 4
+                } else if wire == 0, let (val, newIdx) = readVarint(data, from: idx) {
                     lastHeard = Date(timeIntervalSince1970: Double(val))
                     idx = newIdx
                 } else {
                     idx = skipField(data, from: idx, wireType: wire)
                 }
-            case 7: // hops_away
+            case 10: // device_metrics (sub-message) — pull battery_level (field 1)
+                if wire == 2, let (len, lenEnd) = readVarint(data, from: idx) {
+                    let metricsEnd = min(lenEnd + Int(len), data.count)
+                    battery = parseDeviceMetricsBattery(data, from: lenEnd, end: metricsEnd)
+                    idx = metricsEnd
+                } else {
+                    idx = skipField(data, from: idx, wireType: wire)
+                }
+            case 11: // hops_away (varint)
                 if wire == 0, let (val, newIdx) = readVarint(data, from: idx) {
                     hopDistance = Int(val)
                     idx = newIdx
@@ -415,10 +432,62 @@ class MeshtasticTCPClient: ObservableObject {
             lastHeard: lastHeard ?? Date(),
             snr: snr,
             hopDistance: hopDistance,
-            batteryLevel: nil
+            batteryLevel: battery
         )
 
         return (node, messageEnd)
+    }
+
+    /// Parse a Meshtastic `User` submessage and return (shortName, longName).
+    /// long_name = field 2, short_name = field 3.
+    private func parseUserSubmessage(_ data: Data, from start: Int, end: Int) -> (short: String, long: String) {
+        var shortName = ""
+        var longName = ""
+        var uIdx = start
+        while uIdx < end {
+            guard uIdx < data.count else { break }
+            let uTag = data[uIdx]
+            let uField = (uTag >> 3)
+            let uWire = (uTag & 0x07)
+            uIdx += 1
+
+            if uField == 2 && uWire == 2 { // long_name
+                if let (str, newIdx) = readString(data, from: uIdx) {
+                    longName = str
+                    uIdx = min(newIdx, end)
+                } else {
+                    uIdx = skipField(data, from: uIdx, wireType: uWire)
+                }
+            } else if uField == 3 && uWire == 2 { // short_name
+                if let (str, newIdx) = readString(data, from: uIdx) {
+                    shortName = str
+                    uIdx = min(newIdx, end)
+                } else {
+                    uIdx = skipField(data, from: uIdx, wireType: uWire)
+                }
+            } else {
+                uIdx = skipField(data, from: uIdx, wireType: uWire)
+            }
+        }
+        return (shortName, longName)
+    }
+
+    /// Parse a Meshtastic `DeviceMetrics` submessage and return battery_level
+    /// (field 1, varint, percentage 0-100).
+    private func parseDeviceMetricsBattery(_ data: Data, from start: Int, end: Int) -> Int? {
+        var idx = start
+        while idx < end {
+            guard idx < data.count else { break }
+            let tag = data[idx]
+            let field = (tag >> 3)
+            let wire = (tag & 0x07)
+            idx += 1
+            if field == 1 && wire == 0, let (val, _) = readVarint(data, from: idx) {
+                return Int(val)
+            }
+            idx = skipField(data, from: idx, wireType: wire)
+        }
+        return nil
     }
 
     private func parseMeshPacket(_ data: Data, from index: Int, wireType: UInt8) -> ((from: UInt32, to: UInt32, portNum: Int, payload: Data), Int)? {
