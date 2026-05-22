@@ -1123,7 +1123,15 @@ struct ATAKMapView: View {
             gridOverlay
             // Point Dropper aim crosshair — drop lands where this sits.
             if pointDropAim.isAiming {
-                PointDropCrosshair()
+                // Center the crosshair on the map's full-screen geometric
+                // center so it coincides with the camera-center coordinate
+                // the drop uses. The map ignores safe area (fills the
+                // screen); without this full-screen container the crosshair
+                // would center in the safe-area frame instead, sitting below
+                // true center — so the marker dropped above the crosshair.
+                Color.clear
+                    .overlay(PointDropCrosshair())
+                    .ignoresSafeArea()
                     .allowsHitTesting(false)
                     .zIndex(900)
             }
@@ -3049,7 +3057,11 @@ struct TacticalMapView: UIViewRepresentable {
                 ann.textHaloColor = StyleColor(.black)
                 ann.textHaloWidth = 1.0
                 ann.textSize = 11
-                ann.iconAnchor = .bottom
+                // Affiliation glyphs are circular, so center them on the
+                // coordinate. `.bottom` (for teardrop pins) made the circle
+                // render above its point — markers appeared to drop above
+                // the aim crosshair.
+                ann.iconAnchor = .center
                 fresh.append(ann)
             }
             manager.annotations = fresh
