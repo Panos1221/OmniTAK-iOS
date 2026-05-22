@@ -46,28 +46,19 @@ struct ToolsLauncherSheet: View {
                     }
                 )
 
-                Divider().padding(.leading, 70)
+                // Full sectioned tool catalog — everything the old full-screen
+                // grid offered, as smooth rows that keep the map live behind.
+                // Each routes through ToolSheetHost by id (.openToolSheet).
+                ForEach(Self.toolSections) { section in
+                    sectionHeader(section.title)
+                    ForEach(Array(section.tools.enumerated()), id: \.element.id) { idx, tool in
+                        if idx > 0 { Divider().padding(.leading, 70) }
+                        quickTool(icon: tool.icon, color: tool.color,
+                                  title: tool.title, subtitle: tool.subtitle, toolID: tool.id)
+                    }
+                }
 
-                // Quick tools — open the same real screens the Full Tools grid
-                // opens, routed through ToolSheetHost so they work from here.
-                quickTool(icon: "mappin.circle.fill", color: BarTint.red, title: "Point Drop",
-                          subtitle: "Place and label a tactical marker", toolID: "pointer")
-                Divider().padding(.leading, 70)
-                quickTool(icon: "point.topleft.down.to.point.bottomright.curvepath.fill", color: BarTint.chat,
-                          title: "Routes", subtitle: "Plan and navigate routes", toolID: "routes")
-                Divider().padding(.leading, 70)
-                quickTool(icon: "cross.case.fill", color: BarTint.red, title: "CASEVAC",
-                          subtitle: "Casualty evacuation request", toolID: "casevac")
-                Divider().padding(.leading, 70)
-                quickTool(icon: "airplane.circle.fill", color: BarTint.mesh, title: "ADS-B",
-                          subtitle: "Live aircraft tracking", toolID: "adsb")
-
-                Divider().padding(.leading, 70)
-
-                quickTool(icon: "square.3.layers.3d", color: BarTint.purple, title: "Map Overlays",
-                          subtitle: "Import & toggle KML/KMZ overlays (handles huge files)", toolID: "kml")
-
-                Divider().padding(.leading, 70)
+                sectionHeader("More")
 
                 // Build-your-own-bar entry.
                 row(icon: "slider.horizontal.3", iconColor: BarTint.tools, title: "Customize Toolbar",
@@ -76,15 +67,95 @@ struct ToolsLauncherSheet: View {
 
                 Divider().padding(.leading, 70)
 
-                // Passthrough to the full 5x4 grid.
-                row(icon: "square.grid.3x3.fill", iconColor: .secondary, title: "Full Tools…",
-                    subtitle: "Drawing, Measure, CASEVAC, Routes, and more",
+                // Fallback passthrough to the legacy 5x4 grid.
+                row(icon: "square.grid.3x3.fill", iconColor: .secondary, title: "Full Tools Grid…",
+                    subtitle: "The classic grid — kept as a fallback",
                     bold: false, action: onFullTools)
             }
             .padding(.top, 8)
             .padding(.bottom, 12)
         }
-        .frame(maxHeight: 420)
+        .frame(maxHeight: 560)
+    }
+
+    // MARK: - Tool catalog
+
+    /// One routed tool row (opens via ToolSheetHost using `id`).
+    private struct LauncherTool: Identifiable {
+        let id: String
+        let icon: String
+        let color: Color
+        let title: String
+        let subtitle: String
+    }
+
+    private struct LauncherSection: Identifiable {
+        let id = UUID()
+        let title: String
+        let tools: [LauncherTool]
+    }
+
+    /// The full catalog, grouped — mirrors every screen the legacy grid
+    /// reached, so the popup can be the primary tools surface.
+    private static let toolSections: [LauncherSection] = [
+        LauncherSection(title: "Markers & Terrain", tools: [
+            LauncherTool(id: "pointer", icon: "mappin.circle.fill", color: BarTint.red,
+                         title: "Point Drop", subtitle: "Place and label a tactical marker"),
+            LauncherTool(id: "kml", icon: "square.3.layers.3d", color: BarTint.purple,
+                         title: "Map Overlays", subtitle: "Import & toggle KML/KMZ overlays"),
+            LauncherTool(id: "elevation", icon: "chart.line.uptrend.xyaxis", color: BarTint.teal,
+                         title: "Elevation Profile", subtitle: "Terrain profile along a path"),
+            LauncherTool(id: "los", icon: "eye.fill", color: BarTint.teal,
+                         title: "Line of Sight", subtitle: "Visibility between two points"),
+        ]),
+        LauncherSection(title: "Reports", tools: [
+            LauncherTool(id: "casevac", icon: "cross.case.fill", color: BarTint.red,
+                         title: "CASEVAC", subtitle: "Casualty evacuation request"),
+            LauncherTool(id: "nineline", icon: "scope", color: BarTint.red,
+                         title: "9-Line / CAS", subtitle: "Close air support request"),
+            LauncherTool(id: "spotrep", icon: "binoculars.fill", color: BarTint.orange,
+                         title: "SPOTREP", subtitle: "Spot report"),
+            LauncherTool(id: "alert", icon: "exclamationmark.triangle.fill", color: BarTint.red,
+                         title: "Emergency Beacon", subtitle: "Broadcast an emergency alert"),
+        ]),
+        LauncherSection(title: "Teams & Comms", tools: [
+            LauncherTool(id: "teams", icon: "person.3.fill", color: BarTint.chat,
+                         title: "Teams", subtitle: "Manage team members"),
+            LauncherTool(id: "contacts", icon: "person.crop.circle.fill", color: BarTint.chat,
+                         title: "Contacts", subtitle: "Contact list & chat"),
+            LauncherTool(id: "selfsa", icon: "dot.radiowaves.left.and.right", color: BarTint.map,
+                         title: "Self / Position", subtitle: "Broadcast your position (PLI)"),
+        ]),
+        LauncherSection(title: "Navigation", tools: [
+            LauncherTool(id: "routes", icon: "point.topleft.down.to.point.bottomright.curvepath.fill", color: BarTint.map,
+                         title: "Routes", subtitle: "Plan and navigate routes"),
+            LauncherTool(id: "turnbyturn", icon: "arrow.triangle.turn.up.right.diamond.fill", color: BarTint.map,
+                         title: "Turn-by-Turn", subtitle: "Guided navigation"),
+            LauncherTool(id: "tracks", icon: "figure.walk", color: BarTint.teal,
+                         title: "Track Recording", subtitle: "Record & review your track"),
+            LauncherTool(id: "geofence", icon: "circle.dashed", color: BarTint.purple,
+                         title: "Geofences", subtitle: "Create alert zones"),
+        ]),
+        LauncherSection(title: "Air & Data", tools: [
+            LauncherTool(id: "adsb", icon: "airplane.circle.fill", color: BarTint.mesh,
+                         title: "ADS-B", subtitle: "Live aircraft tracking"),
+            LauncherTool(id: "missionsync", icon: "arrow.triangle.2.circlepath", color: BarTint.servers,
+                         title: "Mission Sync", subtitle: "Sync mission packages"),
+            LauncherTool(id: "plugins", icon: "puzzlepiece.extension.fill", color: BarTint.settings,
+                         title: "Plugins", subtitle: "Manage installed plugins"),
+        ]),
+    ]
+
+    private func sectionHeader(_ title: String) -> some View {
+        HStack {
+            Text(title.uppercased())
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundColor(.secondary)
+            Spacer()
+        }
+        .padding(.horizontal, 20)
+        .padding(.top, 16)
+        .padding(.bottom, 4)
     }
 
     private func quickTool(icon: String, color: Color, title: String, subtitle: String, toolID: String) -> some View {
