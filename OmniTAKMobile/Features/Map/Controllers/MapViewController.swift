@@ -1075,6 +1075,9 @@ struct ATAKMapView: View {
                 // Lasso multi-select — lock the globe camera and capture the
                 // freehand drag when the operator is in lasso mode.
                 lassoActive: drawingManager.currentMode == .lasso && drawingManager.isDrawingActive,
+                // Base layer (satellite / hybrid / standard) so the layers
+                // panel switches the globe's imagery, not just the 2D style.
+                baseLayer: activeMapLayer,
                 selfCallsign: userCallsign,
                 // Phase 3b — saved distance / area measurements mirrored
                 // through the Cesium bridge as dashed polylines + segment
@@ -4131,6 +4134,8 @@ struct CesiumMainMap: UIViewRepresentable {
     /// When true (lasso mode), lock the globe camera and capture a freehand
     /// drag for multi-select; the polygon is posted back as a `.lasso` event.
     var lassoActive: Bool = false
+    /// Base imagery layer for the globe ("satellite" | "hybrid" | "standard").
+    var baseLayer: String = "satellite"
     let selfCallsign: String
     // Phase 3b — measurement sessions to mirror as dashed polylines with
     // per-segment distance labels. Sourced from `MeasurementManager`.
@@ -4225,6 +4230,13 @@ struct CesiumMainMap: UIViewRepresentable {
                 context.coordinator.lassoWasActive = lassoActive
                 webView.evaluateJavaScript("window.OmniBridge.setLassoMode({on:\(lassoActive)});", completionHandler: nil)
             }
+
+            // Base layer (imagery) — swap the globe's imagery on change so the
+            // layers panel's Satellite/Hybrid/Standard work on 3D too.
+            if baseLayer != context.coordinator.lastBaseLayer {
+                context.coordinator.lastBaseLayer = baseLayer
+                webView.evaluateJavaScript("window.OmniBridge.setBaseLayer({type:'\(baseLayer)'});", completionHandler: nil)
+            }
         }
     }
 
@@ -4244,6 +4256,8 @@ struct CesiumMainMap: UIViewRepresentable {
         var wasFollowing = false
         /// Whether lasso mode was active last render (to toggle on transition).
         var lassoWasActive = false
+        /// Last base imagery layer pushed to the globe (swap on change).
+        var lastBaseLayer = "satellite"
         /// Observer token for toolbar zoom commands forwarded to the bridge.
         var zoomObserver: NSObjectProtocol?
 
@@ -4916,6 +4930,21 @@ struct CesiumMainMap: UIViewRepresentable {
                 cv.style.display='none';cv.style.pointerEvents='none';
                 if(v)v.scene.screenSpaceCameraController.enableInputs=true;
               }
+            },
+            // Base imagery swap so the layers panel works on the globe:
+            // satellite = Cesium World Imagery (aerial), standard = OSM streets,
+            // hybrid = aerial with a translucent OSM streets/labels overlay.
+            setBaseLayer(arg){const e=_parse(arg);const t=(e&&e.type)||'satellite';const v=_state.viewer;if(!v)return;
+              try{
+                const layers=v.imageryLayers;layers.removeAll();
+                if(t==='standard'){
+                  layers.addImageryProvider(new Cesium.OpenStreetMapImageryProvider({url:'https://tile.openstreetmap.org/'}));
+                }else{
+                  layers.add(Cesium.ImageryLayer.fromProviderAsync(Cesium.createWorldImageryAsync(),{}));
+                  if(t==='hybrid'){const o=layers.addImageryProvider(new Cesium.OpenStreetMapImageryProvider({url:'https://tile.openstreetmap.org/'}));o.alpha=0.4;}
+                }
+                v.scene.requestRender();
+              }catch(err){}
             },
             ping(){return _state.ready?'pong':'loading'},
             upsertDrawing(arg){const d=_parse(arg);if(!d||!d.uid||!d.kind||!Array.isArray(d.coords)||d.coords.length===0)return;const v=_state.viewer;if(!v)return;
