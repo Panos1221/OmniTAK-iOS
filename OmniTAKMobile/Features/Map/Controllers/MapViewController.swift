@@ -4101,6 +4101,7 @@ struct CesiumMainMap: UIViewRepresentable {
                 let key = "\(loc.coordinate.latitude),\(loc.coordinate.longitude)"
                 if key != context.coordinator.lastFollowKey {
                     context.coordinator.lastFollowKey = key
+                    print("🛰️ Cesium follow → \(loc.coordinate.latitude), \(loc.coordinate.longitude)")
                     webView.evaluateJavaScript(
                         "window.OmniBridge.follow({lat:\(loc.coordinate.latitude),lon:\(loc.coordinate.longitude)});",
                         completionHandler: nil
