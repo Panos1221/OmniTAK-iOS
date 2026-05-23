@@ -1614,6 +1614,7 @@ struct ATAKMapView: View {
             // same point-in-polygon selection the 2D Mapbox lasso uses, then
             // exit lasso mode (which flips setLassoMode off on the bridge).
             defer { drawingManager.cancelDrawing() }
+            print("🟠 Cesium lasso event — polygon vertices: \(event.polygon?.count ?? 0)")
             guard let poly = event.polygon, poly.count >= 3 else { return }
             lassoService.beginLasso()
             for c in poly { lassoService.appendVertex(c) }
@@ -4760,7 +4761,14 @@ struct CesiumMainMap: UIViewRepresentable {
           // a 2D overlay canvas and the screen points are picked to lat/lon on
           // release, posted to native as {event:'lasso',polygon:[[lat,lon]...]}.
           function _drawLasso(){const cv=document.getElementById('lassoCanvas');if(!cv)return;const ctx=cv.getContext('2d');if(!ctx)return;ctx.clearRect(0,0,cv.width,cv.height);const pts=_state.lasso.pts;if(pts.length<2)return;ctx.beginPath();ctx.moveTo(pts[0][0],pts[0][1]);for(let i=1;i<pts.length;i++)ctx.lineTo(pts[i][0],pts[i][1]);ctx.closePath();ctx.lineWidth=3;ctx.setLineDash([6,4]);ctx.strokeStyle='#FF9500';ctx.stroke();ctx.fillStyle='rgba(255,149,0,0.10)';ctx.fill();}
-          function _finishLasso(){const v=_state.viewer;if(!v)return;_state.lasso.dragging=false;const pts=_state.lasso.pts.slice();const poly=[];for(const p of pts){const c=_cartoFor(v,new Cesium.Cartesian2(p[0],p[1]));if(c)poly.push([c.lat,c.lon]);}const cv=document.getElementById('lassoCanvas');if(cv){const ctx=cv.getContext('2d');ctx&&ctx.clearRect(0,0,cv.width,cv.height);}const f=poly.length?poly[0]:[0,0];_postMapEvent({event:'lasso',polygon:poly,lat:f[0],lon:f[1]});}
+          function _finishLasso(){const v=_state.viewer;if(!v)return;_state.lasso.dragging=false;const pts=_state.lasso.pts.slice();const poly=[];for(const p of pts){const c=_cartoFor(v,new Cesium.Cartesian2(p[0],p[1]));if(c)poly.push([c.lat,c.lon]);}const cv=document.getElementById('lassoCanvas');if(cv){const ctx=cv.getContext('2d');ctx&&ctx.clearRect(0,0,cv.width,cv.height);}const f=poly.length?poly[0]:[0,0];_postMapEvent({event:'lasso',polygon:poly,lat:f[0],lon:f[1],count:poly.length});}
+          // DOM touch capture on the overlay canvas — far more reliable than a
+          // Cesium ScreenSpaceEventHandler, which stops delivering once camera
+          // inputs are disabled. The canvas (pointer-events:auto when active)
+          // also intercepts the touch so the globe never pans under the drag.
+          function _lassoTouchStart(e){if(!_state.lasso.enabled)return;e.preventDefault();const t=e.touches[0];if(!t)return;_state.lasso.dragging=true;_state.lasso.pts=[[t.clientX,t.clientY]];_drawLasso();}
+          function _lassoTouchMove(e){if(!_state.lasso.enabled||!_state.lasso.dragging)return;e.preventDefault();const t=e.touches[0];if(!t)return;_state.lasso.pts.push([t.clientX,t.clientY]);_drawLasso();}
+          function _lassoTouchEnd(e){if(!_state.lasso.enabled||!_state.lasso.dragging)return;e.preventDefault();_finishLasso();}
           function _drawColor(hex,a){try{const c=Cesium.Color.fromCssColorString(hex||'#4ADE80');return a!==undefined?c.withAlpha(a):c}catch(e){return Cesium.Color.CYAN}}
           function _havDist(a,b){const R=6371000,lat1=a[1]*Math.PI/180,lat2=b[1]*Math.PI/180,dLat=(b[1]-a[1])*Math.PI/180,dLon=(b[0]-a[0])*Math.PI/180;const s=Math.sin(dLat/2)**2+Math.cos(lat1)*Math.cos(lat2)*Math.sin(dLon/2)**2;return 2*R*Math.asin(Math.min(1,Math.sqrt(s)))}
           function _fitViewport(){
@@ -4877,26 +4885,27 @@ struct CesiumMainMap: UIViewRepresentable {
               if(amount<1)return;
               if(f<1)v.camera.zoomIn(amount);else v.camera.zoomOut(amount);
             },
-            // Lasso multi-select mode. While on, the camera is locked and a
-            // single-finger drag draws the freehand selection polygon.
-            setLassoMode(arg){const e=_parse(arg);const on=!!(e&&e.on);const v=_state.viewer;if(!v)return;
-              const cv=document.getElementById('lassoCanvas');
+            // Lasso multi-select mode. While on, the overlay canvas captures
+            // the single-finger drag (DOM touch events) and intercepts it so
+            // the globe stays put; camera inputs are also disabled as a backup.
+            setLassoMode(arg){const e=_parse(arg);const on=!!(e&&e.on);const v=_state.viewer;const cv=document.getElementById('lassoCanvas');if(!cv)return;
               if(on){
                 _state.lasso.enabled=true;_state.lasso.dragging=false;_state.lasso.pts=[];
-                v.scene.screenSpaceCameraController.enableInputs=false;
-                if(cv){cv.width=window.innerWidth;cv.height=window.innerHeight;cv.style.display='block';}
-                if(!_state.lasso.handler){
-                  const h=new Cesium.ScreenSpaceEventHandler(v.scene.canvas);
-                  h.setInputAction(function(ev){if(!_state.lasso.enabled)return;_state.lasso.dragging=true;_state.lasso.pts=[[ev.position.x,ev.position.y]];_drawLasso();},Cesium.ScreenSpaceEventType.LEFT_DOWN);
-                  h.setInputAction(function(ev){if(!_state.lasso.enabled||!_state.lasso.dragging)return;_state.lasso.pts.push([ev.endPosition.x,ev.endPosition.y]);_drawLasso();},Cesium.ScreenSpaceEventType.MOUSE_MOVE);
-                  h.setInputAction(function(ev){if(!_state.lasso.enabled||!_state.lasso.dragging)return;_finishLasso();},Cesium.ScreenSpaceEventType.LEFT_UP);
-                  _state.lasso.handler=h;
-                }
+                cv.width=window.innerWidth;cv.height=window.innerHeight;cv.style.display='block';cv.style.pointerEvents='auto';
+                cv.addEventListener('touchstart',_lassoTouchStart,{passive:false});
+                cv.addEventListener('touchmove',_lassoTouchMove,{passive:false});
+                cv.addEventListener('touchend',_lassoTouchEnd,{passive:false});
+                cv.addEventListener('touchcancel',_lassoTouchEnd,{passive:false});
+                if(v)v.scene.screenSpaceCameraController.enableInputs=false;
               }else{
                 _state.lasso.enabled=false;_state.lasso.dragging=false;_state.lasso.pts=[];
-                v.scene.screenSpaceCameraController.enableInputs=true;
-                if(_state.lasso.handler){_state.lasso.handler.destroy();_state.lasso.handler=null;}
-                if(cv){const ctx=cv.getContext('2d');ctx&&ctx.clearRect(0,0,cv.width,cv.height);cv.style.display='none';}
+                cv.removeEventListener('touchstart',_lassoTouchStart);
+                cv.removeEventListener('touchmove',_lassoTouchMove);
+                cv.removeEventListener('touchend',_lassoTouchEnd);
+                cv.removeEventListener('touchcancel',_lassoTouchEnd);
+                const ctx=cv.getContext('2d');ctx&&ctx.clearRect(0,0,cv.width,cv.height);
+                cv.style.display='none';cv.style.pointerEvents='none';
+                if(v)v.scene.screenSpaceCameraController.enableInputs=true;
               }
             },
             ping(){return _state.ready?'pong':'loading'},
