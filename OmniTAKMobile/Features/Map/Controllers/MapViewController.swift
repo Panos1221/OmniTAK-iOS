@@ -1123,6 +1123,16 @@ struct ATAKMapView: View {
             // by syncing mapRegion from the camera in handleCesiumMapEvent.
             topToolbars
             mapOverlayComponents
+            // Point Dropper aim crosshair — full-screen-centered so it sits at
+            // the globe point reported as the screen-center pick, which is the
+            // coordinate the drop uses (via mapRegion → MapCenterStore).
+            if pointDropAim.isAiming {
+                Color.clear
+                    .overlay(PointDropCrosshair())
+                    .ignoresSafeArea()
+                    .allowsHitTesting(false)
+                    .zIndex(900)
+            }
             // Engine toggle lives in the Tools sheet (id: "engine") rather
             // than a standalone FAB — operators expect mode toggles in the
             // Tools tray, and we keep the map chrome uncluttered.
@@ -1531,15 +1541,18 @@ struct ATAKMapView: View {
             cesiumLastHeading = cam.heading
             cesiumLastPitch = cam.pitch
             // Mirror the Cesium camera into mapRegion so 2D-derived chrome
-            // (scale bar, MGRS grid) reads the right scale on the globe and
-            // an engine toggle lands at the same view. Approximate the ground
-            // span from camera height at nadir (~1.15·height vertical extent).
-            let lat = event.coordinate.latitude
+            // (scale bar, MGRS grid) reads the right scale on the globe, an
+            // engine toggle lands at the same view, and — crucially — the
+            // point-drop coordinate (MapCenterStore, fed from mapRegion) is
+            // the globe point under the screen-center crosshair, not the
+            // tilted camera's sub-point. Span approximated from camera height.
+            let regionCenter = event.centerCoordinate ?? event.coordinate
+            let lat = regionCenter.latitude
             let metersVisible = max(50.0, 1.15 * cam.height)
             let latDelta = min(metersVisible / 111_320.0, 90.0)
             let lonDelta = min(latDelta / max(cos(lat * .pi / 180), 0.01), 180.0)
             mapRegion = MKCoordinateRegion(
-                center: event.coordinate,
+                center: regionCenter,
                 span: MKCoordinateSpan(latitudeDelta: latDelta, longitudeDelta: lonDelta)
             )
         case .longpress:
@@ -4037,6 +4050,9 @@ struct CesiumMapEvent {
     let entityUid: String?
     /// Camera state, only populated for `.cameraChanged` events.
     let camera: CameraState?
+    /// Globe point under the screen center (aim crosshair) on
+    /// `.cameraChanged` — the correct point-drop / region center when tilted.
+    let centerCoordinate: CLLocationCoordinate2D?
 
     struct CameraState {
         let height: Double      // metres above ellipsoid
@@ -4272,12 +4288,19 @@ struct CesiumMainMap: UIViewRepresentable {
                 } else {
                     cameraState = nil
                 }
+                let centerCoord: CLLocationCoordinate2D?
+                if let cLat = payload.centerLat, let cLon = payload.centerLon {
+                    centerCoord = CLLocationCoordinate2D(latitude: cLat, longitude: cLon)
+                } else {
+                    centerCoord = nil
+                }
                 let event = CesiumMapEvent(
                     kind: kind,
                     coordinate: CLLocationCoordinate2D(latitude: payload.lat, longitude: payload.lon),
                     screenPoint: CGPoint(x: payload.screenX ?? 0, y: payload.screenY ?? 0),
                     entityUid: payload.uid,
-                    camera: cameraState
+                    camera: cameraState,
+                    centerCoordinate: centerCoord
                 )
                 parent.onMapEvent?(event)
             default:
@@ -4302,6 +4325,10 @@ struct CesiumMainMap: UIViewRepresentable {
             let heading: Double?
             let pitch: Double?
             let zoom: Double?
+            // Globe point under the screen center (aim crosshair) on
+            // camerachanged — the correct point-drop / region center.
+            let centerLat: Double?
+            let centerLon: Double?
         }
     }
 
@@ -4726,9 +4753,17 @@ struct CesiumMainMap: UIViewRepresentable {
           function _cartoFor(viewer,pos){let c=viewer.scene.pickPosition(pos);if(!Cesium.defined(c))c=viewer.camera.pickEllipsoid(pos,viewer.scene.globe.ellipsoid);if(!Cesium.defined(c))return null;const cc=Cesium.Cartographic.fromCartesian(c);return{lat:Cesium.Math.toDegrees(cc.latitude),lon:Cesium.Math.toDegrees(cc.longitude),hae:cc.height}}
           function _zoomFromHeight(h,latRad){const c=Math.max(Math.cos(latRad||0),0.01),mpp=(h*256)/1000.0,z=Math.log2(40075017*c/Math.max(mpp,1));return Math.max(0,Math.min(22,z))}
           function _postCameraChanged(v){const cam=v.camera,carto=cam.positionCartographic;if(!carto)return;const r=cam.computeViewRectangle(v.scene.globe.ellipsoid);
-            _postMapEvent({event:'camerachanged',lat:Cesium.Math.toDegrees(carto.latitude),lon:Cesium.Math.toDegrees(carto.longitude),height:carto.height,heading:Cesium.Math.toDegrees(cam.heading),pitch:Cesium.Math.toDegrees(cam.pitch),zoom:_zoomFromHeight(carto.height,carto.latitude),bounds:r?{north:Cesium.Math.toDegrees(r.north),south:Cesium.Math.toDegrees(r.south),east:Cesium.Math.toDegrees(r.east),west:Cesium.Math.toDegrees(r.west)}:null})}
+            // The point under the SCREEN CENTER (where the aim crosshair sits)
+            // — distinct from the camera's sub-point when tilted. Used as the
+            // point-drop coordinate and the scale-bar / region center.
+            const cv=v.scene.canvas;const ctr=_cartoFor(v,new Cesium.Cartesian2(cv.clientWidth/2,cv.clientHeight/2));
+            _postMapEvent({event:'camerachanged',lat:Cesium.Math.toDegrees(carto.latitude),lon:Cesium.Math.toDegrees(carto.longitude),height:carto.height,heading:Cesium.Math.toDegrees(cam.heading),pitch:Cesium.Math.toDegrees(cam.pitch),zoom:_zoomFromHeight(carto.height,carto.latitude),centerLat:ctr?ctr.lat:null,centerLon:ctr?ctr.lon:null,bounds:r?{north:Cesium.Math.toDegrees(r.north),south:Cesium.Math.toDegrees(r.south),east:Cesium.Math.toDegrees(r.east),west:Cesium.Math.toDegrees(r.west)}:null})}
           function _installInputHandlers(viewer){
             viewer.camera.moveEnd.addEventListener(function(){_postCameraChanged(viewer)});
+            // Fire during continuous gestures (pinch-zoom / drag) too, so the
+            // scale bar and coordinate readout track live, not just on settle.
+            viewer.camera.percentageChanged=0.05;
+            viewer.camera.changed.addEventListener(function(){_postCameraChanged(viewer)});
             const h=new Cesium.ScreenSpaceEventHandler(viewer.scene.canvas);
             h.setInputAction(function(click){const p=_cartoFor(viewer,click.position);if(!p)return;_postMapEvent({event:'tap',lat:p.lat,lon:p.lon,hae:p.hae,screenX:click.position.x,screenY:click.position.y,uid:_pickedUid(viewer,click.position)})},Cesium.ScreenSpaceEventType.LEFT_CLICK);
             let pressTimer=null,pressStart=null;
