@@ -4090,6 +4090,7 @@ struct CesiumMainMap: UIViewRepresentable {
             // ground center, so the user can still rotate/tilt while tracked.
             // Dedup on coordinate so unrelated re-renders don't re-issue it.
             if isFollowing, let loc = selfLocation {
+                context.coordinator.wasFollowing = true
                 let key = "\(loc.coordinate.latitude),\(loc.coordinate.longitude)"
                 if key != context.coordinator.lastFollowKey {
                     context.coordinator.lastFollowKey = key
@@ -4100,6 +4101,12 @@ struct CesiumMainMap: UIViewRepresentable {
                     )
                 }
             } else {
+                // Follow just turned off — release the lookAt frame so the
+                // operator can pan/zoom freely again.
+                if context.coordinator.wasFollowing {
+                    context.coordinator.wasFollowing = false
+                    webView.evaluateJavaScript("window.OmniBridge.unfollow();", completionHandler: nil)
+                }
                 context.coordinator.lastFollowKey = nil
             }
         }
@@ -4117,6 +4124,8 @@ struct CesiumMainMap: UIViewRepresentable {
         var lastTrailsSnapshot: String = "[]"
         /// Last coordinate we recentered on in follow mode (dedupe key).
         var lastFollowKey: String?
+        /// Whether follow was active last render (to release lookAt on exit).
+        var wasFollowing = false
 
         init(_ parent: CesiumMainMap) {
             self.parent = parent
@@ -4696,14 +4705,22 @@ struct CesiumMainMap: UIViewRepresentable {
               v.camera.flyTo({destination:Cesium.Cartesian3.fromDegrees(e.lon,e.lat,(typeof e.range==='number')?e.range:5000),
                 orientation:{heading:Cesium.Math.toRadians(e.heading||0),pitch:Cesium.Math.toRadians(typeof e.pitch==='number'?e.pitch:-30),roll:0},duration:1.2});
             },
-            // GPS follow — instant recenter on (lat,lon) keeping the live
-            // camera's height/heading/pitch so the operator stays framed as
-            // they move without animation jitter or losing their tilt/zoom.
+            // GPS follow — frame the operator at SCREEN CENTER even when the
+            // globe is tilted. Placing the camera straight over the user with
+            // pitch pushed the marker to the bottom edge / off-screen; lookAt
+            // orbits the camera around the user's ground position at the
+            // current heading/pitch and the current camera-to-target distance
+            // (so zoom/tilt are preserved and the marker stays centered).
             follow(arg){const e=_parse(arg);if(!e||typeof e.lat!=='number'||typeof e.lon!=='number')return;const v=_state.viewer;if(!v)return;
-              const height=v.camera.positionCartographic.height;
+              const target=Cesium.Cartesian3.fromDegrees(e.lon,e.lat,0);
+              let range=Cesium.Cartesian3.distance(v.camera.positionWC,target);
+              if(!isFinite(range)||range<=0)range=v.camera.positionCartographic.height||5000;
               const heading=v.camera.heading,pitch=v.camera.pitch;
-              v.camera.setView({destination:Cesium.Cartesian3.fromDegrees(e.lon,e.lat,height),orientation:{heading:heading,pitch:pitch,roll:0}});
+              v.camera.lookAt(target,new Cesium.HeadingPitchRange(heading,pitch,range));
             },
+            // Release the lookAt reference frame so free pan/zoom works again
+            // after the operator turns follow off.
+            unfollow(){const v=_state.viewer;if(!v)return;v.camera.lookAtTransform(Cesium.Matrix4.IDENTITY);},
             ping(){return _state.ready?'pong':'loading'},
             upsertDrawing(arg){const d=_parse(arg);if(!d||!d.uid||!d.kind||!Array.isArray(d.coords)||d.coords.length===0)return;const v=_state.viewer;if(!v)return;
               const color=_drawColor(d.color,0.85),fillC=_drawColor(d.color,0.25),width=typeof d.width==='number'?d.width:3;
