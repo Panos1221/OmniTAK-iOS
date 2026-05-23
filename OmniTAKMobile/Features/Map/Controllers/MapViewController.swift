@@ -1715,11 +1715,22 @@ struct ATAKMapView: View {
     }
 
     private func zoomIn() {
+        // On the Cesium globe the camera is driven over the JS bridge, not by
+        // mapRegion — push a zoom command instead. mapRegion is then refreshed
+        // from the camera via handleCesiumMapEvent.
+        if mapEngine == .cesium3D {
+            NotificationCenter.default.post(name: .cesiumZoom, object: nil, userInfo: ["factor": 0.5])
+            return
+        }
         mapRegion.span.latitudeDelta = max(mapRegion.span.latitudeDelta / 2, 0.001)
         mapRegion.span.longitudeDelta = max(mapRegion.span.longitudeDelta / 2, 0.001)
     }
 
     private func zoomOut() {
+        if mapEngine == .cesium3D {
+            NotificationCenter.default.post(name: .cesiumZoom, object: nil, userInfo: ["factor": 2.0])
+            return
+        }
         mapRegion.span.latitudeDelta = min(mapRegion.span.latitudeDelta * 2, 180)
         mapRegion.span.longitudeDelta = min(mapRegion.span.longitudeDelta * 2, 180)
     }
@@ -4047,6 +4058,12 @@ struct CesiumMapEvent {
     }
 }
 
+extension Notification.Name {
+    /// Posted by the toolbar zoom buttons so the Cesium coordinator can zoom
+    /// the globe's camera (mapRegion can't drive it). userInfo["factor"]: Double.
+    static let cesiumZoom = Notification.Name("cesiumZoom")
+}
+
 struct CesiumMainMap: UIViewRepresentable {
     let contacts: [CoTMarker]
     let aircraft: [Aircraft]
@@ -4095,6 +4112,18 @@ struct CesiumMainMap: UIViewRepresentable {
         webView.scrollView.contentInsetAdjustmentBehavior = .never
 
         context.coordinator.webView = webView
+
+        // Bridge the toolbar zoom buttons to the Cesium camera. mapRegion
+        // can't drive the globe, so the parent posts `.cesiumZoom` and the
+        // coordinator forwards it to the JS bridge.
+        context.coordinator.zoomObserver = NotificationCenter.default.addObserver(
+            forName: .cesiumZoom, object: nil, queue: .main
+        ) { [weak coordinator = context.coordinator] note in
+            guard let coordinator, coordinator.isReady, let wv = coordinator.webView else { return }
+            let factor = (note.userInfo?["factor"] as? Double) ?? 1.0
+            wv.evaluateJavaScript("window.OmniBridge.zoomBy({factor:\(factor)});", completionHandler: nil)
+        }
+
         webView.loadHTMLString(CesiumMainMap.html, baseURL: URL(string: "https://cesium.com/"))
         return webView
     }
@@ -4156,6 +4185,12 @@ struct CesiumMainMap: UIViewRepresentable {
         var lastFollowKey: String?
         /// Whether follow was active last render (to release lookAt on exit).
         var wasFollowing = false
+        /// Observer token for toolbar zoom commands forwarded to the bridge.
+        var zoomObserver: NSObjectProtocol?
+
+        deinit {
+            if let zoomObserver { NotificationCenter.default.removeObserver(zoomObserver) }
+        }
 
         init(_ parent: CesiumMainMap) {
             self.parent = parent
@@ -4751,6 +4786,15 @@ struct CesiumMainMap: UIViewRepresentable {
             // Release the lookAt reference frame so free pan/zoom works again
             // after the operator turns follow off.
             unfollow(){const v=_state.viewer;if(!v)return;v.camera.lookAtTransform(Cesium.Matrix4.IDENTITY);},
+            // Toolbar zoom — move the camera along its view axis by the change
+            // in height (factor<1 zooms in, >1 zooms out). Works whether or
+            // not a lookAt follow transform is active.
+            zoomBy(arg){const e=_parse(arg);if(!e)return;const v=_state.viewer;if(!v)return;
+              const f=(typeof e.factor==='number'&&e.factor>0)?e.factor:1;
+              const h=v.camera.positionCartographic.height;const amount=Math.abs(h-h*f);
+              if(amount<1)return;
+              if(f<1)v.camera.zoomIn(amount);else v.camera.zoomOut(amount);
+            },
             ping(){return _state.ready?'pong':'loading'},
             upsertDrawing(arg){const d=_parse(arg);if(!d||!d.uid||!d.kind||!Array.isArray(d.coords)||d.coords.length===0)return;const v=_state.viewer;if(!v)return;
               const color=_drawColor(d.color,0.85),fillC=_drawColor(d.color,0.25),width=typeof d.width==='number'?d.width:3;
