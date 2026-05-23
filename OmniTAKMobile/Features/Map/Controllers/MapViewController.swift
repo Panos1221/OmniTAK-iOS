@@ -1069,6 +1069,9 @@ struct ATAKMapView: View {
                 // a pin shows on whichever engine is active.
                 pointMarkers: pointDropperService.markers,
                 selfLocation: locationManager.location,
+                // Follow mode parity with the 2D map — when on, Cesium keeps
+                // the camera centered on the operator as their GPS updates.
+                isFollowing: trackingMode == .follow,
                 selfCallsign: userCallsign,
                 // Phase 3b — saved distance / area measurements mirrored
                 // through the Cesium bridge as dashed polylines + segment
@@ -4035,6 +4038,9 @@ struct CesiumMainMap: UIViewRepresentable {
     // Store "drop does nothing" regression.
     let pointMarkers: [PointMarker]
     let selfLocation: CLLocation?
+    /// When true (GPS follow mode), keep the Cesium camera centered on the
+    /// operator as `selfLocation` updates, preserving current zoom/tilt/heading.
+    var isFollowing: Bool = false
     let selfCallsign: String
     // Phase 3b — measurement sessions to mirror as dashed polylines with
     // per-segment distance labels. Sourced from `MeasurementManager`.
@@ -4086,6 +4092,23 @@ struct CesiumMainMap: UIViewRepresentable {
             webView.evaluateJavaScript("window.OmniBridge.setDrawings(\(drawings));", completionHandler: nil)
             webView.evaluateJavaScript("window.OmniBridge.setMeasurements(\(measurementsJSON));", completionHandler: nil)
             webView.evaluateJavaScript("window.OmniBridge.setTrails(\(trailsJSON));", completionHandler: nil)
+
+            // GPS follow mode — recenter the camera on the operator. `follow`
+            // keeps the live camera's zoom/tilt/heading and only moves the
+            // ground center, so the user can still rotate/tilt while tracked.
+            // Dedup on coordinate so unrelated re-renders don't re-issue it.
+            if isFollowing, let loc = selfLocation {
+                let key = "\(loc.coordinate.latitude),\(loc.coordinate.longitude)"
+                if key != context.coordinator.lastFollowKey {
+                    context.coordinator.lastFollowKey = key
+                    webView.evaluateJavaScript(
+                        "window.OmniBridge.follow({lat:\(loc.coordinate.latitude),lon:\(loc.coordinate.longitude)});",
+                        completionHandler: nil
+                    )
+                }
+            } else {
+                context.coordinator.lastFollowKey = nil
+            }
         }
     }
 
@@ -4099,6 +4122,8 @@ struct CesiumMainMap: UIViewRepresentable {
         var lastDrawingsSnapshot: String = "[]"
         var lastMeasurementsSnapshot: String = "[]"
         var lastTrailsSnapshot: String = "[]"
+        /// Last coordinate we recentered on in follow mode (dedupe key).
+        var lastFollowKey: String?
 
         init(_ parent: CesiumMainMap) {
             self.parent = parent
@@ -4677,6 +4702,14 @@ struct CesiumMainMap: UIViewRepresentable {
             flyTo(arg){const e=_parse(arg);if(!e)return;const v=_state.viewer;if(!v)return;
               v.camera.flyTo({destination:Cesium.Cartesian3.fromDegrees(e.lon,e.lat,(typeof e.range==='number')?e.range:5000),
                 orientation:{heading:Cesium.Math.toRadians(e.heading||0),pitch:Cesium.Math.toRadians(typeof e.pitch==='number'?e.pitch:-30),roll:0},duration:1.2});
+            },
+            // GPS follow — instant recenter on (lat,lon) keeping the live
+            // camera's height/heading/pitch so the operator stays framed as
+            // they move without animation jitter or losing their tilt/zoom.
+            follow(arg){const e=_parse(arg);if(!e||typeof e.lat!=='number'||typeof e.lon!=='number')return;const v=_state.viewer;if(!v)return;
+              const height=v.camera.positionCartographic.height;
+              const heading=v.camera.heading,pitch=v.camera.pitch;
+              v.camera.setView({destination:Cesium.Cartesian3.fromDegrees(e.lon,e.lat,height),orientation:{heading:heading,pitch:pitch,roll:0}});
             },
             ping(){return _state.ready?'pong':'loading'},
             upsertDrawing(arg){const d=_parse(arg);if(!d||!d.uid||!d.kind||!Array.isArray(d.coords)||d.coords.length===0)return;const v=_state.viewer;if(!v)return;
