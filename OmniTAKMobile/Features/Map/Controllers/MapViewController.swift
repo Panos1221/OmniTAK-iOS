@@ -2538,6 +2538,11 @@ struct TacticalMapView: UIViewRepresentable {
         mapView.gestures.options.doubleTapToZoomInEnabled = true
         mapView.gestures.options.doubleTouchToZoomOutEnabled = true
 
+        // Hide Mapbox's built-in top-leading scale-bar ornament. OmniTAK draws
+        // its own toggleable scale bar (ScaleBarView, bottom-left), so the
+        // native one produced a double scale bar on the 2D map.
+        mapView.ornaments.options.scaleBar.visibility = .hidden
+
         // Tap → contact hit-test / map-tap fan-out
         let tap = UITapGestureRecognizer(
             target: context.coordinator,
