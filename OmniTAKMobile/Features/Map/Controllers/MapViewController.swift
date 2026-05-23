@@ -1621,7 +1621,6 @@ struct ATAKMapView: View {
             // same point-in-polygon selection the 2D Mapbox lasso uses, then
             // exit lasso mode (which flips setLassoMode off on the bridge).
             defer { drawingManager.cancelDrawing() }
-            print("🟠 Cesium lasso event — polygon vertices: \(event.polygon?.count ?? 0)")
             guard let poly = event.polygon, poly.count >= 3 else { return }
             lassoService.beginLasso()
             for c in poly { lassoService.appendVertex(c) }
@@ -4209,7 +4208,6 @@ struct CesiumMainMap: UIViewRepresentable {
                 let key = "\(loc.coordinate.latitude),\(loc.coordinate.longitude)"
                 if key != context.coordinator.lastFollowKey {
                     context.coordinator.lastFollowKey = key
-                    print("🛰️ Cesium follow → \(loc.coordinate.latitude), \(loc.coordinate.longitude)")
                     webView.evaluateJavaScript(
                         "window.OmniBridge.follow({lat:\(loc.coordinate.latitude),lon:\(loc.coordinate.longitude)});",
                         completionHandler: nil
