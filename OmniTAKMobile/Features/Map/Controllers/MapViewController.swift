@@ -1136,6 +1136,10 @@ struct ATAKMapView: View {
                     .allowsHitTesting(false)
                     .zIndex(900)
             }
+            // Lasso selection pill — shows the selected count + actions
+            // (Export / Delete / Clear) after a lasso. Without it on the
+            // Cesium body, a 3D lasso selected items but gave no feedback.
+            lassoSelectionPill
             // Engine toggle lives in the Tools sheet (id: "engine") rather
             // than a standalone FAB — operators expect mode toggles in the
             // Tools tray, and we keep the map chrome uncluttered.
