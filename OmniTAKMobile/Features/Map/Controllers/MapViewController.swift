@@ -1117,6 +1117,12 @@ struct ATAKMapView: View {
             // it the operator had no way to enable follow on the globe, so
             // the camera never tracked them here.
             gpsFollowButton
+            // 2D→3D parity chrome: top status bar + bottom toolbar, and the
+            // compass + scale-bar overlay group. All engine-agnostic except
+            // the scale bar, which reads mapRegion — kept accurate on Cesium
+            // by syncing mapRegion from the camera in handleCesiumMapEvent.
+            topToolbars
+            mapOverlayComponents
             // Engine toggle lives in the Tools sheet (id: "engine") rather
             // than a standalone FAB — operators expect mode toggles in the
             // Tools tray, and we keep the map chrome uncluttered.
@@ -1524,6 +1530,18 @@ struct ATAKMapView: View {
             cesiumLastHeight = cam.height
             cesiumLastHeading = cam.heading
             cesiumLastPitch = cam.pitch
+            // Mirror the Cesium camera into mapRegion so 2D-derived chrome
+            // (scale bar, MGRS grid) reads the right scale on the globe and
+            // an engine toggle lands at the same view. Approximate the ground
+            // span from camera height at nadir (~1.15·height vertical extent).
+            let lat = event.coordinate.latitude
+            let metersVisible = max(50.0, 1.15 * cam.height)
+            let latDelta = min(metersVisible / 111_320.0, 90.0)
+            let lonDelta = min(latDelta / max(cos(lat * .pi / 180), 0.01), 180.0)
+            mapRegion = MKCoordinateRegion(
+                center: event.coordinate,
+                span: MKCoordinateSpan(latitudeDelta: latDelta, longitudeDelta: lonDelta)
+            )
         case .longpress:
             // A long-press landing on a dropped pin opens the same
             // point-marker menu (Edit/Delete/Share/Navigate) the 2D
