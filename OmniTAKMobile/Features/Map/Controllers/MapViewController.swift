@@ -1113,6 +1113,10 @@ struct ATAKMapView: View {
             // uses (interactiveOverlays group); reusing it keeps the
             // look + executeAction wiring identical across engines.
             radialMenu
+            // GPS follow toggle — the same control the 2D map has. Without
+            // it the operator had no way to enable follow on the globe, so
+            // the camera never tracked them here.
+            gpsFollowButton
             // Engine toggle lives in the Tools sheet (id: "engine") rather
             // than a standalone FAB — operators expect mode toggles in the
             // Tools tray, and we keep the map chrome uncluttered.
