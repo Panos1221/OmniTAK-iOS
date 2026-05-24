@@ -1459,6 +1459,20 @@ class TAKService: ObservableObject {
         disconnect()
     }
 
+    /// Bump the published `messagesSent` counter on the main thread.
+    /// `sendCoT` is called from background queues (e.g. the auto-PPLI timer on
+    /// `com.omnitak.ppli`); mutating an `@Published` off the main thread emits
+    /// "Publishing changes from background threads is not allowed" and can crash
+    /// when SwiftUI commits the resulting Core Animation transaction off-main
+    /// (EXC_BREAKPOINT in the animation tick queue).
+    private func bumpMessagesSent() {
+        if Thread.isMainThread {
+            messagesSent += 1
+        } else {
+            DispatchQueue.main.async { [weak self] in self?.messagesSent += 1 }
+        }
+    }
+
     func sendCoT(xml: String) -> Bool {
         // Send to all connected servers
         // IMPORTANT: Check actual sender.isConnected (NWConnection state) not cached state
@@ -1507,7 +1521,7 @@ class TAKService: ObservableObject {
             }
 
             if directTCP.send(xml: xml) {
-                messagesSent += 1
+                bumpMessagesSent()
                 Logger.takCoT.debug("Sent CoT via legacy connection")
                 return true
             } else {
@@ -1524,7 +1538,7 @@ class TAKService: ObservableObject {
         }
 
         if sentCount > 0 {
-            messagesSent += 1
+            bumpMessagesSent()
             Logger.takCoT.debug("Sent CoT to \(sentCount, privacy: .public) server(s)")
             return true
         } else {
