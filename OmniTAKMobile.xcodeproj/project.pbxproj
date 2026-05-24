@@ -592,7 +592,7 @@
 		8F3B7BEB56FAFB09686EF170 /* RadialMenuView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = RadialMenuView.swift; path = OmniTAKMobile/Shared/UI/RadialMenu/RadialMenuView.swift; sourceTree = "<group>"; };
 		9001E88B5E1060AC73E893AF /* SFAPACR----.svg */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text; path = "SFAPACR----.svg"; sourceTree = "<group>"; };
 		90C26A4593204D06AECCDD22 /* MapLibreService.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = MapLibreService.swift; path = OmniTAKMobile/Features/Map/MapLibre/MapLibreService.swift; sourceTree = "<group>"; };
-		910FF6E5A809EA603DD125C4 /* Config.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; path = Config.xcconfig; sourceTree = "<group>"; };
+		910FF6E5A809EA603DD125C4 /* Config.base.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; path = Config.base.xcconfig; sourceTree = "<group>"; };
 		9144EDB48A9F4873A6F5392A /* VideoMapOverlay.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = VideoMapOverlay.swift; path = OmniTAKMobile/Features/Map/Overlays/VideoMapOverlay.swift; sourceTree = "<group>"; };
 		91F222FBFB39ACA4435A4F1A /* SHAP-------.svg */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text; path = "SHAP-------.svg"; sourceTree = "<group>"; };
 		922F25506591914930EEC898 /* TeamService.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = TeamService.swift; path = OmniTAKMobile/Features/Teams/Services/TeamService.swift; sourceTree = "<group>"; };
@@ -1783,7 +1783,7 @@
 				A156DBDD2ED6E19C0021BAAF /* Recovered References */,
 				7305E93FF9B8612CC3C4B8EC /* OmniTAKMobile */,
 				BFF18F129EFC1CBA15C256D1 /* OmniTAKMobileUITests */,
-				910FF6E5A809EA603DD125C4 /* Config.xcconfig */,
+				910FF6E5A809EA603DD125C4 /* Config.base.xcconfig */,
 			);
 			sourceTree = "<group>";
 		};
@@ -2810,7 +2810,7 @@
 		};
 		A11111111111111111111111000000F1 /* Debug */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = 910FF6E5A809EA603DD125C4 /* Config.xcconfig */;
+			baseConfigurationReference = 910FF6E5A809EA603DD125C4 /* Config.base.xcconfig */;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
 				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
@@ -2876,7 +2876,7 @@
 		};
 		A1111111111111111111111100000101 /* Release */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = 910FF6E5A809EA603DD125C4 /* Config.xcconfig */;
+			baseConfigurationReference = 910FF6E5A809EA603DD125C4 /* Config.base.xcconfig */;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
 				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
@@ -2935,7 +2935,7 @@
 		};
 		A1111111111111111111111100000111 /* Debug */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = 910FF6E5A809EA603DD125C4 /* Config.xcconfig */;
+			baseConfigurationReference = 910FF6E5A809EA603DD125C4 /* Config.base.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
@@ -2984,7 +2984,7 @@
 		};
 		A1111111111111111111111100000121 /* Release */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = 910FF6E5A809EA603DD125C4 /* Config.xcconfig */;
+			baseConfigurationReference = 910FF6E5A809EA603DD125C4 /* Config.base.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;

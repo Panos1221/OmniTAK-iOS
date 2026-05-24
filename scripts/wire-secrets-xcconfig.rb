@@ -1,8 +1,11 @@
 #!/usr/bin/env ruby
 #
-# Wire Config.xcconfig (gitignored) as the baseConfigurationReference for
+# Wire Config.base.xcconfig (committed) as the baseConfigurationReference for
 # the app target's Debug + Release build configs, so Xcode substitutes
 # $(MBX_ACCESS_TOKEN) and $(DEFAULT_P12_PASSWORD) into Info.plist at build.
+#
+# Config.base.xcconfig ships empty defaults so fresh checkouts build, and
+# optionally `#include?`s Config.xcconfig (gitignored) for real secret values.
 #
 # Idempotent: re-run safely.
 #
@@ -13,7 +16,7 @@ require 'pathname'
 
 ROOT = Pathname.new(__dir__).parent.realpath
 PROJ_PATH = ROOT.join('OmniTAKMobile.xcodeproj')
-XCCONFIG_NAME = 'Config.xcconfig'
+XCCONFIG_NAME = 'Config.base.xcconfig'
 
 project = Xcodeproj::Project.open(PROJ_PATH)
 

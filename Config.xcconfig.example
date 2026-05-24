@@ -1,7 +1,11 @@
 // Copy this file to `Config.xcconfig` (gitignored) and fill in real values.
-// Xcode auto-loads Config.xcconfig as the baseConfigurationReference for
-// Debug + Release; the values are substituted into Info.plist at build time
-// via `$(SETTING_NAME)` references.
+// The committed Config.base.xcconfig is the baseConfigurationReference for
+// Debug + Release and optionally `#include?`s Config.xcconfig, so your values
+// here override the empty defaults and get substituted into Info.plist at
+// build time via `$(SETTING_NAME)` references.
+//
+// You do NOT need this file just to build — a fresh checkout compiles with the
+// empty defaults (the Mapbox basemap simply won't render tiles without a token).
 //
 // New devs / CI: see CONTRIBUTING.md "Mapbox token" section.
 

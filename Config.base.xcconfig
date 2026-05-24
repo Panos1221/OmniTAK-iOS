@@ -1,0 +1,21 @@
+// OmniTAK build configuration — COMMITTED, contains no secrets.
+//
+// This is the baseConfigurationReference for the app target's Debug + Release
+// configs. It defines empty defaults so a FRESH CHECKOUT BUILDS with zero extra
+// setup, then optionally pulls in real secret values from Config.xcconfig
+// (gitignored) via the include at the bottom.
+//
+// To supply real values locally (e.g. the Mapbox basemap token):
+//   cp Config.xcconfig.example Config.xcconfig    # then fill it in
+// CI: write Config.xcconfig before building, or pass values as build settings.
+
+// Empty defaults — let a clean clone / CI compile without any secrets.
+// (The Mapbox basemap needs a token to render tiles, but the app builds and
+//  runs without one; everything else works.)
+MBX_ACCESS_TOKEN =
+DEFAULT_P12_PASSWORD =
+
+// Real values live here (gitignored). Optional include: the "?" means no build
+// error if the file is absent, which is exactly what makes fresh checkouts work.
+// Settings below override the empty defaults above.
+#include? "Config.xcconfig"
