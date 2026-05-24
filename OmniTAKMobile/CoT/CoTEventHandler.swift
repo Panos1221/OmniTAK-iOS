@@ -98,7 +98,7 @@ class CoTEventHandler: ObservableObject {
     // MARK: - Event Routing
 
     /// Handle a parsed CoT event and route to appropriate handlers
-    func handle(event: CoTEventType) {
+    func handle(event: CoTEventType, serverId: UUID? = nil) {
         DispatchQueue.main.async { [weak self] in
             guard let self = self else { return }
 
@@ -107,10 +107,10 @@ class CoTEventHandler: ObservableObject {
 
             switch event {
             case .positionUpdate(let cotEvent):
-                self.handlePositionUpdate(cotEvent)
+                self.handlePositionUpdate(cotEvent, serverId: serverId)
 
             case .chatMessage(let message):
-                self.handleChatMessage(message)
+                self.handleChatMessage(message, serverId: serverId)
 
             case .emergencyAlert(let alert):
                 self.handleEmergencyAlert(alert)
@@ -126,7 +126,7 @@ class CoTEventHandler: ObservableObject {
 
     // MARK: - Position Update Handler
 
-    private func handlePositionUpdate(_ event: CoTEvent) {
+    private func handlePositionUpdate(_ event: CoTEvent, serverId: UUID? = nil) {
         print("CoTEventHandler: Position update from \(event.detail.callsign) at (\(event.point.lat), \(event.point.lon))")
 
         latestPositionUpdate = event
@@ -166,8 +166,10 @@ class CoTEventHandler: ObservableObject {
             #endif
         }
 
-        // Update participant info for chat
-        if let participant = ChatXMLParser.parseParticipantFromPresence(xml: createPresenceXML(from: event)) {
+        // Update participant info for chat, tagged with the source server so
+        // the contact list + DM routing are server-aware (multi-server).
+        if var participant = ChatXMLParser.parseParticipantFromPresence(xml: createPresenceXML(from: event)) {
+            participant.serverId = serverId
             chatManager?.updateParticipant(participant)
             chatManager?.updateParticipantLastSeen(id: participant.id)
         } else {
@@ -176,7 +178,8 @@ class CoTEventHandler: ObservableObject {
                 id: event.uid,
                 callsign: event.detail.callsign,
                 lastSeen: event.time,
-                isOnline: true
+                isOnline: true,
+                serverId: serverId
             )
             chatManager?.updateParticipant(participant)
         }
@@ -197,13 +200,13 @@ class CoTEventHandler: ObservableObject {
 
     // MARK: - Chat Message Handler
 
-    private func handleChatMessage(_ message: ChatMessage) {
+    private func handleChatMessage(_ message: ChatMessage, serverId: UUID? = nil) {
         print("CoTEventHandler: Chat message from \(message.senderCallsign): \(message.messageText)")
 
         latestChatMessage = message
 
-        // Forward to ChatManager
-        chatManager?.receiveMessage(message)
+        // Forward to ChatManager with the source server for multi-server attribution
+        chatManager?.receiveMessage(message, serverId: serverId)
 
         // Update sender's last seen
         chatManager?.updateParticipantLastSeen(id: message.senderId)

@@ -106,6 +106,9 @@ struct ConversationRow: View {
                         .font(.system(size: 16, weight: .semibold))
                         .lineLimit(1)
 
+                    // Which server this (per-server) DM thread belongs to.
+                    ChatServerBadge(serverId: conversation.serverId)
+
                     Spacer()
 
                     if let lastMessage = conversation.lastMessage {
@@ -223,8 +226,11 @@ struct NewChatView: View {
                                     }
 
                                     VStack(alignment: .leading, spacing: 2) {
-                                        Text(participant.callsign)
-                                            .foregroundColor(.primary)
+                                        HStack(spacing: 6) {
+                                            Text(participant.callsign)
+                                                .foregroundColor(.primary)
+                                            ChatServerBadge(serverId: participant.serverId)
+                                        }
                                         if participant.isOnline {
                                             Text("Online")
                                                 .font(.caption)
