@@ -123,39 +123,44 @@ class DirectTCPSender {
             }
 
             if !caCertificates.isEmpty {
-                // Use proper CA verification with the provided CA certificate
+                // Pin the server to the provided/enrolled CA. The server's
+                // certificate must chain to one of our CA anchors OR a system
+                // root (so publicly-trusted / Let's Encrypt servers validate
+                // too — one easy-connect QR works for both). We use a Basic
+                // X.509 policy instead of the default SSL policy so TAK servers
+                // whose cert CN/SAN doesn't match the public hostname still
+                // connect (hostname mismatch is common on TAK server certs),
+                // while a forged certificate that does NOT chain to a trusted
+                // CA is rejected — no more blanket accept-all.
                 #if DEBUG
-                print("🔒 Using CA certificate for server verification")
+                print("🔒 Pinning server certificate to CA (chain-validated, hostname-lenient)")
                 #endif
 
                 sec_protocol_options_set_verify_block(secOptions, { (metadata, trust, complete) in
-                    #if DEBUG
-                    print("🔐 TLS verify block called - verifying with CA certificate")
-                    #endif
-
-                    // Get the trust object from the metadata
                     let secTrust = sec_trust_copy_ref(trust).takeRetainedValue()
 
-                    // Set our CA certificates as trusted anchors
-                    SecTrustSetAnchorCertificates(secTrust, caCertificates as CFArray)
-                    SecTrustSetAnchorCertificatesOnly(secTrust, true)
+                    // Validate the chain + validity period, not the hostname.
+                    SecTrustSetPolicies(secTrust, SecPolicyCreateBasicX509())
 
-                    // Evaluate the trust
+                    // Our CA anchors in ADDITION to the system roots
+                    // (Only=false keeps Let's Encrypt / publicly-trusted certs working).
+                    SecTrustSetAnchorCertificates(secTrust, caCertificates as CFArray)
+                    SecTrustSetAnchorCertificatesOnly(secTrust, false)
+
                     var error: CFError?
                     let trusted = SecTrustEvaluateWithError(secTrust, &error)
 
                     #if DEBUG
                     if trusted {
-                        print("✅ Server certificate verified successfully with CA")
+                        print("✅ Server certificate chain verified against trusted CA")
                     } else {
-                        print("⚠️ Server certificate verification failed: \(error?.localizedDescription ?? "unknown error")")
-                        print("   Accepting anyway for TAK compatibility")
+                        print("❌ Server certificate REJECTED — does not chain to a trusted CA: \(error?.localizedDescription ?? "unknown")")
                     }
                     #endif
 
-                    // Accept even if verification fails for TAK server compatibility
-                    // (some servers have expired certs or hostname mismatches)
-                    complete(true)
+                    // Enforce the result. A server that can't prove it chains to
+                    // a CA we trust is rejected (prevents MITM on the stream).
+                    complete(trusted)
                 }, .global())
             } else {
                 // No CA certificate - disable peer authentication and accept all certs

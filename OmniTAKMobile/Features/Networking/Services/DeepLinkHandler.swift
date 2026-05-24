@@ -288,7 +288,11 @@ class DeepLinkHandler: ObservableObject {
                     protocolType: server.protocolType,
                     useTLS: server.useTLS,
                     certificateName: server.certificateName,
-                    certificatePassword: server.certificatePassword
+                    certificatePassword: server.certificatePassword,
+                    // Pin the stream to the CA chain enrolled above so the
+                    // server certificate is validated, not blindly accepted.
+                    caCertificateName: server.caCertificateName,
+                    caCertificatePassword: server.caCertificatePassword
                 )
                 isProcessing = false
                 enrolledServerName = server.name
