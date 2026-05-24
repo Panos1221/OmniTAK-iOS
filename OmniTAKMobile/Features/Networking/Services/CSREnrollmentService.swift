@@ -249,7 +249,16 @@ class CSREnrollmentService {
             useTLS: config.useSSL,
             isDefault: false,
             certificateName: certificateAlias,
-            certificatePassword: "omnitak"  // Password for CSR-enrolled certificates
+            certificatePassword: "omnitak",  // Password for CSR-enrolled certificates
+            // Pin the stream to the CA chain we just enrolled against. The CA
+            // certs were stored under "\(certificateAlias)-ca-N". We use the
+            // "-ca" suffix (NOT certificateAlias itself) because the client
+            // cert is stored under the bare certificateAlias label —
+            // loadCACertificates' exact-match would otherwise return the client
+            // cert as the anchor and reject every server. The "-ca" name has no
+            // exact match, so the loader's prefix fallback collects the real
+            // "-ca-0/-ca-1" CA certs and the handshake validates the server.
+            caCertificateName: "\(certificateAlias)-ca"
         )
 
         // Add server to manager (must be on main thread for @Published properties)
