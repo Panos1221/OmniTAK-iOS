@@ -25,19 +25,35 @@ struct ConversationView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            // Messages list
+            // Messages list — or empty state when the thread is new
             ScrollViewReader { proxy in
                 ScrollView {
-                    LazyVStack(spacing: 12) {
-                        ForEach(messages) { message in
-                            MessageBubble(
-                                message: message,
-                                isFromSelf: message.isFromSelf
-                            )
-                            .id(message.id)
+                    if messages.isEmpty {
+                        // Empty-state hint so the user knows where to type.
+                        // The compose box is always rendered below; this just
+                        // fills the white void so the screen doesn't look broken.
+                        VStack(spacing: 12) {
+                            Image(systemName: "bubble.left.and.bubble.right")
+                                .font(.system(size: 48))
+                                .foregroundColor(Color(.systemGray3))
+                            Text("Send the first message")
+                                .font(.subheadline)
+                                .foregroundColor(Color(.systemGray2))
                         }
+                        .frame(maxWidth: .infinity)
+                        .padding(.top, 80)
+                    } else {
+                        LazyVStack(spacing: 12) {
+                            ForEach(messages) { message in
+                                MessageBubble(
+                                    message: message,
+                                    isFromSelf: message.isFromSelf
+                                )
+                                .id(message.id)
+                            }
+                        }
+                        .padding()
                     }
-                    .padding()
                 }
                 .onAppear {
                     scrollProxy = proxy
