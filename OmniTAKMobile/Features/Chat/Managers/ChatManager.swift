@@ -16,14 +16,31 @@ class ChatManager: ObservableObject {
     @Published var conversations: [Conversation] = []
     @Published var messages: [ChatMessage] = []
     @Published var participants: [ChatParticipant] = []
-    @Published var currentUserId: String = "SELF-\(UIDevice.current.identifierForVendor?.uuidString ?? UUID().uuidString)"
-    @Published var currentUserCallsign: String = "OmniTAK-iOS"
+    // Mirrors PositionBroadcastService.userUID so that incoming PPLI echoed
+    // back from the server is correctly recognised as "self" and excluded from
+    // the participants list.  Populated in init() and kept in sync via a
+    // Combine subscriber so late-init / UID-migration are handled automatically.
+    @Published var currentUserId: String = PositionBroadcastService.shared.userUID
+    @Published var currentUserCallsign: String = PositionBroadcastService.shared.userCallsign
 
     private let persistence = ChatPersistence.shared
     private var takService: TAKService?
     private var locationManager: LocationManager?
+    private var cancellables = Set<AnyCancellable>()
 
     private init() {
+        // Keep currentUserId / currentUserCallsign in sync with
+        // PositionBroadcastService so that self-PPLI is always filtered out.
+        PositionBroadcastService.shared.$userUID
+            .receive(on: DispatchQueue.main)
+            .assign(to: \.currentUserId, on: self)
+            .store(in: &cancellables)
+
+        PositionBroadcastService.shared.$userCallsign
+            .receive(on: DispatchQueue.main)
+            .assign(to: \.currentUserCallsign, on: self)
+            .store(in: &cancellables)
+
         // Perform file I/O on a background queue so the first access to
         // ChatManager.shared (e.g. from ContactListView) doesn't block the
         // main thread for 6–26 seconds while JSON is decoded from disk.
