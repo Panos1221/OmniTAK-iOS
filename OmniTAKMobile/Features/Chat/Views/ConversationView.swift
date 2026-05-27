@@ -126,6 +126,10 @@ struct ConversationView: View {
             }
             .padding(.horizontal)
             .padding(.vertical, 8)
+            // Floating CustomToolbar (RootTabView .overlay) covers ~80pt at
+            // the bottom of every screen. Push the compose row above it so
+            // the TextField + send button aren't hidden behind the tab bar.
+            .padding(.bottom, 80)
             .background(Color(.systemBackground))
         }
         .navigationTitle(conversation.displayTitle)
