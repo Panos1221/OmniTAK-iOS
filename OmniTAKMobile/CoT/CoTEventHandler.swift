@@ -166,6 +166,26 @@ class CoTEventHandler: ObservableObject {
             #endif
         }
 
+        // Feed ChatManager.participants from incoming PPLI/CoT so the
+        // "KNOWN CONTACTS" section and New-Chat sheet are populated as soon as
+        // other EUDs appear on the map.  Skip the user's own echoed PPLI so
+        // they don't appear as a contact they can message themselves.
+        let selfUID = PositionBroadcastService.shared.userUID
+        guard event.uid != selfUID else {
+            #if DEBUG
+            print("   ℹ️ Skipping self-PPLI for participant feed (uid: \(event.uid))")
+            #endif
+            // Still publish / callback for map rendering — just skip participant write.
+            positionUpdatePublisher.send(event)
+            NotificationCenter.default.post(
+                name: CoTEventHandler.positionUpdateNotification,
+                object: self,
+                userInfo: ["event": event]
+            )
+            takService?.onCoTReceived?(event)
+            return
+        }
+
         // Update participant info for chat, tagged with the source server so
         // the contact list + DM routing are server-aware (multi-server).
         if var participant = ChatXMLParser.parseParticipantFromPresence(xml: createPresenceXML(from: event)) {
@@ -173,7 +193,7 @@ class CoTEventHandler: ObservableObject {
             chatManager?.updateParticipant(participant)
             chatManager?.updateParticipantLastSeen(id: participant.id)
         } else {
-            // Create basic participant from CoT event
+            // Create basic participant from CoT event (callsign + UID are always present)
             let participant = ChatParticipant(
                 id: event.uid,
                 callsign: event.detail.callsign,

@@ -1929,8 +1929,9 @@ private func cotCallback(
                 // Update enhanced marker
                 service.updateEnhancedMarker(from: event)
 
-                // Also parse participant info for chat
-                if let participant = ChatXMLParser.parseParticipantFromPresence(xml: message) {
+                // Also parse participant info for chat (skip own echoed PPLI)
+                if event.uid != PositionBroadcastService.shared.userUID,
+                   let participant = ChatXMLParser.parseParticipantFromPresence(xml: message) {
                     ChatManager.shared.updateParticipant(participant)
                 }
 
