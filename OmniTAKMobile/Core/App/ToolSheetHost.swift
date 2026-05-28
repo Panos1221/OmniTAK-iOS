@@ -50,6 +50,7 @@ struct ToolSheetHost: ViewModifier {
         case "missionsync":  MissionSyncView()
         case "plugins":      PluginsListView()
         case "kml":          KMLOverlaysPanel()
+        case "uas":          UASConnectView()
         case "pointer":
             PointDropperSheetView(isPresented: Binding(
                 get: { active != nil },

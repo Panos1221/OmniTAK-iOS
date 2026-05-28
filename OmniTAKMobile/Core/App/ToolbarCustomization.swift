@@ -128,6 +128,7 @@ extension BarItem {
         BarItem(id: "tool.los",        label: "Line of Sight", icon: "eye.fill",                         tint: BarTint.teal,   kind: .command(.openTool("los"))),
         BarItem(id: "tool.missionsync",label: "Mission Sync", icon: "arrow.triangle.2.circlepath",       tint: BarTint.chat,   kind: .command(.openTool("missionsync"))),
         BarItem(id: "tool.plugins",    label: "Plugins",    icon: "puzzlepiece.extension.fill",          tint: BarTint.settings, kind: .command(.openTool("plugins"))),
+        BarItem(id: "tool.uas",        label: "Vehicles",   icon: "airplane.departure",                  tint: BarTint.orange, kind: .command(.openTool("uas"))),
     ]
 
     static func item(for id: String) -> BarItem? { catalog.first { $0.id == id } }
