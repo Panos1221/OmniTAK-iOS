@@ -111,11 +111,28 @@ enum ATAKPluginParser {
         if t == "b-m-p-w" || t.hasPrefix("b-m-p-s-p-i") {
             return .waypoint(event)
         }
-        // b-t-f / b-a-* would normally need their richer structures (ChatMessage,
-        // EmergencyAlert) which we don't reconstruct from the protobuf path.
-        // For now treat them as position-update events so they still flow into
-        // the marker pipeline; chat / emergency parsing is best-effort via the
-        // XML fallback path.
+        // b-t-f is a GeoChat message.  We have all we need (uid, callsign,
+        // remarks) from the parsed CoTEvent, so promote it to .chatMessage
+        // so it lands in ChatManager.receiveMessage via CoTEventHandler.
+        if t == "b-t-f" {
+            let msg = ChatMessage(
+                id: event.uid,
+                conversationId: ChatRoom.allUsersId,
+                senderId: event.uid,
+                senderCallsign: event.detail.callsign,
+                recipientId: nil,
+                recipientCallsign: nil,
+                messageText: event.detail.remarks ?? "",
+                timestamp: event.time,
+                status: .delivered,
+                type: .geochat,
+                isFromSelf: false
+            )
+            return .chatMessage(msg)
+        }
+        // b-a-* would need EmergencyAlert richer structure — best-effort via
+        // the XML fallback path; treat remaining b-* as position updates so
+        // they still flow into the marker pipeline.
         if t.hasPrefix("b-") {
             return .positionUpdate(event)
         }
