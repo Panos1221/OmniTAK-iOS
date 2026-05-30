@@ -31,9 +31,13 @@ struct SettingsView: View {
     // Phase 2 of the gy6 plan — toggles the CoreBluetooth FAA Remote ID
     // scanner. Default off because BLE scanning has a battery cost.
     @AppStorage("remoteIdScanEnabled") private var remoteIdScanEnabled = false
+    // Phase 3 — the external gyb_detect sensor over BLE GATT. Catches the
+    // WiFi-beacon Remote ID the phone can't see and streams it over Bluetooth.
+    @AppStorage("gybDetectorEnabled") private var gybDetectorEnabled = false
 
     @State private var showServersSheet = false
     @State private var showMissionCreationSheet = false
+    @State private var showGybSheet = false
 
     var body: some View {
         NavigationView {
@@ -187,6 +191,28 @@ struct SettingsView: View {
                             .font(.caption2)
                             .foregroundColor(.secondary)
                     }
+
+                    // External gyb_detect sensor (WiFi-beacon Remote ID over
+                    // BLE GATT) — the phone can't do WiFi RID itself.
+                    Toggle("External gyb Detector", isOn: $gybDetectorEnabled)
+
+                    Text("Catches WiFi-beacon Remote ID via a gyb sensor and streams it over Bluetooth — the drones your phone can't see on its own.")
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
+
+                    if gybDetectorEnabled {
+                        Button {
+                            showGybSheet = true
+                        } label: {
+                            HStack {
+                                Label("Connect gyb Detector", systemImage: "dot.radiowaves.left.and.right")
+                                Spacer()
+                                if GybManager.shared.client.isConnected {
+                                    Text("Connected").font(.caption).foregroundColor(.green)
+                                }
+                            }
+                        }
+                    }
                 }
 
                 // Language — switches the app UI language live, no
@@ -323,6 +349,12 @@ struct SettingsView: View {
             .sheet(isPresented: $showMissionCreationSheet) {
                 MissionCreationSheet()
             }
+            .sheet(isPresented: $showGybSheet) {
+                GybDetectorView()
+            }
+            .onChange(of: gybDetectorEnabled) { newValue in
+                GybManager.shared.setEnabled(newValue)
+            }
             .alert(loc.t("settings.cacheCleared.title"), isPresented: $showCacheCleared) {
                 Button(loc.t("settings.ok"), role: .cancel) {}
             }
@@ -331,13 +363,20 @@ struct SettingsView: View {
     }
 
     private func refreshCacheSize() {
-        let urlBytes = URLCache.shared.currentDiskUsage + URLCache.shared.currentMemoryUsage
-        let tileBytes = tileCacheSizeBytes()
-        let total = Int64(urlBytes) + tileBytes
-        let formatter = ByteCountFormatter()
-        formatter.allowedUnits = [.useMB, .useGB, .useKB]
-        formatter.countStyle = .file
-        cacheSizeText = formatter.string(fromByteCount: total)
+        // Sizing the tile cache walks every file on disk — for a user with a
+        // large offline map cache that's thousands of files and can block for
+        // hundreds of ms to seconds. Doing it in onAppear on the main thread
+        // is what made Settings open laggy/janky (scales with cache size, so
+        // it's intermittent across users). Compute off-main, publish back.
+        DispatchQueue.global(qos: .utility).async {
+            let urlBytes = URLCache.shared.currentDiskUsage + URLCache.shared.currentMemoryUsage
+            let total = Int64(urlBytes) + tileCacheSizeBytes()
+            let formatter = ByteCountFormatter()
+            formatter.allowedUnits = [.useMB, .useGB, .useKB]
+            formatter.countStyle = .file
+            let text = formatter.string(fromByteCount: total)
+            DispatchQueue.main.async { cacheSizeText = text }
+        }
     }
 
     private func tileCacheSizeBytes() -> Int64 {

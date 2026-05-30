@@ -413,10 +413,13 @@ class RadialMenuActionExecutor {
     }
 
     private static func executeCreateRoute(context: RadialMenuContext, services: RadialMenuServices) -> Bool {
+        // Open the real route planning screen (the same RouteListView the Tools
+        // catalog opens). Previously this posted `radialMenuCreateRoute`, which
+        // had no observer anywhere — a dead tap.
         NotificationCenter.default.post(
-            name: .radialMenuCreateRoute,
+            name: .openToolSheet,
             object: nil,
-            userInfo: ["startCoordinate": context.mapCoordinate]
+            userInfo: ["id": "routes"]
         )
         return true
     }
@@ -565,28 +568,37 @@ class RadialMenuActionExecutor {
     }
 
     private static func executeQuickChat(context: RadialMenuContext) -> Bool {
+        // Open the contacts list to start a chat — the real screen the Tools
+        // catalog opens. Previously posted `radialMenuQuickChat` (no observer).
         NotificationCenter.default.post(
-            name: .radialMenuQuickChat,
+            name: .openToolSheet,
             object: nil,
-            userInfo: ["context": context]
+            userInfo: ["id": "contacts"]
         )
         return true
     }
 
     private static func executeEmergency(context: RadialMenuContext) -> Bool {
+        // Open the emergency beacon screen (confirm-first; does NOT auto-
+        // broadcast). Previously posted `radialMenuEmergency` (no observer).
         NotificationCenter.default.post(
-            name: .radialMenuEmergency,
+            name: .openToolSheet,
             object: nil,
-            userInfo: ["coordinate": context.mapCoordinate]
+            userInfo: ["id": "alert"]
         )
         return true
     }
 
     private static func executeGetInfo(context: RadialMenuContext) -> Bool {
+        // "Get info" on a long-pressed point: copy the formatted coordinate to
+        // the clipboard — a real, useful effect with no new UI. Previously
+        // posted `radialMenuGetInfo`, which had no observer (a dead tap).
+        let coordString = formatCoordinate(context.mapCoordinate)
+        UIPasteboard.general.string = coordString
         NotificationCenter.default.post(
-            name: .radialMenuGetInfo,
+            name: .radialMenuCoordinatesCopied,
             object: nil,
-            userInfo: ["context": context]
+            userInfo: ["coordinate": context.mapCoordinate, "formattedString": coordString]
         )
         return true
     }

@@ -17,6 +17,7 @@ struct OmniTAKMobileApp: App {
     @StateObject private var deepLinkHandler = DeepLinkHandler.shared
     @AppStorage("hasCompletedOnboarding") private var hasCompletedOnboarding = false
     @AppStorage("remoteIdScanEnabled") private var remoteIdScanEnabled = false
+    @AppStorage("gybDetectorEnabled") private var gybDetectorEnabled = false
 
     init() {
         // Eagerly initialize the Meshtastic manager so its COT bridge is wired
@@ -30,6 +31,10 @@ struct OmniTAKMobileApp: App {
         // value is the single source of truth — Settings toggle flips
         // the scanner without needing to talk to the bridge directly.
         _ = RemoteIdAppBridge.shared
+
+        // Wire the external gyb_detect sensor bridge (BLE GATT WiFi-RID
+        // stream). On/off mirrors @AppStorage("gybDetectorEnabled") below.
+        _ = GybManager.shared
     }
 
     var body: some Scene {
@@ -38,9 +43,13 @@ struct OmniTAKMobileApp: App {
                 RootTabView()
                     .onAppear {
                         RemoteIdAppBridge.shared.setEnabled(remoteIdScanEnabled)
+                        GybManager.shared.setEnabled(gybDetectorEnabled)
                     }
                     .onChange(of: remoteIdScanEnabled) { newValue in
                         RemoteIdAppBridge.shared.setEnabled(newValue)
+                    }
+                    .onChange(of: gybDetectorEnabled) { newValue in
+                        GybManager.shared.setEnabled(newValue)
                     }
                     #if DEBUG
                     .task {
