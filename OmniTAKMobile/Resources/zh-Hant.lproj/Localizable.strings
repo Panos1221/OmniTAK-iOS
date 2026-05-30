@@ -1,0 +1,123 @@
+/* OmniTAK Mobile — English (base catalogue)
+   v1 scope: onboarding flow + Settings screen.
+   Other screens fall back to these English strings until later
+   localization passes extend coverage. */
+
+/* --- Onboarding navigation --- */
+"onboarding.skip" = "跳過";
+"onboarding.continue" = "繼續";
+"onboarding.getStarted" = "開始使用";
+"onboarding.back" = "返回";
+
+/* --- Onboarding page 1: Welcome --- */
+"onboarding.page1.title" = "歡迎使用 OmniTAK";
+"onboarding.page1.desc" = "專為 Team Awareness Kit (TAK) 伺服器打造的強大 iOS 客戶端。即時連線、共享與協作。";
+"onboarding.page1.feature1" = "即時位置共享";
+"onboarding.page1.feature2" = "安全通訊";
+"onboarding.page1.feature3" = "地圖态势感知";
+"onboarding.page1.feature4" = "多平台支援";
+
+/* --- Onboarding page 2: Secure & Certified --- */
+"onboarding.page2.title" = "安全與認證";
+"onboarding.page2.desc" = "OmniTAK 支援憑證式身份驗證，可安全連線至 TAK 伺服器。";
+"onboarding.page2.feature1" = "客戶端憑證支援";
+"onboarding.page2.feature2" = "TLS/SSL 加密";
+"onboarding.page2.feature3" = "鑰匙圈整合";
+"onboarding.page2.feature4" = "自動註冊";
+
+/* --- Onboarding page 3: Quick & Easy Setup --- */
+"onboarding.page3.title" = "快速簡易設定";
+"onboarding.page3.desc" = "透過智慧設定精靈，數秒內完成連線。多種連線方式因應各種情境。";
+"onboarding.page3.feature1" = "QR 碼掃描";
+"onboarding.page3.feature2" = "自動發現";
+"onboarding.page3.feature3" = "常見預設";
+"onboarding.page3.feature4" = "手動設定";
+
+/* --- Onboarding page 4: Ready to Connect --- */
+"onboarding.page4.title" = "準備連線？";
+"onboarding.page4.desc" = "讓我們將您連線至 TAK 伺服器。選擇最適合您的方式。";
+"onboarding.page4.feature1" = "30 秒內完成連線";
+"onboarding.page4.feature2" = "無需技術知識";
+"onboarding.page4.feature3" = "完整 ATAK 相容性";
+"onboarding.page4.feature4" = "相容於任何 TAK 伺服器";
+
+/* --- Quick Start Guide --- */
+"quickstart.title" = "快速入門指南";
+"quickstart.subtitle" = "選擇最適合您情況的連線方式";
+"quickstart.done" = "完成";
+"quickstart.needHelp" = "需要協助？";
+"quickstart.help.docs" = "閱讀文件";
+"quickstart.help.support" = "聯絡支援";
+"quickstart.help.videos" = "觀看教學影片";
+"quickstart.item.qr.title" = "掃描 QR 碼";
+"quickstart.item.qr.desc" = "最快速方式 — 掃描 TAK 伺服器管理員提供的註冊 QR 碼";
+"quickstart.item.discover.title" = "自動發現";
+"quickstart.item.discover.desc" = "自動偵測區域網路中的 TAK 伺服器";
+"quickstart.item.quick.title" = "快速設定";
+"quickstart.item.quick.desc" = "使用常見 TAK 伺服器組態的預設值";
+"quickstart.item.manual.title" = "手動設定";
+"quickstart.item.manual.desc" = "完整控制 — 自行設定所有連線參數";
+"quickstart.difficulty.easiest" = "最簡單";
+"quickstart.difficulty.easy" = "簡單";
+"quickstart.difficulty.advanced" = "進階";
+
+/* --- Settings --- */
+"settings.title" = "設定";
+"settings.done" = "完成";
+"settings.section.userProfile" = "使用者資料";
+"settings.callsign" = "呼號";
+"settings.name" = "姓名";
+"settings.section.servers" = "伺服器";
+"settings.manageServers" = "管理伺服器";
+"settings.section.navigation" = "導航";
+"settings.routeNavigation" = "路線導航";
+"settings.section.mapOverlays" = "地圖疊層";
+"settings.mgrsGridOverlay" = "MGRS 網格疊層";
+"settings.gridDensity" = "網格密度";
+"settings.showGridLabels" = "顯示網格標籤";
+"settings.coordinateFormat" = "座標格式";
+"settings.selfPositionMarker" = "自身位置標記";
+"settings.section.droneDetection" = "無人機偵測";
+"settings.faaRemoteIdScanner" = "FAA Remote ID 掃描器";
+"settings.section.language" = "語言";
+"settings.appLanguage" = "應用程式語言";
+"settings.section.breadcrumbTrails" = "行進軌跡";
+"settings.enableTrails" = "啟用軌跡";
+"settings.maxTrailLength" = "最大軌跡長度";
+"settings.trailColor" = "軌跡顏色";
+"settings.section.display" = "顯示";
+"settings.unitSystem" = "單位系統";
+"settings.section.performance" = "效能";
+"settings.cacheSize" = "快取大小";
+"settings.clearCache" = "清除快取";
+"settings.section.dataManagement" = "資料管理";
+"settings.importDataPackage" = "匯入資料套件";
+"settings.resetToDefaults" = "重設為預設值";
+"settings.section.dangerZone" = "危險操作";
+"settings.clearAllTeamData" = "清除所有團隊資料";
+
+/* --- Settings: picker option values + alerts (v1.1 — full text coverage) --- */
+"settings.atakStyle" = "ATAK 風格";
+"settings.coord.dd" = "十進位度數 (DD)";
+"settings.coord.dm" = "度分 (DM)";
+"settings.coord.dms" = "度分秒 (DMS)";
+"settings.coord.bng" = "英國國家網格 (BNG)";
+"settings.coord.bngHelp" = "BNG 針對英國/愛爾蘭最佳化（49°N-61°N, 9°W-2°E）。使用 OSGB36 基準與 SU、TQ、NT 等網格方格。";
+"settings.marker.milstd" = "MIL-STD 符號";
+"settings.marker.bullseye" = "靶心（舊版）";
+"settings.color.cyan" = "青色";
+"settings.color.green" = "綠色";
+"settings.color.orange" = "橘色";
+"settings.color.red" = "紅色";
+"settings.color.blue" = "藍色";
+"settings.unit.metric" = "公制（km, m, km/h）";
+"settings.unit.imperial" = "英制（mi, ft, mph）";
+"settings.trailPoints" = "%d 個點";
+"settings.cacheCleared.title" = "快取已清除";
+"settings.ok" = "確定";
+"settings.droneDetection.desc" = "監聽附近無人機（DJI Mavic、Skydio、Autel）透過藍芽廣播的 FAA Remote ID。偵測到的無人機將以未知空域 UAS 目標顯示在地圖上。可接收藍芽廣播的 Remote ID 子集；WiFi 訊號廣播需搭配 gy6 感測器。藍芽掃描會消耗電池。";
+"settings.droneDetection.permHint" = "iOS 將在掃描器首次執行時請求藍芽權限。若切換後無反應，請開啟系統設定 → OmniTAK → 藍芽 並授予存取權限。";
+"quickstart.time.qr" = "< 30 秒";
+"quickstart.time.discover" = "< 1 分鐘";
+"quickstart.time.quick" = "< 2 分鐘";
+"quickstart.time.manual" = "約 3 分鐘";
