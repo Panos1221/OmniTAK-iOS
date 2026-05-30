@@ -5310,7 +5310,7 @@ struct CesiumMainMap: UIViewRepresentable {
               const ac=e.affiliation||'u';
               const leaderColor=(ac==='f')?Cesium.Color.CYAN:(ac==='h')?Cesium.Color.RED:(ac==='n')?Cesium.Color.LIME:Cesium.Color.YELLOW;
               const leaderPos=showLeader?Cesium.Cartesian3.fromDegreesArrayHeights([e.lon,e.lat,0,e.lon,e.lat,hae]):null;
-              const labelText=(e.callsign||'')+(showLeader?('\n'+Math.round(hae)+' m HAE'):'');
+              const labelText=(e.callsign||'')+(showLeader?('\\n'+Math.round(hae)+' m HAE'):'');
               let entity=_state.entities.get(e.uid);
               if(!entity){entity=v.entities.add({id:e.uid,position:pos,
                 billboard:{image:_billboard(e.affiliation||'u',e.kind,e.sidc),verticalOrigin:Cesium.VerticalOrigin.CENTER,heightReference:hr,disableDepthTestDistance:Number.POSITIVE_INFINITY,scale:e.kind==='aircraft'?1.5:0.7,rotation:rot},
