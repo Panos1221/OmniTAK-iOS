@@ -1467,7 +1467,7 @@ struct ATAKMapView: View {
             // `.onReceive`s don't push this already-maxed body expression past
             // the Swift type-checker's complexity limit. Each of these
             // notifications previously had no observer — they were dead taps.
-            .modifier(RadialMenuExtraObservers(mapRegion: $mapRegion, drawingManager: drawingManager))
+            .modifier(RadialMenuExtraObservers(mapRegion: $mapRegion, drawingManager: drawingManager, mapEngineRaw: $mapEngineRaw))
             // Customizable bar "Drop Pin" shortcut — drop a marker at the
             // current map center on whichever engine is active. Cesium uses
             // its persisted camera center; Mapbox uses the tracked region.
@@ -2413,9 +2413,32 @@ struct LayerButton: View {
 private struct RadialMenuExtraObservers: ViewModifier {
     @Binding var mapRegion: MKCoordinateRegion
     let drawingManager: DrawingToolsManager
+    @Binding var mapEngineRaw: String
+    @State private var showLoadFallbackNote = false
 
     func body(content: Content) -> some View {
         content
+            // 3D globe load watchdog fired — fall back to 2D so the user isn't
+            // stuck on an infinite spinner when the Cesium CDN is unreachable.
+            .onReceive(NotificationCenter.default.publisher(for: .cesiumLoadTimedOut)) { _ in
+                guard mapEngineRaw == MapEngine.cesium3D.rawValue else { return }
+                mapEngineRaw = MapEngine.mapbox2D.rawValue
+                withAnimation { showLoadFallbackNote = true }
+                DispatchQueue.main.asyncAfter(deadline: .now() + 5) {
+                    withAnimation { showLoadFallbackNote = false }
+                }
+            }
+            .overlay(alignment: .top) {
+                if showLoadFallbackNote {
+                    Text("3D globe couldn't load — switched to 2D map")
+                        .font(.footnote.weight(.medium))
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 14).padding(.vertical, 8)
+                        .background(Capsule().fill(Color.black.opacity(0.8)))
+                        .padding(.top, 60)
+                        .transition(.move(edge: .top).combined(with: .opacity))
+                }
+            }
             .onReceive(NotificationCenter.default.publisher(for: .radialMenuCenterMap)) { note in
                 guard let coordinate = note.userInfo?["coordinate"] as? CLLocationCoordinate2D else { return }
                 withAnimation {
@@ -4438,6 +4461,11 @@ extension Notification.Name {
     /// the globe's camera to a contact's position (mapRegion only drives the
     /// 2D engine). userInfo["lat"]: Double, userInfo["lon"]: Double.
     static let cesiumCenterOn = Notification.Name("cesiumCenterOn")
+    /// Posted by the Cesium coordinator's load watchdog when the globe fails to
+    /// initialize within the timeout (e.g. the cesium.com CDN is unreachable).
+    /// `ATAKMapView` falls the map back to the 2D engine so the user isn't
+    /// stuck on an infinite "Loading 3D world…" spinner.
+    static let cesiumLoadTimedOut = Notification.Name("cesiumLoadTimedOut")
 }
 
 struct CesiumMainMap: UIViewRepresentable {
@@ -4523,6 +4551,7 @@ struct CesiumMainMap: UIViewRepresentable {
         }
 
         webView.loadHTMLString(CesiumMainMap.html, baseURL: URL(string: "https://cesium.com/"))
+        context.coordinator.startLoadWatchdog()
         return webView
     }
 
@@ -4621,6 +4650,20 @@ struct CesiumMainMap: UIViewRepresentable {
         var zoomObserver: NSObjectProtocol?
         /// Observer token for "Show on Map" (contact-centering) commands.
         var centerOnObserver: NSObjectProtocol?
+        /// Watchdog: the globe pulls Cesium.js + terrain from the cesium.com
+        /// CDN on every load. If the device can't reach it (bad network, dead
+        /// CDN) the page sits on "Loading 3D world…" forever. If the bridge
+        /// hasn't signalled ready within the timeout, fall back to 2D rather
+        /// than hang. Cancelled the instant `omniBridgeReady` fires.
+        var loadWatchdog: Timer?
+
+        func startLoadWatchdog() {
+            loadWatchdog?.invalidate()
+            loadWatchdog = Timer.scheduledTimer(withTimeInterval: 12.0, repeats: false) { [weak self] _ in
+                guard let self, !self.isReady else { return }
+                NotificationCenter.default.post(name: .cesiumLoadTimedOut, object: nil)
+            }
+        }
 
         /// Per-bridge-call payload hash cache. `updateUIView` runs on every
         /// SwiftUI re-render (including camera ticks), so we hash the JSON
@@ -4637,6 +4680,7 @@ struct CesiumMainMap: UIViewRepresentable {
         deinit {
             if let zoomObserver { NotificationCenter.default.removeObserver(zoomObserver) }
             if let centerOnObserver { NotificationCenter.default.removeObserver(centerOnObserver) }
+            loadWatchdog?.invalidate()
         }
 
         init(_ parent: CesiumMainMap) {
@@ -4648,6 +4692,7 @@ struct CesiumMainMap: UIViewRepresentable {
             switch message.name {
             case "omniBridgeReady":
                 isReady = true
+                loadWatchdog?.invalidate(); loadWatchdog = nil
                 // Drain the latest snapshots the moment the HTML signals it
                 // has the OmniBridge alive — anything queued during page
                 // load lands in one shot.
