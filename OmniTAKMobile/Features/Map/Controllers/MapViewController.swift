@@ -5166,7 +5166,7 @@ struct CesiumMainMap: UIViewRepresentable {
         <script src=\"https://unpkg.com/milsymbol@2.2.0/dist/milsymbol.js\"></script>
         <script>
           Cesium.Ion.defaultAccessToken='\(cesiumIonToken)';
-          const _state={ready:false,viewer:null,entities:new Map(),drawings:new Map(),measurements:new Map(),trails:new Map(),billboardCache:new Map(),lasso:{enabled:false,dragging:false,pts:[],handler:null}};
+          const _state={ready:false,viewer:null,entities:new Map(),drawings:new Map(),measurements:new Map(),trails:new Map(),leaders:new Map(),billboardCache:new Map(),lasso:{enabled:false,dragging:false,pts:[],handler:null}};
           // Lasso multi-select drag (issue #16, 3D parity). Camera pan is
           // disabled while the lasso is enabled; the freehand path is drawn on
           // a 2D overlay canvas and the screen points are picked to lat/lon on
@@ -5270,18 +5270,24 @@ struct CesiumMainMap: UIViewRepresentable {
               if(!entity){entity=v.entities.add({id:e.uid,position:pos,
                 billboard:{image:_billboard(e.affiliation||'u',e.kind,e.sidc),verticalOrigin:Cesium.VerticalOrigin.CENTER,heightReference:hr,disableDepthTestDistance:Number.POSITIVE_INFINITY,scale:e.kind==='aircraft'?1.5:0.7,rotation:rot},
                 label:labelText?{text:labelText,font:'12px -apple-system, sans-serif',fillColor:Cesium.Color.WHITE,outlineColor:Cesium.Color.BLACK,outlineWidth:2,style:Cesium.LabelStyle.FILL_AND_OUTLINE,pixelOffset:new Cesium.Cartesian2(0,-32),heightReference:hr,disableDepthTestDistance:Number.POSITIVE_INFINITY}:undefined,
-                polyline:leaderPos?{positions:leaderPos,width:1.5,arcType:Cesium.ArcType.NONE,material:leaderColor.withAlpha(0.85)}:undefined,
               });_state.entities.set(e.uid,entity);}
               else{entity.position=pos;entity.billboard.image=_billboard(e.affiliation||'u',e.kind,e.sidc);entity.billboard.heightReference=hr;entity.billboard.rotation=rot;
-                if(entity.label){entity.label.text=labelText;entity.label.heightReference=hr;}
-                if(showLeader){if(entity.polyline){entity.polyline.positions=leaderPos;entity.polyline.material=leaderColor.withAlpha(0.85);}else{entity.polyline=new Cesium.PolylineGraphics({positions:leaderPos,width:1.5,arcType:Cesium.ArcType.NONE,material:leaderColor.withAlpha(0.85)});}}else if(entity.polyline){entity.polyline=undefined;}}
+                if(entity.label){entity.label.text=labelText;entity.label.heightReference=hr;}}
+              // Leader line as its OWN entity (uid+':leader'), remove-then-add
+              // on every upsert — exactly like trails/measurements. Mutating a
+              // live entity's `.polyline` graphics in place (the prior approach)
+              // crashed the Cesium WebGL context. Kept out of `_state.entities`
+              // so setEntities' cleanup loop doesn't treat it as a stale uid.
+              const lid=e.uid+':leader';const oldLeader=_state.leaders.get(lid);
+              if(oldLeader){v.entities.remove(oldLeader);_state.leaders.delete(lid);}
+              if(showLeader){_state.leaders.set(lid,v.entities.add({id:lid,polyline:{positions:leaderPos,width:1.5,arcType:Cesium.ArcType.NONE,material:leaderColor.withAlpha(0.85)}}));}
             },
             setEntities(arg){const list=_parse(arg);if(!Array.isArray(list))return;const seen=new Set();
               for(const e of list){if(e&&e.uid){seen.add(e.uid);window.OmniBridge.upsertEntity(e);}}
               for(const uid of Array.from(_state.entities.keys()))if(!seen.has(uid))window.OmniBridge.removeEntity(uid);
             },
-            removeEntity(uid){const v=_state.viewer;if(!v)return;const e=_state.entities.get(uid);if(e){v.entities.remove(e);_state.entities.delete(uid);}},
-            removeAll(){const v=_state.viewer;if(!v)return;v.entities.removeAll();_state.entities.clear();},
+            removeEntity(uid){const v=_state.viewer;if(!v)return;const e=_state.entities.get(uid);if(e){v.entities.remove(e);_state.entities.delete(uid);}const lid=uid+':leader';const l=_state.leaders.get(lid);if(l){v.entities.remove(l);_state.leaders.delete(lid);}},
+            removeAll(){const v=_state.viewer;if(!v)return;v.entities.removeAll();_state.entities.clear();_state.leaders.clear();},
             flyTo(arg){const e=_parse(arg);if(!e)return;const v=_state.viewer;if(!v)return;
               v.camera.flyTo({destination:Cesium.Cartesian3.fromDegrees(e.lon,e.lat,(typeof e.range==='number')?e.range:5000),
                 orientation:{heading:Cesium.Math.toRadians(e.heading||0),pitch:Cesium.Math.toRadians(typeof e.pitch==='number'?e.pitch:-30),roll:0},duration:1.2});
