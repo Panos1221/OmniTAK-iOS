@@ -342,6 +342,7 @@ struct ATAKMapView: View {
                 ATAKSidePanel(
                     isExpanded: $showLayersPanel,
                     activeMapLayer: $activeMapLayer,
+                    is3D: mapEngine == .cesium3D,
                     showFriendly: $showFriendly,
                     showHostile: $showHostile,
                     showNeutral: $showNeutral,
@@ -2244,6 +2245,8 @@ struct MapToolButton: View {
 struct ATAKSidePanel: View {
     @Binding var isExpanded: Bool
     @Binding var activeMapLayer: String
+    /// True on the Cesium 3D globe — gates 3D-only base options (Photoreal).
+    var is3D: Bool = false
     @Binding var showFriendly: Bool
     @Binding var showHostile: Bool
     @Binding var showNeutral: Bool
@@ -2288,6 +2291,14 @@ struct ATAKSidePanel: View {
                 }
                 LayerButton(icon: "map.circle", title: "Standard", isActive: activeMapLayer == "standard", compact: true) {
                     onLayerToggle("standard")
+                }
+                // Photorealistic 3D tiles (Google) — globe only, loaded on
+                // demand. Heavy on GPU/network, so it's opt-in rather than
+                // always-on: picking another base unloads it.
+                if is3D {
+                    LayerButton(icon: "building.2.fill", title: "Photoreal 3D", isActive: activeMapLayer == "photoreal", compact: true) {
+                        onLayerToggle("photoreal")
+                    }
                 }
 
                 Divider()
@@ -5230,7 +5241,7 @@ struct CesiumMainMap: UIViewRepresentable {
         <script src=\"https://unpkg.com/milsymbol@2.2.0/dist/milsymbol.js\"></script>
         <script>
           Cesium.Ion.defaultAccessToken='\(cesiumIonToken)';
-          const _state={ready:false,viewer:null,entities:new Map(),drawings:new Map(),measurements:new Map(),trails:new Map(),leaders:new Map(),billboardCache:new Map(),lasso:{enabled:false,dragging:false,pts:[],handler:null}};
+          const _state={ready:false,viewer:null,entities:new Map(),drawings:new Map(),measurements:new Map(),trails:new Map(),leaders:new Map(),photoreal:null,billboardCache:new Map(),lasso:{enabled:false,dragging:false,pts:[],handler:null}};
           // Lasso multi-select drag (issue #16, 3D parity). Camera pan is
           // disabled while the lasso is enabled; the freehand path is drawn on
           // a 2D overlay canvas and the screen points are picked to lat/lon on
@@ -5409,6 +5420,18 @@ struct CesiumMainMap: UIViewRepresentable {
             // hybrid = aerial with a translucent OSM streets/labels overlay.
             setBaseLayer(arg){const e=_parse(arg);const t=(e&&e.type)||'satellite';const v=_state.viewer;if(!v)return;
               try{
+                // Photorealistic 3D tiles: load on demand, keep imagery beneath.
+                if(t==='photoreal'){
+                  if(!_state.photoreal){
+                    Cesium.createGooglePhotorealistic3DTileset().then(function(ts){
+                      ts.maximumScreenSpaceError=24; // coarser than default 16 — faster to sharpen, lighter on GPU
+                      _state.photoreal=ts; v.scene.primitives.add(ts); v.scene.requestRender();
+                    }).catch(function(err){});
+                  }
+                  return;
+                }
+                // Switching to a flat-imagery base — unload the heavy 3D tiles.
+                if(_state.photoreal){v.scene.primitives.remove(_state.photoreal);_state.photoreal=null;}
                 const layers=v.imageryLayers;layers.removeAll();
                 if(t==='standard'){
                   layers.addImageryProvider(new Cesium.OpenStreetMapImageryProvider({url:'https://tile.openstreetmap.org/'}));
@@ -5473,7 +5496,10 @@ struct CesiumMainMap: UIViewRepresentable {
             _fitViewport();
             const v=new Cesium.Viewer('cesiumContainer',{terrain:Cesium.Terrain.fromWorldTerrain(),animation:false,timeline:false,baseLayerPicker:false,geocoder:false,homeButton:false,sceneModePicker:false,navigationHelpButton:false,fullscreenButton:false,infoBox:false,selectionIndicator:false,creditContainer:document.createElement('div')});
             v.scene.skyAtmosphere.show=true;v.scene.globe.enableLighting=true;_state.viewer=v;_fitViewport();_installInputHandlers(v);
-            try{const t=await Cesium.createGooglePhotorealistic3DTileset();v.scene.primitives.add(t);}catch(e){console.warn('Photoreal unavailable:',e);}
+            // Photorealistic 3D tiles are NOT loaded by default — they're a
+            // heavy GPU/network layer (slow to sharpen + can exhaust the mobile
+            // WebGL process). They load on demand via setBaseLayer('photoreal')
+            // from the Layers panel. Default base = World Imagery + terrain.
             // Bootstrap camera over KJFK to match the ADSB pre-GPS
             // fallback — first-launch users land on a scene where the
             // aircraft data they're seeing in the pill actually appears
