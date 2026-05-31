@@ -4514,6 +4514,11 @@ struct CesiumMainMap: UIViewRepresentable {
         config.userContentController.add(context.coordinator, name: "omniMapEvent")
 
         let webView = WKWebView(frame: .zero, configuration: config)
+        // Recover from WebGL/render-process termination. Cesium is GPU-heavy;
+        // iOS can kill the WebContent process under memory pressure, leaving a
+        // black globe that never returns on its own (the user had to manually
+        // toggle 2D↔3D). The delegate's `…ProcessDidTerminate` reloads it.
+        webView.navigationDelegate = context.coordinator
         webView.isOpaque = false
         webView.backgroundColor = .black
         webView.scrollView.backgroundColor = .black
@@ -4630,7 +4635,7 @@ struct CesiumMainMap: UIViewRepresentable {
 
     func makeCoordinator() -> Coordinator { Coordinator(self) }
 
-    class Coordinator: NSObject, WKScriptMessageHandler {
+    class Coordinator: NSObject, WKScriptMessageHandler, WKNavigationDelegate {
         var parent: CesiumMainMap
         weak var webView: WKWebView?
         var isReady = false
@@ -4663,6 +4668,20 @@ struct CesiumMainMap: UIViewRepresentable {
                 guard let self, !self.isReady else { return }
                 NotificationCenter.default.post(name: .cesiumLoadTimedOut, object: nil)
             }
+        }
+
+        /// The WebGL render process was killed (memory pressure) — the globe is
+        /// now black and won't recover on its own. Reload it; `omniBridgeReady`
+        /// will re-fire and `updateUIView` re-pushes the entity snapshot, so the
+        /// scene restores. The watchdog covers the case where the reload itself
+        /// can't complete (→ falls back to 2D).
+        func webViewWebContentProcessDidTerminate(_ webView: WKWebView) {
+            isReady = false
+            // Force the next updateUIView to re-push every bridge payload (the
+            // fresh page has no entities/drawings/trails yet).
+            bridgePayloadHashes.removeAll()
+            webView.loadHTMLString(CesiumMainMap.html, baseURL: URL(string: "https://cesium.com/"))
+            startLoadWatchdog()
         }
 
         /// Per-bridge-call payload hash cache. `updateUIView` runs on every
