@@ -1,7 +1,7 @@
-/* OmniTAK Mobile — English (base catalogue)
+/* OmniTAK Mobile — Traditional Chinese (繁體中文 / zh-Hant)
    v1 scope: onboarding flow + Settings screen.
-   Other screens fall back to these English strings until later
-   localization passes extend coverage. */
+   Untranslated keys fall back to the English base catalogue until
+   later localization passes extend coverage. */
 
 /* --- Onboarding navigation --- */
 "onboarding.skip" = "跳過";

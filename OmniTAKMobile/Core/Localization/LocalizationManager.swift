@@ -44,6 +44,7 @@ final class LocalizationManager: ObservableObject {
         case german    = "de"
         case french    = "fr"
         case spanish   = "es"
+        case traditionalChinese = "zh-Hant"
 
         var id: String { rawValue }
 
@@ -57,6 +58,7 @@ final class LocalizationManager: ObservableObject {
             case .german:    return "Deutsch"
             case .french:    return "Français"
             case .spanish:   return "Español"
+            case .traditionalChinese: return "繁體中文"
             }
         }
 
@@ -70,6 +72,7 @@ final class LocalizationManager: ObservableObject {
             case .german:    return "🇩🇪"
             case .french:    return "🇫🇷"
             case .spanish:   return "🇪🇸"
+            case .traditionalChinese: return "🇹🇼"
             }
         }
     }
@@ -155,6 +158,17 @@ final class LocalizationManager: ObservableObject {
     /// OmniTAK ships. Falls back to English.
     private static func systemDefault() -> Language {
         for preferred in Locale.preferredLanguages {
+            let lower = preferred.lowercased()
+            // Script-aware match first so "zh-Hant-TW" resolves to
+            // zh-Hant rather than collapsing to a bare "zh" (which we
+            // don't ship). Longer raw values are checked naturally
+            // since a script tag only matches its own prefix.
+            if let match = Language.allCases.first(where: {
+                lower.hasPrefix($0.rawValue.lowercased())
+            }) {
+                return match
+            }
+            // Bare two-letter subtag (e.g. "fr-CA" → fr).
             let code = String(preferred.prefix(2)).lowercased()
             if let match = Language(rawValue: code) {
                 return match

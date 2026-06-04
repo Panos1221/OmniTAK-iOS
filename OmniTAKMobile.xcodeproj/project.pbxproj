@@ -719,6 +719,7 @@
 		E6426A4780DEDD91B5DA2B46 /* SFAPMFT----.svg */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text; path = "SFAPMFT----.svg"; sourceTree = "<group>"; };
 		E763527D180A2BFA06815720 /* SHAPMFQ----.svg */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text; path = "SHAPMFQ----.svg"; sourceTree = "<group>"; };
 		E7CD94F2AA3C9E1621AE6021 /* es */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.strings; name = es; path = OmniTAKMobile/Resources/es.lproj/Localizable.strings; sourceTree = "<group>"; };
+		D9B49FD9370499A376CCF228 /* zh-Hant */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.strings; name = "zh-Hant"; path = "OmniTAKMobile/Resources/zh-Hant.lproj/Localizable.strings"; sourceTree = "<group>"; };
 		E7CED1E79EF4463A98DDA34A /* MapLibre3DSettingsView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = MapLibre3DSettingsView.swift; path = OmniTAKMobile/Features/Map/MapLibre/MapLibre3DSettingsView.swift; sourceTree = "<group>"; };
 		EA171D08B8BECD16ACA18D51 /* SHGP-------.svg */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text; path = "SHGP-------.svg"; sourceTree = "<group>"; };
 		EA4A86523E550E87AC1EE8A4 /* SALUTEReportView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = SALUTEReportView.swift; path = OmniTAKMobile/Features/Military/Views/SALUTEReportView.swift; sourceTree = "<group>"; };
@@ -2364,6 +2365,7 @@
 				de,
 				fr,
 				es,
+				"zh-Hant",
 			);
 			mainGroup = A1111111111111111111111100000071;
 			packageReferences = (
@@ -2790,6 +2792,7 @@
 				6573C607EB2B7E7F82B0B79D /* de */,
 				B1F80E89642B38A496E02F12 /* fr */,
 				E7CD94F2AA3C9E1621AE6021 /* es */,
+				D9B49FD9370499A376CCF228 /* zh-Hant */,
 			);
 			name = Localizable.strings;
 			sourceTree = "<group>";
