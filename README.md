@@ -1,5 +1,7 @@
 # OmniTAK-iOS
 
+[![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
+
 Open-source TAK (Team Awareness Kit) client for iPhone and iPad, built in Swift + SwiftUI.
 
 OmniTAK speaks Cursor-on-Target (CoT) over TLS to any TAK Server, supports data-package import, ADS-B traffic display, RTSP/SRT/HLS video feeds, Meshtastic radios, and more — designed for search-and-rescue, civil defense, and outdoor operations.
@@ -84,6 +86,8 @@ Contributions welcome. See [CONTRIBUTING.md](CONTRIBUTING.md). For larger change
 ## License
 
 Apache License 2.0. See [LICENSE](LICENSE).
+
+**Free to use, modify, and share, with no separate permission needed.** Apache 2.0 covers personal, volunteer, commercial, and government use at no cost. It only asks that you keep the existing copyright and license notice in place, and note any changes you make to the source. Translations and other contributions are welcome.
 
 OmniTAK-iOS bundles or links the following open-source components:
 
