@@ -71,6 +71,24 @@ class PositionBroadcastService: ObservableObject {
         }
     }
 
+    // MARK: - Mesh Off-Grid PPLI
+    //
+    // When a Meshtastic radio is connected, OmniTAK also broadcasts self-position
+    // over the mesh (portnum 72 / ATAK_PLUGIN) so peers with NO server can see
+    // each other on the map.  This is throttled independently of the auto-PPLI
+    // keepalive (which is server-only) to avoid flooding low-bandwidth LoRa links.
+
+    @Published var meshBroadcastEnabled: Bool = true {
+        didSet { saveBroadcastSettings() }
+    }
+
+    @Published var meshPPLIInterval: TimeInterval = 30.0 {
+        didSet { saveBroadcastSettings() }
+    }
+
+    // Not @Published — mutated on ppliQueue; expose internal for @testable access.
+    internal var lastMeshPPLISend: Date?
+
     @Published var lastBroadcastTime: Date?
     @Published var broadcastCount: Int = 0
     @Published var lastError: String?
@@ -227,6 +245,33 @@ class PositionBroadcastService: ObservableObject {
 
         let cotXML = generateSelfSACoT(location: location)
         let _ = takService.sendCoT(xml: cotXML)
+
+        // --- Mesh off-grid PPLI ---
+        // Reuse the already-computed CoT XML and send to mesh if connected.
+        // Throttled to meshPPLIInterval to avoid saturating low-bandwidth LoRa.
+        // MeshtasticManager is @MainActor, so we must hop to the main actor
+        // before touching it (prevents the off-main @Published-publish crash class).
+        if meshBroadcastEnabled {
+            let interval = meshPPLIInterval
+            let lastSend = lastMeshPPLISend
+            let now = Date()
+            guard lastSend == nil || now.timeIntervalSince(lastSend!) >= interval else {
+                return
+            }
+            lastMeshPPLISend = now
+            let xmlToSend = cotXML
+            Task { @MainActor in
+                guard MeshtasticManager.shared.isConnected else { return }
+                guard let event = CoTMessageParser.parsePositionUpdate(xml: xmlToSend) else {
+                    print("⚠️ Mesh PPLI: failed to parse self-SA CoT XML for mesh send")
+                    return
+                }
+                MeshtasticManager.shared.sendCoTOverMesh(event)
+                #if DEBUG
+                print("📡 Mesh PPLI: sent self-position over mesh")
+                #endif
+            }
+        }
     }
 
     // MARK: - Position Broadcast
@@ -374,6 +419,8 @@ class PositionBroadcastService: ObservableObject {
         UserDefaults.standard.set(teamRole, forKey: "teamRole")
         UserDefaults.standard.set(autoPPLIEnabled, forKey: "autoPPLIEnabled")
         UserDefaults.standard.set(autoPPLIInterval, forKey: "autoPPLIInterval")
+        UserDefaults.standard.set(meshBroadcastEnabled, forKey: "meshBroadcastEnabled")
+        UserDefaults.standard.set(meshPPLIInterval, forKey: "meshPPLIInterval")
     }
 
     private func loadBroadcastSettings() {
@@ -413,6 +460,15 @@ class PositionBroadcastService: ObservableObject {
         let savedPPLIInterval = UserDefaults.standard.double(forKey: "autoPPLIInterval")
         if savedPPLIInterval > 0 {
             autoPPLIInterval = savedPPLIInterval
+        }
+
+        if UserDefaults.standard.object(forKey: "meshBroadcastEnabled") != nil {
+            meshBroadcastEnabled = UserDefaults.standard.bool(forKey: "meshBroadcastEnabled")
+        }
+
+        let savedMeshInterval = UserDefaults.standard.double(forKey: "meshPPLIInterval")
+        if savedMeshInterval > 0 {
+            meshPPLIInterval = savedMeshInterval
         }
     }
 
