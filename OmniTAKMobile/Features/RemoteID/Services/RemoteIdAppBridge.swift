@@ -155,6 +155,7 @@ final class RemoteIdAppBridge: ObservableObject {
         let detail = CoTDetail(
             callsign: "DRONE-\(track.uasId)",
             team: nil,
+            teamRole: nil,
             speed: loc.groundSpeedMs,
             course: Double(loc.trackDirectionDeg),
             remarks: remarks,

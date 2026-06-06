@@ -1770,6 +1770,7 @@ struct ATAKMapView: View {
                 detail: CoTDetail(
                     callsign: "OmniTAK-iOS",
                     team: "Cyan",
+                    teamRole: nil,
                     speed: location.speed >= 0 ? location.speed : nil,
                     course: location.course >= 0 ? location.course : nil,
                     remarks: nil,
