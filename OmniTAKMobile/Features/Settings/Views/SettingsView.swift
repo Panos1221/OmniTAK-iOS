@@ -153,11 +153,17 @@ struct SettingsView: View {
                         Text("MGRS").tag("MGRS")
                         Text("UTM").tag("UTM")
                         Text(loc.t("settings.coord.bng")).tag("BNG")
+                        Text(loc.t("settings.coord.twd97")).tag("TWD97")
                     }
 
                     // Help text for coordinate formats
                     if coordinateFormatString == "BNG" {
                         Text(loc.t("settings.coord.bngHelp"))
+                            .font(.caption2)
+                            .foregroundColor(.secondary)
+                            .padding(.top, 4)
+                    } else if coordinateFormatString == "TWD97" {
+                        Text(loc.t("settings.coord.twd97Help"))
                             .font(.caption2)
                             .foregroundColor(.secondary)
                             .padding(.top, 4)

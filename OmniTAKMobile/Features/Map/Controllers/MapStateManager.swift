@@ -58,6 +58,7 @@ enum CoordinateDisplayFormat: String, CaseIterable, Identifiable {
     case mgrs = "MGRS"
     case utm = "UTM"
     case bng = "BNG"
+    case twd97 = "TWD97"
 
     var id: String { rawValue }
 
@@ -69,6 +70,7 @@ enum CoordinateDisplayFormat: String, CaseIterable, Identifiable {
         case .mgrs: return "Military Grid Reference System"
         case .utm: return "Universal Transverse Mercator"
         case .bng: return "British National Grid"
+        case .twd97: return "TWD97 / TM2 (Taiwan)"
         }
     }
 
@@ -96,6 +98,10 @@ enum CoordinateDisplayFormat: String, CaseIterable, Identifiable {
             } else {
                 return "Out of BNG bounds"
             }
+        case .twd97:
+            // Readout uses the full 7+7 absolute coordinate; the 5+5 grid
+            // mode lives in the "Go to coordinate" entry sheet.
+            return TWD97Converter.formatTWD97(coordinate, mode: .full7, withSpaces: true)
         }
     }
 }

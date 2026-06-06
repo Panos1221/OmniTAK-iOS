@@ -121,3 +121,124 @@
 "quickstart.time.discover" = "< 1 min";
 "quickstart.time.quick" = "< 2 min";
 "quickstart.time.manual" = "~3 min";
+
+/* --- Bottom bar + tools shortcuts (labels). Keyed by BarItem.id ("bar.<id>").
+       Military/technical acronyms (CASEVAC, 9-Line, SPOTREP, ADS-B, Self SA,
+       Mesh) stay English per the translation conventions. --- */
+"bar.tab.map" = "Map";
+"bar.tab.chat" = "Chat";
+"bar.tab.servers" = "Servers";
+"bar.tab.mesh" = "Mesh";
+"bar.tab.settings" = "Settings";
+"bar.cmd.tools" = "Tools";
+"bar.cmd.fulltools" = "All Tools";
+"bar.cmd.droppin" = "Drop Pin";
+"bar.cmd.measure" = "Measure";
+"bar.cmd.drawing" = "Drawing";
+"bar.cmd.layers" = "Layers";
+"bar.cmd.drawingslist" = "Drawings";
+"bar.cmd.lasso" = "Select";
+"bar.cmd.engine" = "2D / 3D";
+"bar.tool.pointer" = "Point Drop";
+"bar.tool.routes" = "Routes";
+"bar.tool.navigation" = "Navigation";
+"bar.tool.teams" = "Teams";
+"bar.tool.contacts" = "Contacts";
+"bar.tool.casevac" = "CASEVAC";
+"bar.tool.nineline" = "9-Line";
+"bar.tool.spotrep" = "SPOTREP";
+"bar.tool.alert" = "Emergency";
+"bar.tool.tracks" = "Tracks";
+"bar.tool.geofence" = "Geofence";
+"bar.tool.adsb" = "ADS-B";
+"bar.tool.selfsa" = "Self SA";
+"bar.tool.elevation" = "Elevation";
+"bar.tool.los" = "Line of Sight";
+"bar.tool.missionsync" = "Mission Sync";
+"bar.tool.plugins" = "Plugins";
+"bar.tool.uas" = "Vehicles";
+
+/* --- Bottom bar edit/coachmark chrome --- */
+"bar.coachmark" = "Press & hold to build your own toolbar";
+"bar.editHint" = "Drag to reorder · tap − to remove · ＋ to add";
+"bar.done" = "Done";
+"bar.add" = "Add";
+
+/* --- Tools popup (ToolsLauncherSheet): inline rows --- */
+"toolsheet.lasso.title" = "Lasso Select";
+"toolsheet.lasso.subtitle" = "Long-press + drag on the map to multi-select";
+"toolsheet.engine.to2d" = "Switch to 2D Map";
+"toolsheet.engine.to3d" = "Switch to 3D Globe";
+"toolsheet.engine.sub2d" = "Currently 3D Cesium — drop to Mapbox 2D for offline / low-bandwidth";
+"toolsheet.engine.sub3d" = "Currently 2D Mapbox — back to the photoreal Cesium globe";
+"toolsheet.customize.title" = "Customize Toolbar";
+"toolsheet.customize.subtitle" = "Pick and arrange your own bottom-bar shortcuts";
+"toolsheet.fullgrid.title" = "Full Tools Grid…";
+"toolsheet.fullgrid.subtitle" = "The classic grid — kept as a fallback";
+
+/* --- Tools popup: section headers --- */
+"tools.section.markers" = "Markers & Terrain";
+"tools.section.reports" = "Reports";
+"tools.section.teams" = "Teams & Comms";
+"tools.section.navigation" = "Navigation";
+"tools.section.airdata" = "Air & Data";
+"tools.section.more" = "More";
+
+/* --- Tools popup: catalog (keyed by tool id) --- */
+"tools.pointer.title" = "Point Drop";
+"tools.pointer.subtitle" = "Place and label a tactical marker";
+"tools.kml.title" = "Map Overlays";
+"tools.kml.subtitle" = "Import & toggle KML/KMZ overlays";
+"tools.elevation.title" = "Elevation Profile";
+"tools.elevation.subtitle" = "Terrain profile along a path";
+"tools.los.title" = "Line of Sight";
+"tools.los.subtitle" = "Visibility between two points";
+"tools.casevac.title" = "CASEVAC";
+"tools.casevac.subtitle" = "Casualty evacuation request";
+"tools.nineline.title" = "9-Line / CAS";
+"tools.nineline.subtitle" = "Close air support request";
+"tools.spotrep.title" = "SPOTREP";
+"tools.spotrep.subtitle" = "Spot report";
+"tools.alert.title" = "Emergency Beacon";
+"tools.alert.subtitle" = "Broadcast an emergency alert";
+"tools.teams.title" = "Teams";
+"tools.teams.subtitle" = "Manage team members";
+"tools.contacts.title" = "Contacts";
+"tools.contacts.subtitle" = "Contact list & chat";
+"tools.selfsa.title" = "Self / Position";
+"tools.selfsa.subtitle" = "Broadcast your position (PLI)";
+"tools.routes.title" = "Routes";
+"tools.routes.subtitle" = "Plan and navigate routes";
+"tools.turnbyturn.title" = "Turn-by-Turn";
+"tools.turnbyturn.subtitle" = "Guided navigation";
+"tools.tracks.title" = "Track Recording";
+"tools.tracks.subtitle" = "Record & review your track";
+"tools.geofence.title" = "Geofences";
+"tools.geofence.subtitle" = "Create alert zones";
+"tools.adsb.title" = "ADS-B";
+"tools.adsb.subtitle" = "Live aircraft tracking";
+"tools.missionsync.title" = "Mission Sync";
+"tools.missionsync.subtitle" = "Sync mission packages";
+"tools.plugins.title" = "Plugins";
+"tools.plugins.subtitle" = "Manage installed plugins";
+
+/* TWD97 (Taiwan) coordinate format + Go to Coordinate entry */
+"settings.coord.twd97" = "TWD97 / TM2 (Taiwan)";
+"settings.coord.twd97Help" = "TWD97 / TM2 zone 121 for Taiwan (≈WGS84). Readout uses the full 7+7 digit coordinate; the Go to Coordinate tool also offers 5+5 local grid input.";
+"tools.gotocoord.title" = "Go to Coordinate";
+"tools.gotocoord.subtitle" = "Jump to a typed grid/lat-lon (TWD97, MGRS)";
+"common.cancel" = "Cancel";
+"coordentry.title" = "Go to Coordinate";
+"coordentry.format" = "Format";
+"coordentry.digitmode" = "Digit Mode";
+"coordentry.input" = "Input";
+"coordentry.preview" = "Preview";
+"coordentry.dropmarker" = "Drop a marker here";
+"coordentry.go" = "Go";
+"coordentry.easting" = "Easting";
+"coordentry.northing" = "Northing";
+"coordentry.lat" = "Latitude";
+"coordentry.lon" = "Longitude";
+"coordentry.grid5.note" = "5+5 is relative to the current map center (100 km cell).";
+"coordentry.invalid" = "Coordinate out of range or unparseable.";
+"coordentry.enterprompt" = "Enter a coordinate to preview the location.";
