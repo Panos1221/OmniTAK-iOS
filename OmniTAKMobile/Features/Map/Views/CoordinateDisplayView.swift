@@ -128,6 +128,8 @@ struct CoordinateDisplayView: View {
             return formatUTM(coordinate)
         case .bng:
             return formatBNG(coordinate)
+        case .twd97:
+            return formatTWD97(coordinate)
         }
     }
 
@@ -236,6 +238,13 @@ struct CoordinateDisplayView: View {
             return "Out of BNG bounds"
         }
     }
+
+    // MARK: - TWD97 Formatting
+
+    private func formatTWD97(_ coordinate: CLLocationCoordinate2D) -> String {
+        // Full 7+7 absolute TM2 readout; entry sheet offers the 5+5 grid mode.
+        return TWD97Converter.formatTWD97(coordinate, mode: .full7, withSpaces: true)
+    }
 }
 
 // MARK: - Coordinate Format Enum
@@ -245,6 +254,7 @@ enum CoordinateFormat: String, CaseIterable {
     case mgrs = "MGRS"
     case utm = "UTM"
     case bng = "BNG"
+    case twd97 = "TWD97"
 
     var displayName: String {
         switch self {
@@ -256,6 +266,8 @@ enum CoordinateFormat: String, CaseIterable {
             return "Universal Transverse Mercator"
         case .bng:
             return "British National Grid"
+        case .twd97:
+            return "TWD97 / TM2 (Taiwan)"
         }
     }
 }

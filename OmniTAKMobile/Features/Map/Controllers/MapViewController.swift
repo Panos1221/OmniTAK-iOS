@@ -1327,6 +1327,15 @@ struct ATAKMapView: View {
             )
     }
 
+    /// Notification observers for the "Go to Coordinate" entry sheet, kept on
+    /// a separate EmptyView so they don't extend `lifecycleHandlers`' chain.
+    private var coordinateHandlers: some View {
+        EmptyView()
+            .onReceive(NotificationCenter.default.publisher(for: .goToCoordinate)) { note in
+                handleGoToCoordinate(note)
+            }
+    }
+
     private var lifecycleHandlers: some View {
         EmptyView()
             .onAppear {
@@ -1512,6 +1521,10 @@ struct ATAKMapView: View {
             .onReceive(NotificationCenter.default.publisher(for: .startNavigationToContact)) { note in
                 handleStartNavigationToContact(note)
             }
+            // Coordinate-entry handler lives on a sibling EmptyView (attached
+            // via .background) to keep this already-large modifier chain under
+            // the Swift type-checker ceiling.
+            .background(coordinateHandlers)
             .sheet(isPresented: $showAppModePicker) {
                 AppModePickerView()
             }
@@ -1986,6 +1999,31 @@ struct ATAKMapView: View {
             object: nil,
             userInfo: ["lat": target.latitude, "lon": target.longitude]
         )
+    }
+
+    /// Jump the map to a typed coordinate (from the "Go to Coordinate"
+    /// sheet), optionally dropping a marker. Centers both the 2D (MapLibre)
+    /// and 3D (Cesium) engines, mirroring handleCenterMapOnContact.
+    private func handleGoToCoordinate(_ note: Notification) {
+        guard let lat = note.userInfo?["lat"] as? Double,
+              let lon = note.userInfo?["lon"] as? Double else { return }
+        let target = CLLocationCoordinate2D(latitude: lat, longitude: lon)
+        let drop = note.userInfo?["drop"] as? Bool ?? false
+
+        withAnimation {
+            mapRegion = MKCoordinateRegion(
+                center: target,
+                span: MKCoordinateSpan(latitudeDelta: 0.02, longitudeDelta: 0.02)
+            )
+        }
+        NotificationCenter.default.post(
+            name: .cesiumCenterOn,
+            object: nil,
+            userInfo: ["lat": target.latitude, "lon": target.longitude]
+        )
+        if drop {
+            dropMarkerAtLocation(coordinate: target, affiliation: .unknown)
+        }
     }
 
     private func handleStartNavigationToContact(_ note: Notification) {

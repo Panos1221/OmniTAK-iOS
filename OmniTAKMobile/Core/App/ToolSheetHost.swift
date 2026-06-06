@@ -51,6 +51,7 @@ struct ToolSheetHost: ViewModifier {
         case "plugins":      PluginsListView()
         case "kml":          KMLOverlaysPanel()
         case "uas":          UASConnectView()
+        case "gotocoord":    CoordinateEntryView()
         case "pointer":
             PointDropperSheetView(isPresented: Binding(
                 get: { active != nil },
