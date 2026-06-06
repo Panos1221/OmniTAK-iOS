@@ -443,6 +443,16 @@ class MilStdCoTParser {
             modifiers = result.modifiers
         }
 
+        // Air tracks (a-?-A-M-F/H-…, e.g. FAA Remote ID drones a-u-A-M-H-Q)
+        // don't use the U/E/I SIDC prefixes parseFunction expects, so they
+        // fall through to .unknown and render as a generic ground-ish blip.
+        // Map the air dimension's rotary/fixed wing to an aircraft icon so
+        // UAS and other air contacts actually read as airborne.
+        if battleDimension == .air && unitType == .unknown {
+            let fn = components.count > 3 ? components[3...].map { $0.uppercased() } : []
+            unitType = fn.contains("H") ? .utilityHelicopter : .aviation
+        }
+
         return MilStdSymbolProperties(
             affiliation: affiliation,
             battleDimension: battleDimension,

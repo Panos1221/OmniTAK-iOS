@@ -977,7 +977,6 @@ class TAKService: ObservableObject {
     @Published var lastError = ""
     @Published var messagesReceived: Int = 0
     @Published var messagesSent: Int = 0
-    @Published var lastMessage = ""
     @Published var cotEvents: [CoTEvent] = []
     @Published var enhancedMarkers: [String: EnhancedCoTMarker] = [:]  // UID -> Marker map
     @Published var bytesReceived: Int = 0
@@ -1294,75 +1293,71 @@ class TAKService: ObservableObject {
         }
         connectionsLock.unlock()
 
-        bytesReceived = totalBytes
+        // Route through the coalesced flush so the published counter has a
+        // single writer (this runs on low-rate connection events).
+        rawBytesReceived = totalBytes
+        scheduleStatsFlush()
     }
 
-    private func handleReceivedMessage(_ xml: String, fromServerId serverId: UUID? = nil) {
-        messagesReceived += 1
-        lastMessage = xml
+    // MARK: - Coalesced receive statistics
+    //
+    // `messagesReceived` / `bytesReceived` are @Published and observed by the
+    // map view (ATAKMapView holds @ObservedObject TAKService). Bumping them on
+    // every inbound packet re-evaluated the entire map body per packet — a
+    // spurious-invalidation lag source on busy servers, since the counters
+    // don't affect what's on the map. We now increment plain backing ints per
+    // packet and flush the @Published mirrors at most ~4x/sec. The flush is the
+    // SOLE writer of the two published counters so nothing races it.
+    private var rawMessagesReceived = 0
+    private var rawBytesReceived = 0
+    private var statsFlushScheduled = false
 
-        // Update bytes received
-        if let tcp = directTCP {
-            bytesReceived = tcp.bytesReceived
+    /// Per-packet received-counter bump (main thread; all callers already hop).
+    /// `fileprivate` so the C-FFI `cotCallback` (file scope) can call it too.
+    fileprivate func incrementMessagesReceived(bytes: Int? = nil) {
+        rawMessagesReceived += 1
+        if let bytes { rawBytesReceived = bytes }
+        scheduleStatsFlush()
+    }
+
+    /// Coalesce published-counter updates to ~4x/sec. Idempotent until it fires.
+    private func scheduleStatsFlush() {
+        guard !statsFlushScheduled else { return }
+        statsFlushScheduled = true
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) { [weak self] in
+            guard let self else { return }
+            self.statsFlushScheduled = false
+            if self.messagesReceived != self.rawMessagesReceived { self.messagesReceived = self.rawMessagesReceived }
+            if self.bytesReceived != self.rawBytesReceived { self.bytesReceived = self.rawBytesReceived }
         }
+    }
 
-        #if DEBUG
-        print("📥 TAKService: Processing message #\(messagesReceived)")
-        #endif
+    /// Serial queue for CoT parsing. The parser compiles ~12 regular
+    /// expressions over the full XML per message; on a busy TAK server that's
+    /// dozens of packets/sec. Running it on main blocked the UI (the dominant
+    /// source of map lag). Parse off-main here — `CoTEventHandler.handle()`
+    /// re-hops to main to commit the @Published mutations, and a *serial*
+    /// queue preserves per-packet ordering into that main-queue commit.
+    private let cotParseQueue = DispatchQueue(label: "com.omnitak.cotparse", qos: .userInitiated)
 
-        // Parse the message using CoTMessageParser
-        if let eventType = CoTMessageParser.parse(xml: xml) {
-            #if DEBUG
-            // Log successful parse with event details
-            switch eventType {
-            case .positionUpdate(let event):
-                print("✅ TAKService: Parsed POSITION UPDATE - UID: \(event.uid), Callsign: \(event.detail.callsign), Type: \(event.type)")
-                print("   📍 Location: (\(event.point.lat), \(event.point.lon))")
-                print("   📊 cotEvents count BEFORE: \(cotEvents.count)")
-            case .chatMessage(let msg):
-                print("✅ TAKService: Parsed CHAT MESSAGE from \(msg.senderCallsign)")
-            case .emergencyAlert(let alert):
-                print("✅ TAKService: Parsed EMERGENCY ALERT from \(alert.callsign)")
-            case .waypoint(let event):
-                print("✅ TAKService: Parsed WAYPOINT - \(event.detail.callsign)")
-            case .unknown(let typeStr):
-                print("⚠️ TAKService: Parsed UNKNOWN event type: \(typeStr)")
-            }
-            #endif
+    private func handleReceivedMessage(_ xml: String, fromServerId serverId: UUID? = nil) {
+        // Coalesced counter bump (see incrementMessagesReceived). Note:
+        // `lastMessage` was removed — it stored the entire XML string as
+        // @Published on every packet and had zero readers anywhere in the app
+        // (pure invalidation waste).
+        incrementMessagesReceived(bytes: directTCP?.bytesReceived)
 
-            // Route to event handler
-            eventHandler.handle(event: eventType, serverId: serverId)
-
-            #if DEBUG
-            // Verify cotEvents was updated
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak self] in
-                if let self = self {
-                    print("   📊 cotEvents count AFTER: \(self.cotEvents.count)")
-                }
+        // Heavy regex parse off the main thread.
+        cotParseQueue.async { [weak self] in
+            guard let self = self else { return }
+            guard let eventType = CoTMessageParser.parse(xml: xml) else {
+                #if DEBUG
+                print("❌ TAKService: FAILED to parse CoT message! Preview: \(String(xml.prefix(200)))")
+                #endif
+                return
             }
-            #endif
-        } else {
-            #if DEBUG
-            print("❌ TAKService: FAILED to parse CoT message!")
-            print("   📄 XML Preview (first 500 chars):")
-            print("   \(String(xml.prefix(500)))")
-            // Check for common parsing issues
-            if !xml.contains("<event") {
-                print("   ⚠️ Missing <event> tag")
-            }
-            if !xml.contains("</event>") {
-                print("   ⚠️ Missing </event> tag")
-            }
-            if !xml.contains("uid=\"") {
-                print("   ⚠️ Missing uid attribute")
-            }
-            if !xml.contains("type=\"") {
-                print("   ⚠️ Missing type attribute")
-            }
-            if !xml.contains("<point") {
-                print("   ⚠️ Missing <point> element")
-            }
-            #endif
+            // Routes through CoTEventHandler.handle, which dispatches to main.
+            self.eventHandler.handle(event: eventType, serverId: serverId)
         }
     }
 
@@ -1832,6 +1827,10 @@ class TAKService: ObservableObject {
         messagesReceived = 0
         messagesSent = 0
         bytesReceived = 0
+        // Keep the coalesced backing counters in lockstep, otherwise the next
+        // scheduled flush would restore the pre-reset totals.
+        rawMessagesReceived = 0
+        rawBytesReceived = 0
 
         // Reset stats on all connections
         connectionsLock.lock()
@@ -1881,8 +1880,7 @@ private func cotCallback(
         #endif
         if let chatMessage = ChatXMLParser.parseGeoChatMessage(xml: message) {
             DispatchQueue.main.async {
-                service.messagesReceived += 1
-                service.lastMessage = message
+                service.incrementMessagesReceived()
                 service.onChatMessageReceived?(chatMessage)
                 #if DEBUG
                 print("💬 [CHAT DEBUG] Successfully parsed chat message from \(chatMessage.senderCallsign): \(chatMessage.messageText)")
@@ -1899,8 +1897,7 @@ private func cotCallback(
         // Check if this is a waypoint marker (b-m-p-w) or has waypoint metadata
         if let event = parseCoT(xml: message) {
             DispatchQueue.main.async {
-                service.messagesReceived += 1
-                service.lastMessage = message
+                service.incrementMessagesReceived()
 
                 // Import waypoint into WaypointManager
                 _ = WaypointManager.shared.importFromCoT(
@@ -1921,9 +1918,17 @@ private func cotCallback(
         // Parse regular CoT message
         if let event = parseCoT(xml: message) {
             DispatchQueue.main.async {
-                service.messagesReceived += 1
-                service.lastMessage = message
-                service.cotEvents.append(event)
+                service.incrementMessagesReceived()
+                // Dedup by UID: this Rust-FFI callback path runs alongside the
+                // DirectTCP path in legacy connect(), so the same contact can
+                // arrive twice. Appending blindly grew cotEvents unbounded with
+                // duplicates (a steady map-lag source). Upsert instead, exactly
+                // like CoTEventHandler.handlePositionUpdate.
+                if let idx = service.cotEvents.firstIndex(where: { $0.uid == event.uid }) {
+                    service.cotEvents[idx] = event
+                } else {
+                    service.cotEvents.append(event)
+                }
                 service.onCoTReceived?(event)
 
                 // Update enhanced marker

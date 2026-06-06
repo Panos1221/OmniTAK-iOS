@@ -86,6 +86,15 @@ class CoTEventHandler: ObservableObject {
         }
     }
 
+    /// Remove a single tracked contact by UID (e.g. a stale Remote ID / gyb
+    /// drone) so the map drops its marker immediately rather than waiting for
+    /// the staleEventThreshold backstop.
+    func removeEvent(uid: String) {
+        guard let service = takService else { return }
+        service.cotEvents.removeAll { $0.uid == uid }
+        service.enhancedMarkers.removeValue(forKey: uid)
+    }
+
     // MARK: - Setup
 
     func configure(takService: TAKService, chatManager: ChatManager) {
@@ -188,20 +197,28 @@ class CoTEventHandler: ObservableObject {
 
         // Update participant info for chat, tagged with the source server so
         // the contact list + DM routing are server-aware (multi-server).
-        if var participant = ChatXMLParser.parseParticipantFromPresence(xml: createPresenceXML(from: event)) {
-            participant.serverId = serverId
-            chatManager?.updateParticipant(participant)
-            chatManager?.updateParticipantLastSeen(id: participant.id)
-        } else {
-            // Create basic participant from CoT event (callsign + UID are always present)
-            let participant = ChatParticipant(
-                id: event.uid,
-                callsign: event.detail.callsign,
-                lastSeen: event.time,
-                isOnline: true,
-                serverId: serverId
-            )
-            chatManager?.updateParticipant(participant)
+        //
+        // Skip detected drones (RID-{uasId}): they render on the map and
+        // federate to servers like any CoT contact, but they are not EUDs and
+        // can't receive DMs, so they must not pollute the "KNOWN CONTACTS"
+        // list / New-Chat sheet. The `RID-` prefix is assigned only by
+        // RemoteIdAppBridge for on-device + gyb-sensor drone detections.
+        if !event.uid.hasPrefix("RID-") {
+            if var participant = ChatXMLParser.parseParticipantFromPresence(xml: createPresenceXML(from: event)) {
+                participant.serverId = serverId
+                chatManager?.updateParticipant(participant)
+                chatManager?.updateParticipantLastSeen(id: participant.id)
+            } else {
+                // Create basic participant from CoT event (callsign + UID are always present)
+                let participant = ChatParticipant(
+                    id: event.uid,
+                    callsign: event.detail.callsign,
+                    lastSeen: event.time,
+                    isOnline: true,
+                    serverId: serverId
+                )
+                chatManager?.updateParticipant(participant)
+            }
         }
 
         // Publish to Combine subscribers

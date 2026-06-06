@@ -150,6 +150,11 @@ struct ATAKMapView: View {
     // Computed CoT markers from TAK service - filtered by overlay settings
     private var cotMarkers: [CoTMarker] {
         takService.cotEvents.compactMap { event in
+            // Air-dimension tracks (a-?-A-…, e.g. Remote ID / gyb drones,
+            // ADS-B) carry their HAE so the 3D globe floats them at altitude
+            // with a TAK leader line; ground units stay clamped (hae nil).
+            let typeTokens = event.type.split(separator: "-")
+            let isAir = typeTokens.count > 2 && typeTokens[2].lowercased() == "a"
             let marker = CoTMarker(
                 uid: event.uid,
                 coordinate: CLLocationCoordinate2D(
@@ -158,7 +163,8 @@ struct ATAKMapView: View {
                 ),
                 type: event.type,
                 callsign: event.detail.callsign,
-                team: event.detail.team ?? "Unknown"
+                team: event.detail.team ?? "Unknown",
+                hae: (isAir && event.point.hae > 0) ? event.point.hae : nil
             )
 
             // Filter based on overlay settings and CoT affiliation
@@ -260,7 +266,11 @@ struct ATAKMapView: View {
                     }
                 }
             )
-            .id("statusbar-\(takService.isConnected)-\(takService.connectedServerIds.count)-\(takService.messagesReceived)-\(takService.messagesSent)")
+            // Identity keyed on connection state only. Message counters were
+            // in here too, which tore down + rebuilt the whole status-bar
+            // subtree on every counter change; they're passed as params and
+            // re-render naturally without an identity reset.
+            .id("statusbar-\(takService.isConnected)-\(takService.connectedServerIds.count)")
 
             Spacer()
 
@@ -332,6 +342,7 @@ struct ATAKMapView: View {
                 ATAKSidePanel(
                     isExpanded: $showLayersPanel,
                     activeMapLayer: $activeMapLayer,
+                    is3D: mapEngine == .cesium3D,
                     showFriendly: $showFriendly,
                     showHostile: $showHostile,
                     showNeutral: $showNeutral,
@@ -1452,6 +1463,12 @@ struct ATAKMapView: View {
                     showLayersPanel.toggle()
                 }
             }
+            // Radial "Center Map" + draw shortcuts. Bundled into a single
+            // ViewModifier (type-checked independently) so the four extra
+            // `.onReceive`s don't push this already-maxed body expression past
+            // the Swift type-checker's complexity limit. Each of these
+            // notifications previously had no observer — they were dead taps.
+            .modifier(RadialMenuExtraObservers(mapRegion: $mapRegion, drawingManager: drawingManager, mapEngineRaw: $mapEngineRaw))
             // Customizable bar "Drop Pin" shortcut — drop a marker at the
             // current map center on whichever engine is active. Cesium uses
             // its persisted camera center; Mapbox uses the tracked region.
@@ -2228,6 +2245,8 @@ struct MapToolButton: View {
 struct ATAKSidePanel: View {
     @Binding var isExpanded: Bool
     @Binding var activeMapLayer: String
+    /// True on the Cesium 3D globe — gates 3D-only base options (Photoreal).
+    var is3D: Bool = false
     @Binding var showFriendly: Bool
     @Binding var showHostile: Bool
     @Binding var showNeutral: Bool
@@ -2272,6 +2291,14 @@ struct ATAKSidePanel: View {
                 }
                 LayerButton(icon: "map.circle", title: "Standard", isActive: activeMapLayer == "standard", compact: true) {
                     onLayerToggle("standard")
+                }
+                // Photorealistic 3D tiles (Google) — globe only, loaded on
+                // demand. Heavy on GPU/network, so it's opt-in rather than
+                // always-on: picking another base unloads it.
+                if is3D {
+                    LayerButton(icon: "building.2.fill", title: "Photoreal 3D", isActive: activeMapLayer == "photoreal", compact: true) {
+                        onLayerToggle("photoreal")
+                    }
                 }
 
                 Divider()
@@ -2387,6 +2414,68 @@ struct LayerButton: View {
     }
 }
 
+// MARK: - Radial Menu Extra Observers
+
+/// Wires the radial-menu "Center Map" and draw-shape shortcuts that previously
+/// posted notifications with no observer (dead taps). Lives in its own
+/// ViewModifier so its `.onReceive`s are type-checked independently of
+/// `ATAKMapView`'s body, which is already at the Swift type-checker's
+/// expression-complexity ceiling.
+private struct RadialMenuExtraObservers: ViewModifier {
+    @Binding var mapRegion: MKCoordinateRegion
+    let drawingManager: DrawingToolsManager
+    @Binding var mapEngineRaw: String
+    @State private var showLoadFallbackNote = false
+
+    func body(content: Content) -> some View {
+        content
+            // 3D globe load watchdog fired — fall back to 2D so the user isn't
+            // stuck on an infinite spinner when the Cesium CDN is unreachable.
+            .onReceive(NotificationCenter.default.publisher(for: .cesiumLoadTimedOut)) { _ in
+                guard mapEngineRaw == MapEngine.cesium3D.rawValue else { return }
+                mapEngineRaw = MapEngine.mapbox2D.rawValue
+                withAnimation { showLoadFallbackNote = true }
+                DispatchQueue.main.asyncAfter(deadline: .now() + 5) {
+                    withAnimation { showLoadFallbackNote = false }
+                }
+            }
+            .overlay(alignment: .top) {
+                if showLoadFallbackNote {
+                    Text("3D globe couldn't load — switched to 2D map")
+                        .font(.footnote.weight(.medium))
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 14).padding(.vertical, 8)
+                        .background(Capsule().fill(Color.black.opacity(0.8)))
+                        .padding(.top, 60)
+                        .transition(.move(edge: .top).combined(with: .opacity))
+                }
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .radialMenuCenterMap)) { note in
+                guard let coordinate = note.userInfo?["coordinate"] as? CLLocationCoordinate2D else { return }
+                withAnimation {
+                    mapRegion = MKCoordinateRegion(
+                        center: coordinate,
+                        span: MKCoordinateSpan(latitudeDelta: 0.02, longitudeDelta: 0.02)
+                    )
+                }
+                NotificationCenter.default.post(
+                    name: .cesiumCenterOn,
+                    object: nil,
+                    userInfo: ["lat": coordinate.latitude, "lon": coordinate.longitude]
+                )
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .radialMenuDrawLine)) { _ in
+                drawingManager.startDrawing(mode: .line)
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .radialMenuDrawCircle)) { _ in
+                drawingManager.startDrawing(mode: .circle)
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .radialMenuDrawPolygon)) { _ in
+                drawingManager.startDrawing(mode: .polygon)
+            }
+    }
+}
+
 // MARK: - CoT Marker
 
 struct CoTMarker: Identifiable {
@@ -2396,6 +2485,9 @@ struct CoTMarker: Identifiable {
     let type: String
     let callsign: String
     let team: String
+    /// Height above ellipsoid (m) for airborne tracks (air-dimension CoT).
+    /// nil → clamp to ground. Drives the Cesium 3D altitude + TAK leader line.
+    var hae: Double? = nil
 }
 
 struct CoTMarkerView: View {
@@ -4380,6 +4472,11 @@ extension Notification.Name {
     /// the globe's camera to a contact's position (mapRegion only drives the
     /// 2D engine). userInfo["lat"]: Double, userInfo["lon"]: Double.
     static let cesiumCenterOn = Notification.Name("cesiumCenterOn")
+    /// Posted by the Cesium coordinator's load watchdog when the globe fails to
+    /// initialize within the timeout (e.g. the cesium.com CDN is unreachable).
+    /// `ATAKMapView` falls the map back to the 2D engine so the user isn't
+    /// stuck on an infinite "Loading 3D world…" spinner.
+    static let cesiumLoadTimedOut = Notification.Name("cesiumLoadTimedOut")
 }
 
 struct CesiumMainMap: UIViewRepresentable {
@@ -4428,6 +4525,11 @@ struct CesiumMainMap: UIViewRepresentable {
         config.userContentController.add(context.coordinator, name: "omniMapEvent")
 
         let webView = WKWebView(frame: .zero, configuration: config)
+        // Recover from WebGL/render-process termination. Cesium is GPU-heavy;
+        // iOS can kill the WebContent process under memory pressure, leaving a
+        // black globe that never returns on its own (the user had to manually
+        // toggle 2D↔3D). The delegate's `…ProcessDidTerminate` reloads it.
+        webView.navigationDelegate = context.coordinator
         webView.isOpaque = false
         webView.backgroundColor = .black
         webView.scrollView.backgroundColor = .black
@@ -4465,6 +4567,7 @@ struct CesiumMainMap: UIViewRepresentable {
         }
 
         webView.loadHTMLString(CesiumMainMap.html, baseURL: URL(string: "https://cesium.com/"))
+        context.coordinator.startLoadWatchdog()
         return webView
     }
 
@@ -4479,21 +4582,28 @@ struct CesiumMainMap: UIViewRepresentable {
         context.coordinator.lastMeasurementsSnapshot = measurementsJSON
         context.coordinator.lastTrailsSnapshot = trailsJSON
         if context.coordinator.isReady {
-            webView.evaluateJavaScript("window.OmniBridge.setEntities(\(entities));", completionHandler: nil)
-            // Dedup drawings + measurements bridge calls — `updateUIView`
-            // fires on every SwiftUI re-render, which a camera tick triggers
-            // via published region updates. Without this guard the WKWebView
-            // re-applies identical drawing/measurement payloads on every
-            // pan/zoom frame, which causes visible label + waypoint flicker
-            // on the 3D globe — same anti-pattern fixed on the 2D path via
-            // `shouldPublish(layer:signature:)` in commit c9855f0.
+            // Dedup ALL the bulk bridge calls — `updateUIView` fires on every
+            // SwiftUI re-render, including ones triggered by unrelated
+            // @Published churn (per-packet message counters, camera ticks).
+            // Crossing the WKWebView process boundary with an identical
+            // entity/trail payload every frame was a dominant map-lag source.
+            // `setEntities` + `setTrails` were previously unguarded while
+            // `setDrawings`/`setMeasurements` were — bring them in line (same
+            // anti-pattern fixed on the 2D path in commit c9855f0). The JSON is
+            // still built (it backs `lastSnapshot`, replayed on webview-ready);
+            // only the cross-boundary push is skipped when nothing changed.
+            if context.coordinator.shouldPublishBridge(call: "setEntities", signature: entities.hashValue) {
+                webView.evaluateJavaScript("window.OmniBridge.setEntities(\(entities));", completionHandler: nil)
+            }
             if context.coordinator.shouldPublishBridge(call: "setDrawings", signature: drawings.hashValue) {
                 webView.evaluateJavaScript("window.OmniBridge.setDrawings(\(drawings));", completionHandler: nil)
             }
             if context.coordinator.shouldPublishBridge(call: "setMeasurements", signature: measurementsJSON.hashValue) {
                 webView.evaluateJavaScript("window.OmniBridge.setMeasurements(\(measurementsJSON));", completionHandler: nil)
             }
-            webView.evaluateJavaScript("window.OmniBridge.setTrails(\(trailsJSON));", completionHandler: nil)
+            if context.coordinator.shouldPublishBridge(call: "setTrails", signature: trailsJSON.hashValue) {
+                webView.evaluateJavaScript("window.OmniBridge.setTrails(\(trailsJSON));", completionHandler: nil)
+            }
 
             // GPS follow mode — recenter the camera on the operator. `follow`
             // keeps the live camera's zoom/tilt/heading and only moves the
@@ -4536,7 +4646,7 @@ struct CesiumMainMap: UIViewRepresentable {
 
     func makeCoordinator() -> Coordinator { Coordinator(self) }
 
-    class Coordinator: NSObject, WKScriptMessageHandler {
+    class Coordinator: NSObject, WKScriptMessageHandler, WKNavigationDelegate {
         var parent: CesiumMainMap
         weak var webView: WKWebView?
         var isReady = false
@@ -4556,6 +4666,34 @@ struct CesiumMainMap: UIViewRepresentable {
         var zoomObserver: NSObjectProtocol?
         /// Observer token for "Show on Map" (contact-centering) commands.
         var centerOnObserver: NSObjectProtocol?
+        /// Watchdog: the globe pulls Cesium.js + terrain from the cesium.com
+        /// CDN on every load. If the device can't reach it (bad network, dead
+        /// CDN) the page sits on "Loading 3D world…" forever. If the bridge
+        /// hasn't signalled ready within the timeout, fall back to 2D rather
+        /// than hang. Cancelled the instant `omniBridgeReady` fires.
+        var loadWatchdog: Timer?
+
+        func startLoadWatchdog() {
+            loadWatchdog?.invalidate()
+            loadWatchdog = Timer.scheduledTimer(withTimeInterval: 12.0, repeats: false) { [weak self] _ in
+                guard let self, !self.isReady else { return }
+                NotificationCenter.default.post(name: .cesiumLoadTimedOut, object: nil)
+            }
+        }
+
+        /// The WebGL render process was killed (memory pressure) — the globe is
+        /// now black and won't recover on its own. Reload it; `omniBridgeReady`
+        /// will re-fire and `updateUIView` re-pushes the entity snapshot, so the
+        /// scene restores. The watchdog covers the case where the reload itself
+        /// can't complete (→ falls back to 2D).
+        func webViewWebContentProcessDidTerminate(_ webView: WKWebView) {
+            isReady = false
+            // Force the next updateUIView to re-push every bridge payload (the
+            // fresh page has no entities/drawings/trails yet).
+            bridgePayloadHashes.removeAll()
+            webView.loadHTMLString(CesiumMainMap.html, baseURL: URL(string: "https://cesium.com/"))
+            startLoadWatchdog()
+        }
 
         /// Per-bridge-call payload hash cache. `updateUIView` runs on every
         /// SwiftUI re-render (including camera ticks), so we hash the JSON
@@ -4572,6 +4710,7 @@ struct CesiumMainMap: UIViewRepresentable {
         deinit {
             if let zoomObserver { NotificationCenter.default.removeObserver(zoomObserver) }
             if let centerOnObserver { NotificationCenter.default.removeObserver(centerOnObserver) }
+            loadWatchdog?.invalidate()
         }
 
         init(_ parent: CesiumMainMap) {
@@ -4583,6 +4722,7 @@ struct CesiumMainMap: UIViewRepresentable {
             switch message.name {
             case "omniBridgeReady":
                 isReady = true
+                loadWatchdog?.invalidate(); loadWatchdog = nil
                 // Drain the latest snapshots the moment the HTML signals it
                 // has the OmniBridge alive — anything queued during page
                 // load lands in one shot.
@@ -4838,6 +4978,12 @@ struct CesiumMainMap: UIViewRepresentable {
         // HTML side renders via milsymbol.js; when nil/unparseable it
         // falls back to the affiliation-shape canvas billboard.
         let sidc: String?
+        // TAK-style altitude leader line (vertical drop-line from ground to
+        // the icon + "{alt} m HAE" label). Reserved for detected drones so
+        // the 3D globe doesn't get cluttered with a stick under every
+        // airborne ADS-B aircraft. Aircraft still float at their altitude;
+        // they just don't draw the leader/label.
+        let leader: Bool
     }
 
     private func buildEntityJSON() -> String {
@@ -4855,7 +5001,8 @@ struct CesiumMainMap: UIViewRepresentable {
                 heading: nil,
                 // Self renders as a friendly ground combat unit so milsymbol
                 // draws the standard friendly frame the operator expects.
-                sidc: "SFGPUCI----"
+                sidc: "SFGPUCI----",
+                leader: false
             ))
         }
 
@@ -4864,7 +5011,7 @@ struct CesiumMainMap: UIViewRepresentable {
                 uid: c.uid,
                 lat: c.coordinate.latitude,
                 lon: c.coordinate.longitude,
-                hae: nil, // Phase 2 has no HAE for contacts yet — clamps to ground
+                hae: c.hae, // air tracks (drones/ADS-B) float at HAE; ground units stay nil → clamped
                 callsign: c.callsign,
                 affiliation: CesiumMainMap.affiliation(fromCoTType: c.type),
                 kind: "contact",
@@ -4872,7 +5019,10 @@ struct CesiumMainMap: UIViewRepresentable {
                 // SIDC from the existing CoT→2525 mapping service — same
                 // mapping the 2D Mapbox / MapKit paths use, so a contact
                 // reads identically across all engines.
-                sidc: MilStdIconService.shared.getSIDC(for: c.type)
+                sidc: MilStdIconService.shared.getSIDC(for: c.type),
+                // Detected drones (RID-{uasId}) get the TAK altitude leader
+                // line; other airborne CoT contacts float without the stick.
+                leader: c.uid.hasPrefix("RID-")
             ))
         }
 
@@ -4894,7 +5044,10 @@ struct CesiumMainMap: UIViewRepresentable {
                 // Aircraft keep the heading-rotated arrow billboard — the
                 // HTML _billboard() function ignores sidc when kind ==
                 // "aircraft" so the directional arrow wins.
-                sidc: nil
+                sidc: nil,
+                // ADS-B aircraft float at altitude but skip the leader line to
+                // keep a busy airspace readable.
+                leader: false
             ))
         }
 
@@ -4914,7 +5067,8 @@ struct CesiumMainMap: UIViewRepresentable {
                 affiliation: CesiumMainMap.affiliation(fromCoTType: pm.cotType),
                 kind: "marker",
                 heading: nil,
-                sidc: MilStdIconService.shared.getSIDC(for: pm.cotType)
+                sidc: MilStdIconService.shared.getSIDC(for: pm.cotType),
+                leader: false
             ))
         }
 
@@ -5087,7 +5241,7 @@ struct CesiumMainMap: UIViewRepresentable {
         <script src=\"https://unpkg.com/milsymbol@2.2.0/dist/milsymbol.js\"></script>
         <script>
           Cesium.Ion.defaultAccessToken='\(cesiumIonToken)';
-          const _state={ready:false,viewer:null,entities:new Map(),drawings:new Map(),measurements:new Map(),trails:new Map(),billboardCache:new Map(),lasso:{enabled:false,dragging:false,pts:[],handler:null}};
+          const _state={ready:false,viewer:null,entities:new Map(),drawings:new Map(),measurements:new Map(),trails:new Map(),leaders:new Map(),photoreal:null,billboardCache:new Map(),lasso:{enabled:false,dragging:false,pts:[],handler:null}};
           // Lasso multi-select drag (issue #16, 3D parity). Camera pan is
           // disabled while the lasso is enabled; the freehand path is drawn on
           // a 2D overlay canvas and the screen points are picked to lat/lon on
@@ -5172,22 +5326,43 @@ struct CesiumMainMap: UIViewRepresentable {
           }
           window.OmniBridge={
             upsertEntity(arg){const e=_parse(arg);if(!e||!e.uid||typeof e.lat!=='number'||typeof e.lon!=='number')return;const v=_state.viewer;if(!v)return;
-              const hae=(typeof e.hae==='number'&&isFinite(e.hae))?e.hae:0;const useGround=hae===0;
+              const hae=(typeof e.hae==='number'&&isFinite(e.hae))?e.hae:0;const useGround=hae<=0;const airborne=!useGround;
               const pos=Cesium.Cartesian3.fromDegrees(e.lon,e.lat,hae);
               const rot=(typeof e.heading==='number')?-e.heading*Math.PI/180:0;
+              const hr=useGround?Cesium.HeightReference.CLAMP_TO_GROUND:Cesium.HeightReference.NONE;
+              // TAK-style altitude leader line: a vertical drop-line from the
+              // ground up to the icon, so a drone reads as flying rather than
+              // sitting on the terrain; the label carries the elevation. Gated
+              // to airborne entities flagged `leader` (detected drones) — ADS-B
+              // aircraft still float at altitude but skip the stick/label so a
+              // busy airspace stays readable. Ground units never get a line.
+              const showLeader=airborne&&(e.leader===true);
+              const ac=e.affiliation||'u';
+              const leaderColor=(ac==='f')?Cesium.Color.CYAN:(ac==='h')?Cesium.Color.RED:(ac==='n')?Cesium.Color.LIME:Cesium.Color.YELLOW;
+              const leaderPos=showLeader?Cesium.Cartesian3.fromDegreesArrayHeights([e.lon,e.lat,0,e.lon,e.lat,hae]):null;
+              const labelText=(e.callsign||'')+(showLeader?('\\n'+Math.round(hae)+' m HAE'):'');
               let entity=_state.entities.get(e.uid);
               if(!entity){entity=v.entities.add({id:e.uid,position:pos,
-                billboard:{image:_billboard(e.affiliation||'u',e.kind,e.sidc),verticalOrigin:Cesium.VerticalOrigin.CENTER,heightReference:useGround?Cesium.HeightReference.CLAMP_TO_GROUND:Cesium.HeightReference.NONE,disableDepthTestDistance:Number.POSITIVE_INFINITY,scale:e.kind==='aircraft'?1.5:0.7,rotation:rot},
-                label:e.callsign?{text:e.callsign,font:'12px -apple-system, sans-serif',fillColor:Cesium.Color.WHITE,outlineColor:Cesium.Color.BLACK,outlineWidth:2,style:Cesium.LabelStyle.FILL_AND_OUTLINE,pixelOffset:new Cesium.Cartesian2(0,-32),heightReference:useGround?Cesium.HeightReference.CLAMP_TO_GROUND:Cesium.HeightReference.NONE,disableDepthTestDistance:Number.POSITIVE_INFINITY}:undefined,
+                billboard:{image:_billboard(e.affiliation||'u',e.kind,e.sidc),verticalOrigin:Cesium.VerticalOrigin.CENTER,heightReference:hr,disableDepthTestDistance:Number.POSITIVE_INFINITY,scale:e.kind==='aircraft'?1.5:0.7,rotation:rot},
+                label:labelText?{text:labelText,font:'12px -apple-system, sans-serif',fillColor:Cesium.Color.WHITE,outlineColor:Cesium.Color.BLACK,outlineWidth:2,style:Cesium.LabelStyle.FILL_AND_OUTLINE,pixelOffset:new Cesium.Cartesian2(0,-32),heightReference:hr,disableDepthTestDistance:Number.POSITIVE_INFINITY}:undefined,
               });_state.entities.set(e.uid,entity);}
-              else{entity.position=pos;entity.billboard.image=_billboard(e.affiliation||'u',e.kind,e.sidc);entity.billboard.heightReference=useGround?Cesium.HeightReference.CLAMP_TO_GROUND:Cesium.HeightReference.NONE;entity.billboard.rotation=rot;if(entity.label&&e.callsign)entity.label.text=e.callsign;}
+              else{entity.position=pos;entity.billboard.image=_billboard(e.affiliation||'u',e.kind,e.sidc);entity.billboard.heightReference=hr;entity.billboard.rotation=rot;
+                if(entity.label){entity.label.text=labelText;entity.label.heightReference=hr;}}
+              // Leader line as its OWN entity (uid+':leader'), remove-then-add
+              // on every upsert — exactly like trails/measurements. Mutating a
+              // live entity's `.polyline` graphics in place (the prior approach)
+              // crashed the Cesium WebGL context. Kept out of `_state.entities`
+              // so setEntities' cleanup loop doesn't treat it as a stale uid.
+              const lid=e.uid+':leader';const oldLeader=_state.leaders.get(lid);
+              if(oldLeader){v.entities.remove(oldLeader);_state.leaders.delete(lid);}
+              if(showLeader){_state.leaders.set(lid,v.entities.add({id:lid,polyline:{positions:leaderPos,width:1.5,arcType:Cesium.ArcType.NONE,material:leaderColor.withAlpha(0.85)}}));}
             },
             setEntities(arg){const list=_parse(arg);if(!Array.isArray(list))return;const seen=new Set();
               for(const e of list){if(e&&e.uid){seen.add(e.uid);window.OmniBridge.upsertEntity(e);}}
               for(const uid of Array.from(_state.entities.keys()))if(!seen.has(uid))window.OmniBridge.removeEntity(uid);
             },
-            removeEntity(uid){const v=_state.viewer;if(!v)return;const e=_state.entities.get(uid);if(e){v.entities.remove(e);_state.entities.delete(uid);}},
-            removeAll(){const v=_state.viewer;if(!v)return;v.entities.removeAll();_state.entities.clear();},
+            removeEntity(uid){const v=_state.viewer;if(!v)return;const e=_state.entities.get(uid);if(e){v.entities.remove(e);_state.entities.delete(uid);}const lid=uid+':leader';const l=_state.leaders.get(lid);if(l){v.entities.remove(l);_state.leaders.delete(lid);}},
+            removeAll(){const v=_state.viewer;if(!v)return;v.entities.removeAll();_state.entities.clear();_state.leaders.clear();},
             flyTo(arg){const e=_parse(arg);if(!e)return;const v=_state.viewer;if(!v)return;
               v.camera.flyTo({destination:Cesium.Cartesian3.fromDegrees(e.lon,e.lat,(typeof e.range==='number')?e.range:5000),
                 orientation:{heading:Cesium.Math.toRadians(e.heading||0),pitch:Cesium.Math.toRadians(typeof e.pitch==='number'?e.pitch:-30),roll:0},duration:1.2});
@@ -5245,6 +5420,18 @@ struct CesiumMainMap: UIViewRepresentable {
             // hybrid = aerial with a translucent OSM streets/labels overlay.
             setBaseLayer(arg){const e=_parse(arg);const t=(e&&e.type)||'satellite';const v=_state.viewer;if(!v)return;
               try{
+                // Photorealistic 3D tiles: load on demand, keep imagery beneath.
+                if(t==='photoreal'){
+                  if(!_state.photoreal){
+                    Cesium.createGooglePhotorealistic3DTileset().then(function(ts){
+                      ts.maximumScreenSpaceError=24; // coarser than default 16 — faster to sharpen, lighter on GPU
+                      _state.photoreal=ts; v.scene.primitives.add(ts); v.scene.requestRender();
+                    }).catch(function(err){});
+                  }
+                  return;
+                }
+                // Switching to a flat-imagery base — unload the heavy 3D tiles.
+                if(_state.photoreal){v.scene.primitives.remove(_state.photoreal);_state.photoreal=null;}
                 const layers=v.imageryLayers;layers.removeAll();
                 if(t==='standard'){
                   layers.addImageryProvider(new Cesium.OpenStreetMapImageryProvider({url:'https://tile.openstreetmap.org/'}));
@@ -5309,7 +5496,10 @@ struct CesiumMainMap: UIViewRepresentable {
             _fitViewport();
             const v=new Cesium.Viewer('cesiumContainer',{terrain:Cesium.Terrain.fromWorldTerrain(),animation:false,timeline:false,baseLayerPicker:false,geocoder:false,homeButton:false,sceneModePicker:false,navigationHelpButton:false,fullscreenButton:false,infoBox:false,selectionIndicator:false,creditContainer:document.createElement('div')});
             v.scene.skyAtmosphere.show=true;v.scene.globe.enableLighting=true;_state.viewer=v;_fitViewport();_installInputHandlers(v);
-            try{const t=await Cesium.createGooglePhotorealistic3DTileset();v.scene.primitives.add(t);}catch(e){console.warn('Photoreal unavailable:',e);}
+            // Photorealistic 3D tiles are NOT loaded by default — they're a
+            // heavy GPU/network layer (slow to sharpen + can exhaust the mobile
+            // WebGL process). They load on demand via setBaseLayer('photoreal')
+            // from the Layers panel. Default base = World Imagery + terrain.
             // Bootstrap camera over KJFK to match the ADSB pre-GPS
             // fallback — first-launch users land on a scene where the
             // aircraft data they're seeing in the pill actually appears
