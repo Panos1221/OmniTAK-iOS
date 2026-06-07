@@ -56,6 +56,7 @@ final class RemoteIdTrackStore {
 
         var basic: (idType: OpenDroneIdMessage.IdType, uaType: OpenDroneIdMessage.UaType, uasId: String)?
         var location: OpenDroneIdMessage.Location?
+        var operatorLocation: OpenDroneIdMessage.OperatorLocation?
 
         for msg in messages {
             switch msg {
@@ -65,6 +66,8 @@ final class RemoteIdTrackStore {
                 }
             case let .location(loc):
                 if location == nil { location = loc }
+            case let .operatorLocation(op):
+                if operatorLocation == nil { operatorLocation = op }
             case .unknown:
                 continue
             }
@@ -81,12 +84,17 @@ final class RemoteIdTrackStore {
             uaType: basic?.uaType ?? previous?.uaType ?? .undeclared,
             idType: basic?.idType ?? previous?.idType ?? .none,
             lastLocation: location ?? previous?.lastLocation,
-            lastUpdateMs: now
+            lastUpdateMs: now,
+            lastOperatorLocation: operatorLocation ?? previous?.lastOperatorLocation
         )
 
+        // Only emit when something actually changed (new sighting, new
+        // position, new operator location, or new aircraft type). PPLI-style
+        // identical updates don't need to thrash the map.
         let changed: Bool
         if let previous = previous {
             changed = previous.lastLocation != updated.lastLocation
+                || previous.lastOperatorLocation != updated.lastOperatorLocation
                 || previous.uaType != updated.uaType
         } else {
             changed = true

@@ -106,15 +106,25 @@ final class RemoteIdAppBridge: ObservableObject {
     // earlier PointDropperService route drew an affiliation-only "yellow
     // circle" that ignored the air dimension entirely.
     private func upsertMarker(for track: RemoteIdTrack, sourceNote: String? = nil) {
-        guard let loc = track.lastLocation, loc.hasValidPosition else { return }
-        let event = Self.makeCoTEvent(track: track, loc: loc, sourceNote: sourceNote)
-        CoTEventHandler.shared.handle(event: .positionUpdate(event))
+        // Emit the drone marker (when it has a valid GPS fix) AND/OR the
+        // operator (pilot) marker (whenever the operator location is valid).
+        // When the drone has no GPS yet, the pilot still plots — that's the
+        // fix for the invisible-detection bug.
+        if let loc = track.lastLocation, loc.hasValidPosition {
+            let event = Self.makeDroneCoTEvent(track: track, loc: loc, sourceNote: sourceNote)
+            CoTEventHandler.shared.handle(event: .positionUpdate(event))
+        }
+        if let op = track.lastOperatorLocation, op.hasValidPosition {
+            let event = Self.makeOperatorCoTEvent(track: track, op: op, sourceNote: sourceNote)
+            CoTEventHandler.shared.handle(event: .positionUpdate(event))
+        }
     }
 
     private func removeMarker(uasId: String) {
-        // Promptly drop the contact (RID stale purge is ~30 s) instead of
-        // waiting for the 1-hour CoT staleness backstop.
+        // Promptly drop both the drone and operator contacts (RID stale purge
+        // is ~30 s) instead of waiting for the 1-hour CoT staleness backstop.
         CoTEventHandler.shared.removeEvent(uid: "RID-" + uasId)
+        CoTEventHandler.shared.removeEvent(uid: "RID-OP-" + uasId)
     }
 
     /// UA Type → CoT type. Multirotor → `a-u-A-M-H-Q` (rotary), fixed-wing
@@ -132,7 +142,7 @@ final class RemoteIdAppBridge: ObservableObject {
         }
     }
 
-    private static func makeCoTEvent(
+    private static func makeDroneCoTEvent(
         track: RemoteIdTrack,
         loc: OpenDroneIdMessage.Location,
         sourceNote: String?
@@ -143,6 +153,9 @@ final class RemoteIdAppBridge: ObservableObject {
         if let agl = loc.heightAboveTakeoffM { remarks += String(format: " / AGL: %.0f m", agl) }
         if loc.groundSpeedMs > 0 { remarks += String(format: " / Speed: %.1f m/s", loc.groundSpeedMs) }
         remarks += " / Heading: \(loc.trackDirectionDeg)°"
+        if let op = track.lastOperatorLocation, op.hasValidPosition {
+            remarks += " / Pilot: PILOT-\(track.uasId)"
+        }
         if let note = sourceNote { remarks += note }
 
         let point = CoTPoint(
@@ -166,6 +179,49 @@ final class RemoteIdAppBridge: ObservableObject {
         return CoTEvent(
             uid: "RID-\(track.uasId)",
             type: cotType(for: track.uaType),
+            time: Date(),
+            point: point,
+            detail: detail
+        )
+    }
+
+    /// Operator (pilot) marker. Unknown-ground (`a-u-G`) so the operator can
+    /// promote affiliation; plots wherever the RID System message reports the
+    /// pilot, even before the drone itself has GPS. Matches Android's
+    /// `RemoteIdToCoTConverter.operatorCoT` UID/type/callsign exactly.
+    private static func makeOperatorCoTEvent(
+        track: RemoteIdTrack,
+        op: OpenDroneIdMessage.OperatorLocation,
+        sourceNote: String?
+    ) -> CoTEvent {
+        var remarks = "FAA Remote ID operator (pilot) location."
+        remarks += " Drone: DRONE-\(track.uasId)"
+        if track.lastLocation?.hasValidPosition != true {
+            remarks += " / drone GPS not yet acquired"
+        }
+        if let note = sourceNote { remarks += note }
+
+        let point = CoTPoint(
+            lat: op.latitude,
+            lon: op.longitude,
+            hae: op.altitudeM ?? 0,
+            ce: 9_999_999,
+            le: 9_999_999
+        )
+        let detail = CoTDetail(
+            callsign: "PILOT-\(track.uasId)",
+            team: nil,
+            teamRole: nil,
+            speed: 0,
+            course: 0,
+            remarks: remarks,
+            battery: nil,
+            device: "Remote ID",
+            platform: "OmniTAK"
+        )
+        return CoTEvent(
+            uid: "RID-OP-\(track.uasId)",
+            type: "a-u-G",
             time: Date(),
             point: point,
             detail: detail

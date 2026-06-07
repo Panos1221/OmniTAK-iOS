@@ -103,6 +103,22 @@ enum GybDetectionParser {
             messages.append(.location(loc))
         }
 
+        // Operator (pilot) location from the RID System message. The firmware
+        // sends opLat/opLon when known, often before the drone has a GPS fix —
+        // so this is frequently the ONLY plottable point and fixes the
+        // invisible-detection bug.
+        if let opLat = doubleValue(obj["opLat"]), let opLon = doubleValue(obj["opLon"]),
+           !(opLat == 0 && opLon == 0), !opLat.isNaN, !opLon.isNaN {
+            messages.append(.operatorLocation(
+                OpenDroneIdMessage.OperatorLocation(
+                    protocolVersion: 0,
+                    latitude: opLat,
+                    longitude: opLon,
+                    altitudeM: doubleValue(obj["opAlt"])
+                )
+            ))
+        }
+
         return .drone(uasId: key, messages: messages, recvMethod: recvMethod)
     }
 

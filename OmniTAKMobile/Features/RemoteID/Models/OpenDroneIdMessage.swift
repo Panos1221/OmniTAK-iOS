@@ -31,6 +31,11 @@ enum OpenDroneIdMessage: Equatable {
     /// little-endian integers, degrees × 1e7.
     case location(Location)
 
+    /// Operator (pilot) location, from the RID System message. Often
+    /// available before the drone itself reports a GPS fix, and is the
+    /// tactically valuable point in a C-UAS picture (where the pilot is).
+    case operatorLocation(OperatorLocation)
+
     /// Unparsed / unknown message type. Kept so the scanner can
     /// count non-fatal frames it skipped, useful for diagnostics.
     case unknown(messageType: Int, protocolVersion: Int)
@@ -40,6 +45,7 @@ enum OpenDroneIdMessage: Equatable {
         switch self {
         case .basicId: return MessageType.basicId.rawValue
         case .location: return MessageType.location.rawValue
+        case .operatorLocation: return MessageType.system.rawValue
         case let .unknown(messageType, _): return messageType
         }
     }
@@ -132,6 +138,22 @@ enum OpenDroneIdMessage: Equatable {
         let horizontalAccuracyM: Double?
         let verticalAccuracyM: Double?
         let timestampSec: Int?
+
+        /// True when both lat and lon decoded to non-zero,
+        /// non-NaN values.
+        var hasValidPosition: Bool {
+            !latitude.isNaN && !longitude.isNaN &&
+                !(latitude == 0 && longitude == 0)
+        }
+    }
+
+    /// Decoded operator (pilot) location payload, from the RID System
+    /// message. Mirrors the Android `OpenDroneIdMessage.OperatorLocation`.
+    struct OperatorLocation: Equatable {
+        let protocolVersion: Int
+        let latitude: Double
+        let longitude: Double
+        let altitudeM: Double?
 
         /// True when both lat and lon decoded to non-zero,
         /// non-NaN values.

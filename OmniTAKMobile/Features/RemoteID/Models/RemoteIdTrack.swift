@@ -18,10 +18,16 @@ struct RemoteIdTrack: Equatable {
     let lastLocation: OpenDroneIdMessage.Location?
     /// Wall-clock time of the last update.
     let lastUpdateMs: Int64
+    /// Operator (pilot) location, when broadcast. Often present before
+    /// the drone has a GPS fix, so it can be the only plottable point we
+    /// have — that's what fixes the "invisible detection" bug.
+    var lastOperatorLocation: OpenDroneIdMessage.OperatorLocation? = nil
 
-    /// True when we have both an identifier and a valid lat/lon —
-    /// enough to render on the map.
+    /// True when we have an identifier and at least one plottable point —
+    /// the drone's own GPS, or the operator/pilot location.
     var isRenderable: Bool {
-        !uasId.isEmpty && lastLocation?.hasValidPosition == true
+        !uasId.isEmpty &&
+            (lastLocation?.hasValidPosition == true ||
+             lastOperatorLocation?.hasValidPosition == true)
     }
 }
