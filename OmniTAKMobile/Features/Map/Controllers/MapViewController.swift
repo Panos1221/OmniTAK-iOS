@@ -4279,7 +4279,7 @@ extension RadialMenuMapCoordinator {
             pressedDrawingType: nil,
             contextType: .pointMarker
         )
-        menuConfiguration = .markerContextMenu(for: marker)
+        menuConfiguration = .markerContextMenu(for: marker).filteringDisabledPlugins()
         currentContext = context
         menuCenterPoint = adjustMenuPositionForMapbox(screenPoint, menuRadius: menuConfiguration.radius)
         RadialMenuHaptic.menuAppear.trigger()

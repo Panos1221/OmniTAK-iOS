@@ -396,3 +396,43 @@ enum RadialMenuEvent {
     case itemSelected(RadialMenuAction)  // Item selected
     case dismissed                 // Menu dismissed without selection
 }
+
+// MARK: - Plugin gating
+
+extension RadialMenuAction {
+    /// The plugin/tool id this action depends on, when the backing feature
+    /// can be disabled in Settings → Plugins. nil = core map behavior,
+    /// never gated. Ids match `PluginID.rawValue` / ToolRegistry ids.
+    var pluginToolID: String? {
+        switch self {
+        case .measure, .measureDistance, .measureArea, .measureBearing:
+            return "measure"
+        case .openDrawingTools, .openDrawingsList, .drawLine, .drawCircle, .drawPolygon:
+            return "drawing"
+        case .navigate, .navigateToMarker, .createRoute:
+            return "routes"
+        case .quickChat:
+            return "chat"
+        case .emergency:
+            return "alert"
+        case .custom(let id) where id == "meshtastic":
+            return "meshtastic"
+        default:
+            return nil
+        }
+    }
+}
+
+extension RadialMenuConfiguration {
+    /// Drop entries whose backing feature is disabled in Settings →
+    /// Plugins. The plugin toggles previously filtered only the legacy
+    /// 5x4 grid, so a "disabled" tool stayed one tap away on the radial.
+    func filteringDisabledPlugins() -> RadialMenuConfiguration {
+        var copy = self
+        copy.items = items.filter { item in
+            guard let toolID = item.action.pluginToolID else { return true }
+            return PluginSettingsManager.shared.isToolEnabled(toolID)
+        }
+        return copy
+    }
+}

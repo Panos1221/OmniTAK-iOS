@@ -108,6 +108,10 @@ class RadialMenuMapCoordinator: ObservableObject {
 
         currentContext = context
 
+        // Plugin gating — drop entries whose feature is disabled in
+        // Settings → Plugins.
+        menuConfiguration = menuConfiguration.filteringDisabledPlugins()
+
         // Adjust menu position if near edges
         menuCenterPoint = adjustMenuPosition(screenPoint, menuRadius: menuConfiguration.radius)
 
@@ -332,6 +336,10 @@ class RadialMenuMapCoordinator: ObservableObject {
         }
 
         currentContext = context
+
+        // Plugin gating — drop entries whose feature is disabled in
+        // Settings → Plugins.
+        menuConfiguration = menuConfiguration.filteringDisabledPlugins()
 
         // Adjust menu position if near edges
         menuCenterPoint = adjustMenuPosition(screenPoint, menuRadius: menuConfiguration.radius)
