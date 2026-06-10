@@ -4320,8 +4320,9 @@ class DrawingLabelAnnotation: NSObject, MKAnnotation {
 }
 
 // Tagged annotation for in-progress drawing points so the diff-based
-// update can distinguish them from other MKPointAnnotations. Measurement
-// uses MeasurementPointAnnotation from MeasurementService.swift.
+// update can distinguish them from other MKPointAnnotations. Live
+// measurement rendering goes through MeasurementManager and
+// CompactMeasurementOverlay, which use their own annotation handling.
 class DrawingTempPointAnnotation: MKPointAnnotation {}
 
 // MARK: - Overlay Settings Panel
