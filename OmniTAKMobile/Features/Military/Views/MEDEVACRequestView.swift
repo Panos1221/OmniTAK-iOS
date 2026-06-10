@@ -315,42 +315,18 @@ struct MEDEVACRequestView: View {
         let request = createRequest()
         let cotXML = generateMEDEVACCoT(request: request)
 
-        let success = TAKService.shared.sendCoT(xml: cotXML)
-        Logger.military.info("MEDEVAC send success=\(success, privacy: .public)")
-
-        let generator = UINotificationFeedbackGenerator()
-        if success {
-            generator.notificationOccurred(.success)
+        if MilitaryReportCoT.sendReport(xml: cotXML, logTag: "MEDEVAC") {
             showSentAlert = true
         } else {
-            generator.notificationOccurred(.error)
             showSendErrorAlert = true
         }
     }
 
     private func generateMEDEVACCoT(request: MEDEVACRequest) -> String {
-        let dateFormatter = ISO8601DateFormatter()
-        dateFormatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-
-        let now = Date()
-        let stale = now.addingTimeInterval(3600)
-
-        let timeStr = dateFormatter.string(from: now)
-        let staleStr = dateFormatter.string(from: stale)
-
-        let uid = "MEDEVAC-\(request.id)"
-        let lat = request.locationLat ?? 0.0
-        let lon = request.locationLon ?? 0.0
-
-        return """
-        <?xml version="1.0" encoding="UTF-8"?>
-        <event version="2.0" uid="\(uid)" type="b-r-f-h-c" time="\(timeStr)" start="\(timeStr)" stale="\(staleStr)" how="h-g-i-g-o">
-            <point lat="\(lat)" lon="\(lon)" hae="0.0" ce="9999999" le="9999999"/>
-            <detail>
-                <contact callsign="\(request.senderCallsign)"/>
+        let reportDetail = """
                 <medevac>
-                    <line1>\(request.locationGrid)</line1>
-                    <line2>\(request.radioFrequency)/\(request.callSign)-\(request.callSignSuffix)</line2>
+                    <line1>\(request.locationGrid.xmlEscaped)</line1>
+                    <line2>\(request.radioFrequency.xmlEscaped)/\(request.callSign.xmlEscaped)-\(request.callSignSuffix.xmlEscaped)</line2>
                     <line3_urgent>\(request.urgentPatients)</line3_urgent>
                     <line3_priority>\(request.priorityPatients)</line3_priority>
                     <line3_routine>\(request.routinePatients)</line3_routine>
@@ -363,10 +339,17 @@ struct MEDEVACRequestView: View {
                     <line8>\(request.patientNationality.code)</line8>
                     <line9>\(request.cbrnContamination.code)</line9>
                 </medevac>
-                <remarks>\(request.remarks)</remarks>
-            </detail>
-        </event>
         """
+
+        return MilitaryReportCoT.buildReportEvent(
+            uid: "MEDEVAC-\(request.id)",
+            type: .medevac,
+            senderCallsign: request.senderCallsign,
+            lat: request.locationLat ?? 0.0,
+            lon: request.locationLon ?? 0.0,
+            reportDetail: reportDetail,
+            remarks: request.remarks
+        )
     }
 }
 

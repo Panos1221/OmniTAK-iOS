@@ -395,63 +395,36 @@ struct SPOTREPView: View {
         let report = createReport()
         let cotXML = generateSPOTREPCoT(report: report)
 
-        let success = TAKService.shared.sendCoT(xml: cotXML)
-        Logger.military.info("SPOTREP send success=\(success, privacy: .public)")
-
-        let generator = UINotificationFeedbackGenerator()
-        if success {
-            generator.notificationOccurred(.success)
+        if MilitaryReportCoT.sendReport(xml: cotXML, logTag: "SPOTREP") {
             showSentAlert = true
         } else {
-            generator.notificationOccurred(.error)
             showSendErrorAlert = true
         }
     }
 
     private func generateSPOTREPCoT(report: SPOTREPReport) -> String {
-        let dateFormatter = ISO8601DateFormatter()
-        dateFormatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-
-        let now = Date()
-        let stale = now.addingTimeInterval(3600)
-
-        let timeStr = dateFormatter.string(from: now)
-        let staleStr = dateFormatter.string(from: stale)
-
-        let uid = "SPOTREP-\(report.id)"
-        let lat = report.locationLat ?? 0.0
-        let lon = report.locationLon ?? 0.0
-
-        return """
-        <?xml version="1.0" encoding="UTF-8"?>
-        <event version="2.0" uid="\(uid)" type="b-r-f-h-c" time="\(timeStr)" start="\(timeStr)" stale="\(staleStr)" how="h-g-i-g-o">
-            <point lat="\(lat)" lon="\(lon)" hae="0.0" ce="9999999" le="9999999"/>
-            <detail>
-                <contact callsign="\(escapeXML(report.senderCallsign))"/>
+        let reportDetail = """
                 <spotrep>
                     <dtg>\(report.formattedDTG)</dtg>
-                    <unitId>\(escapeXML(report.unitIdentification))</unitId>
+                    <unitId>\(report.unitIdentification.xmlEscaped)</unitId>
                     <size>\(report.enemyUnitSize.code)</size>
                     <activity>\(report.activityObserved.code)</activity>
-                    <location>\(escapeXML(report.locationGrid))</location>
-                    <uniform>\(escapeXML(report.uniformDescription))</uniform>
+                    <location>\(report.locationGrid.xmlEscaped)</location>
+                    <uniform>\(report.uniformDescription.xmlEscaped)</uniform>
                     <timeObserved>\(report.formattedObservationTime)</timeObserved>
-                    <equipment>\(escapeXML(report.equipmentObserved))</equipment>
+                    <equipment>\(report.equipmentObserved.xmlEscaped)</equipment>
                 </spotrep>
-                <remarks>\(escapeXML(report.remarks))</remarks>
-            </detail>
-        </event>
         """
-    }
 
-    private func escapeXML(_ string: String) -> String {
-        var escaped = string
-        escaped = escaped.replacingOccurrences(of: "&", with: "&amp;")
-        escaped = escaped.replacingOccurrences(of: "<", with: "&lt;")
-        escaped = escaped.replacingOccurrences(of: ">", with: "&gt;")
-        escaped = escaped.replacingOccurrences(of: "\"", with: "&quot;")
-        escaped = escaped.replacingOccurrences(of: "'", with: "&apos;")
-        return escaped
+        return MilitaryReportCoT.buildReportEvent(
+            uid: "SPOTREP-\(report.id)",
+            type: .spotrep,
+            senderCallsign: report.senderCallsign,
+            lat: report.locationLat ?? 0.0,
+            lon: report.locationLon ?? 0.0,
+            reportDetail: reportDetail,
+            remarks: report.remarks
+        )
     }
 }
 
