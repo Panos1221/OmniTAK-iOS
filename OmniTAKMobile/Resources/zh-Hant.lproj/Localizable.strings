@@ -260,3 +260,13 @@
 "settings.section.mission" = "任務";
 "settings.createMission" = "建立新任務";
 "settings.mgrsGrid.2dOnly" = "僅限 2D 地圖";
+
+/* Marker radial Info / Share / Copy feedback (2026-06) */
+"radial.copied" = "已複製";
+"markerInfo.title" = "標記資訊";
+"markerInfo.name" = "名稱";
+"markerInfo.affiliation" = "屬性";
+"markerInfo.coordinates" = "座標";
+"markerInfo.altitude" = "高度";
+"markerInfo.created" = "建立時間";
+"markerInfo.remarks" = "備註";

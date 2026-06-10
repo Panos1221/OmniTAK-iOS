@@ -1046,6 +1046,10 @@ struct ATAKMapView: View {
         .background(modalSheets)
         .background(errorOverlays)
         .background(lifecycleHandlers)
+        // Marker radial Info / Share / Copy feedback (sheet + share sheet +
+        // HUD toast). Bundled in a ViewModifier (type-checked independently)
+        // and attached here so it covers BOTH engines.
+        .modifier(MarkerRadialFeedback())
         .onReceive(NotificationCenter.default.publisher(for: .radialMenuEditMarker)) { notification in
             if let marker = notification.userInfo?["marker"] as? PointMarker {
                 editingPointMarkerID = marker.id

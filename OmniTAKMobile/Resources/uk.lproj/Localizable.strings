@@ -180,3 +180,13 @@
 "settings.section.mission" = "МІСІЯ";
 "settings.createMission" = "Створити нову місію";
 "settings.mgrsGrid.2dOnly" = "Лише на 2D-карті";
+
+/* Marker radial Info / Share / Copy feedback (2026-06) */
+"radial.copied" = "Скопійовано";
+"markerInfo.title" = "Інформація про маркер";
+"markerInfo.name" = "Назва";
+"markerInfo.affiliation" = "Приналежність";
+"markerInfo.coordinates" = "Координати";
+"markerInfo.altitude" = "Висота";
+"markerInfo.created" = "Створено";
+"markerInfo.remarks" = "Примітки";

@@ -180,3 +180,13 @@
 "settings.section.mission" = "MISSION";
 "settings.createMission" = "Créer une nouvelle mission";
 "settings.mgrsGrid.2dOnly" = "Carte 2D uniquement";
+
+/* Marker radial Info / Share / Copy feedback (2026-06) */
+"radial.copied" = "Copié";
+"markerInfo.title" = "Infos du marqueur";
+"markerInfo.name" = "Nom";
+"markerInfo.affiliation" = "Affiliation";
+"markerInfo.coordinates" = "Coordonnées";
+"markerInfo.altitude" = "Altitude";
+"markerInfo.created" = "Créé";
+"markerInfo.remarks" = "Remarques";
