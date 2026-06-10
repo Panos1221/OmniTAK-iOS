@@ -4503,6 +4503,16 @@ struct CesiumMapEvent {
     }
 }
 
+/// Cesium Ion access token, injected at build time from the gitignored
+/// Config.xcconfig via the Info.plist `CesiumIonToken` key — the exact same
+/// pattern as the Mapbox `MBXAccessToken`. NEVER hardcode the token in source:
+/// this repo is public. An empty token just means Ion-hosted assets (world
+/// terrain) don't load; the globe itself still renders.
+enum CesiumIonConfig {
+    static let token: String =
+        (Bundle.main.object(forInfoDictionaryKey: "CesiumIonToken") as? String) ?? ""
+}
+
 extension Notification.Name {
     /// Posted by the toolbar zoom buttons so the Cesium coordinator can zoom
     /// the globe's camera (mapRegion can't drive it). userInfo["factor"]: Double.
@@ -5242,8 +5252,9 @@ struct CesiumMainMap: UIViewRepresentable {
         }
     }
 
-    private static let cesiumIonToken =
-        "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqdGkiOiI3NDUwNGNjMy05ZGM2LTRhNjgtYWY1ZS0xNjdjMTI0OTYxMjYiLCJpZCI6NDMyNTU0LCJpc3MiOiJodHRwczovL2lvbi5jZXNpdW0uY29tIiwiYXVkIjoidW5kZWZpbmVkX2RlZmF1bHQiLCJpYXQiOjE3Nzg5OTYwNzd9.4MTmIKjioTboeXn02fm7i7Ftude-JVIg3RYW4jgIZ48"
+    /// Build-time injected — see `CesiumIonConfig`. Kept as a computed alias so
+    /// the HTML interpolation below reads the same as before the migration.
+    private static var cesiumIonToken: String { CesiumIonConfig.token }
 
     /// HTML kept in lockstep with `OmniTAK-Android/app/src/main/assets/cesium_scene.html`.
     /// When you change one, change both. Phase 4 will dedupe by bundling a

@@ -518,8 +518,9 @@ private struct CesiumWebView: UIViewRepresentable {
 
     func updateUIView(_ webView: WKWebView, context: Context) {}
 
-    private static let cesiumIonToken =
-        "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqdGkiOiI3NDUwNGNjMy05ZGM2LTRhNjgtYWY1ZS0xNjdjMTI0OTYxMjYiLCJpZCI6NDMyNTU0LCJpc3MiOiJodHRwczovL2lvbi5jZXNpdW0uY29tIiwiYXVkIjoidW5kZWZpbmVkX2RlZmF1bHQiLCJpYXQiOjE3Nzg5OTYwNzd9.4MTmIKjioTboeXn02fm7i7Ftude-JVIg3RYW4jgIZ48"
+    /// Build-time injected from the gitignored Config.xcconfig — single source
+    /// of truth is `CesiumIonConfig` (MapViewController.swift). Never hardcode.
+    private static var cesiumIonToken: String { CesiumIonConfig.token }
 
     private static var html: String {
         """
