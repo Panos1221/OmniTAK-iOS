@@ -895,7 +895,7 @@ struct ConnectionStateSnapshot {
     static var disconnected: ConnectionStateSnapshot {
         ConnectionStateSnapshot(
             isConnected: false,
-            status: "Not Connected",
+            status: "Disconnected",
             reconnectionState: ReconnectionState(),
             serverName: nil,
             protocolType: nil,
@@ -984,9 +984,18 @@ class TAKService: ObservableObject {
     // Shared singleton for global access
     static let shared = TAKService()
 
-    @Published var connectionStatus = "Disconnected"
-    @Published var isConnected = false  // True if ANY server is connected
+    /// The single published source of connection status. The legacy
+    /// String/Bool/Set projections below are computed off it (or off
+    /// serverConnections) so they can never desync from the snapshot —
+    /// previously all four were @Published and had to be written in
+    /// lockstep at every transition site.
     @Published var connectionState: ConnectionStateSnapshot = .disconnected
+
+    /// True if ANY server is connected (computed off connectionState)
+    var isConnected: Bool { connectionState.isConnected }
+    /// Human-readable status string (computed off connectionState)
+    var connectionStatus: String { connectionState.status }
+
     @Published var lastError = ""
     @Published var messagesReceived: Int = 0
     @Published var messagesSent: Int = 0
@@ -994,9 +1003,18 @@ class TAKService: ObservableObject {
     @Published var bytesReceived: Int = 0
 
     // Multi-server connection tracking
-    @Published var connectedServerIds: Set<UUID> = []
     private var serverConnections: [UUID: ServerConnectionState] = [:]
     private let connectionsLock = NSLock()
+
+    /// IDs of currently-connected servers, derived from serverConnections
+    /// (cached state, refreshed by updateOverallConnectionState's sync
+    /// sweep — the same freshness the old stored set had). Views observing
+    /// TAKService re-render when connectionState publishes.
+    var connectedServerIds: Set<UUID> {
+        connectionsLock.lock()
+        defer { connectionsLock.unlock() }
+        return Set(serverConnections.filter { $0.value.isConnected }.keys)
+    }
 
     // Legacy single-server tracking (for backward compatibility)
     private var currentServerName: String = ""
@@ -1267,19 +1285,17 @@ class TAKService: ObservableObject {
         connectionsLock.unlock()
 
         DispatchQueue.main.async {
-            self.connectedServerIds = connectedIds
-            self.isConnected = anyConnected
-
             if anyConnected {
                 let count = connectedIds.count
-                if count == 1 {
-                    self.connectionStatus = "Connected to \(serverNames.first ?? "server")"
-                } else {
-                    self.connectionStatus = "Connected to \(count) servers"
-                }
-                self.connectionState = .connected(serverName: serverNames.joined(separator: ", "), protocolType: "Multi")
+                var snapshot = ConnectionStateSnapshot.connected(
+                    serverName: serverNames.joined(separator: ", "),
+                    protocolType: "Multi"
+                )
+                snapshot.status = count == 1
+                    ? "Connected to \(serverNames.first ?? "server")"
+                    : "Connected to \(count) servers"
+                self.connectionState = snapshot
             } else {
-                self.connectionStatus = "Disconnected"
                 self.connectionState = .disconnected
             }
 
@@ -1384,7 +1400,6 @@ class TAKService: ObservableObject {
         currentProtocolType = useTLS ? "TLS" : protocolType.uppercased()
 
         // Use DirectTCPSender for actual network communication
-        connectionStatus = "Connecting..."
         connectionState = .connecting(serverName: currentServerName)
 
         directTCP?.connect(host: host, port: port, protocolType: protocolType, useTLS: useTLS, certificateName: certificateName, certificatePassword: certificatePassword, caCertificateName: caCertificateName, caCertificatePassword: caCertificatePassword, allowUntrustedTLS: allowUntrustedTLS) { [weak self] success in
@@ -1392,8 +1407,6 @@ class TAKService: ObservableObject {
                 guard let self = self else { return }
 
                 if success {
-                    self.isConnected = true
-                    self.connectionStatus = "Connected"
                     self.connectionState = .connected(serverName: self.currentServerName, protocolType: self.currentProtocolType)
                     self.lastError = ""
                     #if DEBUG
@@ -1445,9 +1458,9 @@ class TAKService: ObservableObject {
                         #endif
                     }
                 } else {
-                    self.isConnected = false
-                    self.connectionStatus = "Connection Failed"
-                    self.connectionState = .disconnected
+                    var failed = ConnectionStateSnapshot.disconnected
+                    failed.status = "Connection Failed"
+                    self.connectionState = failed
                     self.lastError = "Failed to connect to \(host):\(port)"
                     print("❌ Connection failed")
                 }
@@ -1474,9 +1487,6 @@ class TAKService: ObservableObject {
             connectionHandle = 0
         }
 
-        connectedServerIds.removeAll()
-        isConnected = false
-        connectionStatus = "Disconnected"
         connectionState = .disconnected
 
         // Stop the auto-PPLI keepalive — no connection, no heartbeat needed
