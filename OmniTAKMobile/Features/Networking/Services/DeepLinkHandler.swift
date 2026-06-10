@@ -215,14 +215,16 @@ class DeepLinkHandler: ObservableObject {
     private let urlSession: URLSession
 
     init() {
-        // Configure URLSession to accept self-signed certificates
+        // Deep-link enrollment bootstraps the truststore from the server
+        // itself, so this session explicitly accepts untrusted certs
+        // (shared TAKTLSSessionDelegate, .acceptUntrusted mode).
         let configuration = URLSessionConfiguration.default
         configuration.timeoutIntervalForRequest = 30
         configuration.timeoutIntervalForResource = 60
 
         self.urlSession = URLSession(
             configuration: configuration,
-            delegate: SelfSignedCertDelegate(),
+            delegate: TAKTLSSessionDelegate(trustMode: .acceptUntrusted),
             delegateQueue: nil
         )
     }
@@ -737,20 +739,3 @@ enum DeepLinkError: LocalizedError {
     }
 }
 
-// MARK: - Self-Signed Certificate Delegate
-
-private class SelfSignedCertDelegate: NSObject, URLSessionDelegate {
-    func urlSession(
-        _ session: URLSession,
-        didReceive challenge: URLAuthenticationChallenge,
-        completionHandler: @escaping (URLSession.AuthChallengeDisposition, URLCredential?) -> Void
-    ) {
-        if challenge.protectionSpace.authenticationMethod == NSURLAuthenticationMethodServerTrust {
-            if let serverTrust = challenge.protectionSpace.serverTrust {
-                completionHandler(.useCredential, URLCredential(trust: serverTrust))
-                return
-            }
-        }
-        completionHandler(.performDefaultHandling, nil)
-    }
-}

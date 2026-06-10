@@ -21,7 +21,7 @@ enum ConnectionProtocol {
 /// CSR-enrolled (easy-connect) identities live in the keychain under a label
 /// equal to the cert's name and are NOT tracked by `CertificateManager`. Both
 /// the streaming path (`DirectTCPSender.loadCSREnrolledIdentity`) and the REST
-/// mTLS path (`TAKAPIURLSessionDelegate.resolveClientIdentity`) must resolve
+/// mTLS path (`TAKTLSSessionDelegate.resolveClientIdentity`) must resolve
 /// them identically, so this is the single source of truth.
 ///
 /// Tries three lookups in order:
@@ -293,7 +293,7 @@ class DirectTCPSender {
                 #if DEBUG
                 print("🔐 Loading CA certificate: \(caName)")
                 #endif
-                if let caCerts = loadCACertificates(name: caName) {
+                if let caCerts = DirectTCPSender.loadCACertificates(name: caName) {
                     caCertificates = caCerts
                     #if DEBUG
                     print("✅ Loaded \(caCerts.count) CA certificate(s)")
@@ -815,8 +815,10 @@ class DirectTCPSender {
         return sec_identity_create(identity as! SecIdentity)
     }
 
-    /// Load CA certificates from keychain by label
-    private func loadCACertificates(name: String) -> [SecCertificate]? {
+    /// Load CA certificates from keychain by label.
+    /// Static + internal (not private): TAKAPIConfiguration derives the
+    /// REST session's CA-anchored trust mode from the same truststore.
+    static func loadCACertificates(name: String) -> [SecCertificate]? {
         #if DEBUG
         print("🔐 Looking for CA certificate with label: \(name)")
         #endif

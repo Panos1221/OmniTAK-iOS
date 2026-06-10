@@ -172,11 +172,13 @@ class CertificateEnrollmentService: ObservableObject {
     private let urlSession: URLSession
 
     init() {
-        // Configure URLSession to accept self-signed certificates (common in TAK)
+        // Enrollment bootstraps the truststore from the server itself, so
+        // this session explicitly accepts untrusted certs (shared
+        // TAKTLSSessionDelegate, .acceptUntrusted mode).
         let configuration = URLSessionConfiguration.default
         configuration.timeoutIntervalForRequest = 30
         configuration.timeoutIntervalForResource = 60
-        self.urlSession = URLSession(configuration: configuration, delegate: SelfSignedCertificateDelegate(), delegateQueue: nil)
+        self.urlSession = URLSession(configuration: configuration, delegate: TAKTLSSessionDelegate(trustMode: .acceptUntrusted), delegateQueue: nil)
 
         loadCertificateMetadata()
     }
@@ -466,17 +468,3 @@ fileprivate extension TAKEnrollmentURL {
     }
 }
 
-// MARK: - Self-Signed Certificate Delegate
-
-class SelfSignedCertificateDelegate: NSObject, URLSessionDelegate {
-    func urlSession(_ session: URLSession, didReceive challenge: URLAuthenticationChallenge, completionHandler: @escaping (URLSession.AuthChallengeDisposition, URLCredential?) -> Void) {
-        // Accept self-signed certificates (common in TAK deployments)
-        if challenge.protectionSpace.authenticationMethod == NSURLAuthenticationMethodServerTrust,
-           let serverTrust = challenge.protectionSpace.serverTrust {
-            let credential = URLCredential(trust: serverTrust)
-            completionHandler(.useCredential, credential)
-        } else {
-            completionHandler(.performDefaultHandling, nil)
-        }
-    }
-}

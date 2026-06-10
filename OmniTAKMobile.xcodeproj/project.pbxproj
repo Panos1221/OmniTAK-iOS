@@ -98,6 +98,7 @@
 		3F1823FC24E48A2C323C946F /* SFAP-------.svg in Resources */ = {isa = PBXBuildFile; fileRef = A5F9A46BE3568A1DB7E52044 /* SFAP-------.svg */; };
 		3FEAC7E3EE536548FBB0F37D /* CertificateFormatConverter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1B2F1E34DA7072A77EB08259 /* CertificateFormatConverter.swift */; };
 		40746A5EE6624B31B2E44DB4 /* TAKRestAPIClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9540F19EA7E0D4D8F98FC80F /* TAKRestAPIClient.swift */; };
+		C3D4E5F60718293A4B5C6D7E /* TAKTLSSessionDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = C3D4E5F60718293A4B5C6D7F /* TAKTLSSessionDelegate.swift */; };
 		408CC6660B98D38BA2A6A39C /* SHGPEVC----.svg in Resources */ = {isa = PBXBuildFile; fileRef = 7D8E2F02A147ACFC3768B6E3 /* SHGPEVC----.svg */; };
 		409D7589A76E63D323F8F8FC /* PointMarkerModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 84F4DD664BBA1341CE945E50 /* PointMarkerModels.swift */; };
 		40BCC83669B81473CF4AEAD6 /* MeshtasticCOTBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = AD37B36A231B559A5C280059 /* MeshtasticCOTBridge.swift */; };
@@ -560,6 +561,7 @@
 		922F25506591914930EEC898 /* TeamService.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = TeamService.swift; path = OmniTAKMobile/Features/Teams/Services/TeamService.swift; sourceTree = "<group>"; };
 		9450DBDE52BFDA77D0BBA9DE /* EmergencyBeaconService.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = EmergencyBeaconService.swift; path = OmniTAKMobile/Features/Tracking/Services/EmergencyBeaconService.swift; sourceTree = "<group>"; };
 		9540F19EA7E0D4D8F98FC80F /* TAKRestAPIClient.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = TAKRestAPIClient.swift; path = OmniTAKMobile/Features/Networking/Services/TAKRestAPIClient.swift; sourceTree = "<group>"; };
+		C3D4E5F60718293A4B5C6D7F /* TAKTLSSessionDelegate.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = TAKTLSSessionDelegate.swift; path = OmniTAKMobile/Features/Networking/Services/TAKTLSSessionDelegate.swift; sourceTree = "<group>"; };
 		98FDD932AB0896DCFA82D9BD /* ToolsLauncherSheet.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = OmniTAKMobile/Features/Drawing/Views/ToolsLauncherSheet.swift; sourceTree = "<group>"; };
 		9A9BEB1C723F75F83398705E /* SHSPCL-----.svg */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text; path = "SHSPCL-----.svg"; sourceTree = "<group>"; };
 		9F574EC82B38F9A8107A6205 /* SFGPUUL----.svg */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text; path = "SFGPUUL----.svg"; sourceTree = "<group>"; };
@@ -745,6 +747,7 @@
 				FE5ADEAC186F3A6CC4CB7055 /* DeepLinkHandler.swift */,
 				6CB754FA0C8506C4D22450CE /* ServerValidator.swift */,
 				9540F19EA7E0D4D8F98FC80F /* TAKRestAPIClient.swift */,
+				C3D4E5F60718293A4B5C6D7F /* TAKTLSSessionDelegate.swift */,
 			);
 			name = Services;
 			sourceTree = "<group>";
@@ -2732,6 +2735,7 @@
 				B6DB49544A68E8CE29BAFEDC /* MissionSyncView.swift in Sources */,
 				61F47CA6368F4B4692FDE35B /* MissionCreationSheet.swift in Sources */,
 				40746A5EE6624B31B2E44DB4 /* TAKRestAPIClient.swift in Sources */,
+				C3D4E5F60718293A4B5C6D7E /* TAKTLSSessionDelegate.swift in Sources */,
 				265D7A1D6302893B932347C0 /* VideoSource.swift in Sources */,
 				36D4D1FE34B89A26F9185A0C /* DroneState.swift in Sources */,
 				3E4A76914379F5FAE63343A6 /* MAVLinkCodec.swift in Sources */,
