@@ -219,3 +219,9 @@
 "tools.uas.subtitle" = "Підключення до БПЛА";
 "tools.settings.title" = "Налаштування";
 "tools.settings.subtitle" = "Налаштування застосунку";
+
+/* Track persistence error surfacing (2026-06) */
+"tracks.error.title" = "Помилка треку";
+"tracks.error.save" = "Не вдалося зберегти трек: %@";
+"tracks.error.delete" = "Не вдалося видалити трек: %@";
+"tracks.error.export" = "Не вдалося експортувати трек: %@";

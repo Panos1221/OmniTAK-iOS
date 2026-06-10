@@ -219,3 +219,9 @@
 "tools.uas.subtitle" = "Mit UAS / Drohnen verbinden";
 "tools.settings.title" = "Einstellungen";
 "tools.settings.subtitle" = "App-Einstellungen";
+
+/* Track persistence error surfacing (2026-06) */
+"tracks.error.title" = "Track-Fehler";
+"tracks.error.save" = "Track konnte nicht gespeichert werden: %@";
+"tracks.error.delete" = "Track konnte nicht gelöscht werden: %@";
+"tracks.error.export" = "Track konnte nicht exportiert werden: %@";

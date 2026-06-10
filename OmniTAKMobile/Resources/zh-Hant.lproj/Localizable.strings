@@ -299,3 +299,9 @@
 "tools.uas.subtitle" = "連接 UAS／無人機";
 "tools.settings.title" = "設定";
 "tools.settings.subtitle" = "App 設定";
+
+/* Track persistence error surfacing (2026-06) */
+"tracks.error.title" = "軌跡錯誤";
+"tracks.error.save" = "無法儲存軌跡：%@";
+"tracks.error.delete" = "無法刪除軌跡：%@";
+"tracks.error.export" = "無法匯出軌跡：%@";

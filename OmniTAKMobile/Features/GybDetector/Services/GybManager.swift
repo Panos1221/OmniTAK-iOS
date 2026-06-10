@@ -62,6 +62,12 @@ final class GybManager: ObservableObject {
     // MARK: - Stream handling
 
     private func handleLine(_ line: String) {
+        // Defensive enabled-gate: detections must never flow into the
+        // marker pipeline while the Settings toggle is OFF (the purge
+        // timer doesn't run in that state, so markers would never go
+        // stale). The BLE client also refuses to (re)connect when
+        // disabled, so this is belt-and-braces.
+        guard enabled else { return }
         guard let msg = GybDetectionParser.parse(line) else { return }
         switch msg {
         case let .deviceInfo(model, serial, _):

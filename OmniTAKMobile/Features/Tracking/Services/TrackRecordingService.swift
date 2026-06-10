@@ -31,6 +31,12 @@ class TrackRecordingService: NSObject, ObservableObject {
     @Published var livePointCount: Int = 0
     @Published var liveElevationGain: Double = 0
 
+    /// Most recent user-facing persistence/export failure, already
+    /// localized. Surfaced as an alert by TrackListView/TrackDetailView —
+    /// these used to be print-only catches, so a failed save/delete/export
+    /// silently vanished a user's recorded track.
+    @Published var lastError: String?
+
     // MARK: - Private Properties
 
     private let locationManager = CLLocationManager()
@@ -254,6 +260,7 @@ class TrackRecordingService: NSObject, ObservableObject {
             print("Saved track to: \(fileURL.path)")
         } catch {
             print("Failed to save track: \(error)")
+            lastError = LocalizationManager.shared.t("tracks.error.save", error.localizedDescription)
         }
     }
 
@@ -310,6 +317,7 @@ class TrackRecordingService: NSObject, ObservableObject {
             print("Deleted track: \(track.name)")
         } catch {
             print("Failed to delete track: \(error)")
+            lastError = LocalizationManager.shared.t("tracks.error.delete", error.localizedDescription)
         }
     }
 
@@ -360,6 +368,7 @@ class TrackRecordingService: NSObject, ObservableObject {
             return tempURL
         } catch {
             print("Failed to create GPX file: \(error)")
+            lastError = LocalizationManager.shared.t("tracks.error.export", error.localizedDescription)
             return nil
         }
     }
@@ -377,6 +386,7 @@ class TrackRecordingService: NSObject, ObservableObject {
             return tempURL
         } catch {
             print("Failed to create KML file: \(error)")
+            lastError = LocalizationManager.shared.t("tracks.error.export", error.localizedDescription)
             return nil
         }
     }

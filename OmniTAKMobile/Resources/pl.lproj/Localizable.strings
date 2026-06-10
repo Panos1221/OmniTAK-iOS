@@ -219,3 +219,9 @@
 "tools.uas.subtitle" = "Połączenie z UAS / dronami";
 "tools.settings.title" = "Ustawienia";
 "tools.settings.subtitle" = "Ustawienia aplikacji";
+
+/* Track persistence error surfacing (2026-06) */
+"tracks.error.title" = "Błąd trasy";
+"tracks.error.save" = "Nie udało się zapisać trasy: %@";
+"tracks.error.delete" = "Nie udało się usunąć trasy: %@";
+"tracks.error.export" = "Nie udało się wyeksportować trasy: %@";
