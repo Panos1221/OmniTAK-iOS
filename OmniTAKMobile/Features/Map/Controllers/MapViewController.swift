@@ -79,7 +79,7 @@ struct ATAKMapView: View {
     private var mapEngine: MapEngine { MapEngine(rawValue: mapEngineRaw) ?? .cesium3D }
     @ObservedObject private var pointDropAim = PointDropUIState.shared
     // (userCallsign is already declared further down; we reference it from
-    // cesium3DBody for the self-position label.)
+    // cesiumEngineView for the self-position label.)
 
     // Feature screen states
     @State private var showTeamManagement = false
@@ -556,18 +556,9 @@ struct ATAKMapView: View {
         .zIndex(1007)
     }
 
-    @ViewBuilder
-    private var interactiveOverlays: some View {
-        Group {
-            loadingScreen
-            radialMenu
-            cursorModeOverlay
-            lassoSelectionPill  // Issue #16
-            // overlaySettingsButton - Removed per user request
-            // overlaySettingsPanel - Removed per user request
-            // mapCenterDisplay - Removed per user request (coords available via radial menu)
-        }
-    }
+    // interactiveOverlays was dissolved into the engine-agnostic `mapChrome`
+    // (radialMenu, lassoSelectionPill) and the 2D-only conditional in `body`
+    // (loadingScreen, cursorModeOverlay).
 
     // == Issue #16: lasso selection pill BEGIN ==
     // Compact floating pill that surfaces the current selection count
@@ -1037,16 +1028,32 @@ struct ATAKMapView: View {
     }
 
     var body: some View {
-        // Modal sheets / error overlays / lifecycle + radial-menu observers
-        // attach here at the body level so they're mounted on BOTH engines.
-        // They used to be chained on mapbox2DBody's ZStack, which meant
-        // every radial-menu action (Layers, Drawings, Lasso, etc.) silently
-        // no-op'd on Cesium 3D — the notification fired but no subscriber.
-        Group {
-            switch mapEngine {
-            case .cesium3D: cesium3DBody
-            case .mapbox2D: mapbox2DBody
+        // Engine-agnostic composition: the switch renders ONLY the bare map
+        // engine; every piece of shared chrome mounts once via `mapChrome`,
+        // and the modal sheets / error overlays / lifecycle + radial-menu
+        // observers attach at the body level. Nothing visible to the
+        // operator may be added inside an engine view unless it is truly
+        // engine-specific — that structure is what killed the recurring
+        // "feature wired into one engine only" bug class (radial menu,
+        // measurement HUD, side panels all shipped broken on Cesium once).
+        ZStack {
+            Group {
+                switch mapEngine {
+                case .cesium3D: cesiumEngineView
+                case .mapbox2D: mapboxEngineView
+                }
             }
+            // Engine-specific overlays stay conditional. Both are 2D-only:
+            // the loading splash never mounted on the (default) globe, and
+            // cursor mode drives the Mapbox camera. Their zIndexes (2000 /
+            // 2500) must compete with the chrome's in the SAME ZStack so
+            // the splash keeps covering the toolbars and the radial menu
+            // (3000) keeps floating above cursor mode.
+            if mapEngine == .mapbox2D {
+                loadingScreen
+                cursorModeOverlay
+            }
+            mapChrome
         }
         .background(modalSheets)
         .background(errorOverlays)
@@ -1067,20 +1074,14 @@ struct ATAKMapView: View {
         }
     }
 
-    /// Phase 1: render the Cesium scene full-screen behind the existing top
-    /// chrome (status bar / server indicator) and the new engine-toggle FAB.
-    /// CoT entities, drawings, MGRS grid, lasso, etc. are 2D-only for now —
-    /// Phase 2 wires a JS bridge that pushes them into Cesium as Entity
-    /// objects at real altitude.
+    /// The bare 3D engine — the Cesium scene and nothing else. All shared
+    /// chrome (toolbars, panels, radial menu, HUDs) mounts engine-
+    /// agnostically via `mapChrome` in `body`; entities/drawings/
+    /// measurements bridge into the scene through CesiumMainMap's
+    /// JS bridge parameters below.
     @ViewBuilder
-    private var cesium3DBody: some View {
-        // Default ZStack alignment (.center) — matches mapbox2DBody so the
-        // side panels' inner HStack { panel; Spacer() } gets full width to
-        // push the panel against the leading edge. With .bottomLeading
-        // alignment the HStack collapsed to content size and the Layers
-        // panel never appeared even though showLayersPanel was true.
-        ZStack {
-            CesiumMainMap(
+    private var cesiumEngineView: some View {
+        CesiumMainMap(
                 contacts: cotMarkers,
                 aircraft: adsbService.settings.isEnabled ? adsbService.aircraft : [],
                 lineDrawings: drawingStore.lines,
@@ -1136,60 +1137,10 @@ struct ATAKMapView: View {
                 }
             )
             .ignoresSafeArea()
-            statusIndicators
-            // Side panels (Layers / Drawing Tools / Drawing List). Without
-            // this, the radial menu's "Layers" / "Drawings" entries silently
-            // flipped their state booleans on Cesium 3D but no panel ever
-            // appeared. Some toggles inside the layers panel (satellite /
-            // hybrid / standard base layers) don't apply to the 3D engine,
-            // but the affiliation, overlay, and ADSB toggles all bridge
-            // through to the Cesium scene.
-            sidePanels
-            // Phase 4a — surface the same radial menu over the Cesium
-            // scene. `radialMenu` is the same view the 2D Mapbox path
-            // uses (interactiveOverlays group); reusing it keeps the
-            // look + executeAction wiring identical across engines.
-            radialMenu
-            // GPS follow toggle — the same control the 2D map has. Without
-            // it the operator had no way to enable follow on the globe, so
-            // the camera never tracked them here.
-            gpsFollowButton
-            // 2D→3D parity chrome: top status bar + bottom toolbar, and the
-            // compass + scale-bar overlay group. All engine-agnostic except
-            // the scale bar, which reads mapRegion — kept accurate on Cesium
-            // by syncing mapRegion from the camera in handleCesiumMapEvent.
-            topToolbars
-            mapOverlayComponents
-            // Point Dropper aim crosshair — full-screen-centered so it sits at
-            // the globe point reported as the screen-center pick, which is the
-            // coordinate the drop uses (via mapRegion → MapCenterStore).
-            if pointDropAim.isAiming {
-                Color.clear
-                    .overlay(PointDropCrosshair())
-                    .ignoresSafeArea()
-                    .allowsHitTesting(false)
-                    .zIndex(900)
-            }
-            // Lasso selection pill — shows the selected count + actions
-            // (Export / Delete / Clear) after a lasso. Without it on the
-            // Cesium body, a 3D lasso selected items but gave no feedback.
-            lassoSelectionPill
-            // Measurement HUD + route navigation panel. These were Mapbox-
-            // only, so on the (default) 3D globe starting a measurement or
-            // navigation silently showed nothing — taps even accumulated
-            // into measurementManager with no way to finish/cancel. The
-            // in-progress polyline and the active route now bridge through
-            // CesiumMainMap like saved measurements already did.
-            measurementChrome
-            routeNavigationChrome
-            // Engine toggle lives in the Tools sheet (id: "engine") rather
-            // than a standalone FAB — operators expect mode toggles in the
-            // Tools tray, and we keep the map chrome uncluttered.
-        }
     }
 
     /// Compact measurement HUD (ATAK-style) — engine-agnostic SwiftUI
-    /// chrome, mounted on both `cesium3DBody` and `mapbox2DBody`.
+    /// chrome, mounted on both engines via `mapChrome`.
     @ViewBuilder
     private var measurementChrome: some View {
         if showMeasurement {
@@ -1219,41 +1170,44 @@ struct ATAKMapView: View {
         .zIndex(1100)
     }
 
+    /// The bare 2D engine — the Mapbox map plus its only truly
+    /// engine-specific overlay, the MGRS grid (rendered against the 2D
+    /// camera). Everything else lives in `mapChrome` / `body`.
     @ViewBuilder
-    private var mapbox2DBody: some View {
+    private var mapboxEngineView: some View {
         ZStack {
             mainMapView
             gridOverlay
-            // Point Dropper aim crosshair — drop lands where this sits.
-            if pointDropAim.isAiming {
-                // Center the crosshair on the map's full-screen geometric
-                // center so it coincides with the camera-center coordinate
-                // the drop uses. The map ignores safe area (fills the
-                // screen); without this full-screen container the crosshair
-                // would center in the safe-area frame instead, sitting below
-                // true center — so the marker dropped above the crosshair.
-                Color.clear
-                    .overlay(PointDropCrosshair())
-                    .ignoresSafeArea()
-                    .allowsHitTesting(false)
-                    .zIndex(900)
-            }
-            topToolbars
-            sidePanels
-            statusIndicators
-            mapOverlayComponents
-            interactiveOverlays
-            gpsFollowButton
-
-            // Measurement HUD + route navigation panel — shared chrome
-            // mounted on BOTH engine bodies (see measurementChrome /
-            // routeNavigationChrome).
-            measurementChrome
-            routeNavigationChrome
         }
-        // Modal sheets, error overlays, lifecycle handlers, and the radial-
-        // menu .onReceive observers used to chain here but moved up to the
-        // body switch so they fire on both engines (Cesium 3D + Mapbox 2D).
+    }
+
+    /// Engine-agnostic map chrome — the single overlay stack shared by BOTH
+    /// engines, mounted once in `body` above whichever engine is active.
+    /// Add new shared chrome HERE, never inside an engine view: chrome that
+    /// was chained onto one engine's ZStack is exactly how the radial menu,
+    /// side panels, measurement HUD, and GPS-follow button each shipped
+    /// broken on the other engine.
+    @ViewBuilder
+    private var mapChrome: some View {
+        // Point Dropper aim crosshair — drop lands where this sits. Centered
+        // on the full screen (not the safe area) so it coincides with the
+        // camera-center coordinate the drop uses on both engines.
+        if pointDropAim.isAiming {
+            Color.clear
+                .overlay(PointDropCrosshair())
+                .ignoresSafeArea()
+                .allowsHitTesting(false)
+                .zIndex(900)
+        }
+        topToolbars
+        sidePanels
+        statusIndicators
+        mapOverlayComponents
+        radialMenu
+        gpsFollowButton
+        lassoSelectionPill
+        measurementChrome
+        routeNavigationChrome
     }
 
     private var modalSheets: some View {
