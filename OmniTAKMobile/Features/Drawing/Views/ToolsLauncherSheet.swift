@@ -21,6 +21,21 @@ struct ToolsLauncherSheet: View {
     @AppStorage("mapEngine") private var mapEngineRaw: String = MapEngine.cesium3D.rawValue
     private var mapEngine: MapEngine { MapEngine(rawValue: mapEngineRaw) ?? .cesium3D }
 
+    // Plugin gating — the Settings → Plugins toggles previously filtered
+    // only the legacy 5x4 grid, so a "disabled" tool stayed one tap away
+    // here in the primary tools surface.
+    @ObservedObject private var pluginManager = PluginSettingsManager.shared
+
+    /// `toolSections` with disabled-plugin tools removed; sections that end
+    /// up empty are dropped entirely.
+    private var visibleSections: [LauncherSection] {
+        Self.toolSections.compactMap { section in
+            let tools = section.tools.filter { pluginManager.isToolEnabled($0.id) }
+            guard !tools.isEmpty else { return nil }
+            return LauncherSection(title: section.title, titleKey: section.titleKey, tools: tools)
+        }
+    }
+
     var body: some View {
         ScrollView {
             VStack(spacing: 0) {
@@ -50,7 +65,8 @@ struct ToolsLauncherSheet: View {
                 // Full sectioned tool catalog — everything the old full-screen
                 // grid offered, as smooth rows that keep the map live behind.
                 // Each routes through ToolSheetHost by id (.openToolSheet).
-                ForEach(Self.toolSections) { section in
+                // Filtered by the Settings → Plugins enable toggles.
+                ForEach(visibleSections) { section in
                     sectionHeader(loc.t(section.titleKey))
                     ForEach(Array(section.tools.enumerated()), id: \.element.id) { idx, tool in
                         if idx > 0 { Divider().padding(.leading, 70) }
@@ -78,6 +94,14 @@ struct ToolsLauncherSheet: View {
             .padding(.bottom, 12)
         }
         .frame(maxHeight: 560)
+        .onAppear {
+            #if DEBUG
+            ToolRegistry.validate(
+                ids: Self.toolSections.flatMap { $0.tools.map(\.id) },
+                from: "ToolsLauncherSheet"
+            )
+            #endif
+        }
     }
 
     // MARK: - Tool catalog

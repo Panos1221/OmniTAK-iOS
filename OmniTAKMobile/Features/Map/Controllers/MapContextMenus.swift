@@ -724,3 +724,134 @@ extension RadialMenuConfiguration {
         )
     }
 }
+
+// MARK: - Marker Radial Feedback (Info / Share / Copy)
+
+/// Body-level observers for the marker radial actions that previously posted
+/// notifications with no subscriber — silent dead taps in a shipping build:
+///   - `.radialMenuShowMarkerInfo`    → present `MarkerInfoSheet` (modal sheet)
+///   - `.radialMenuShareMarker`       → present the system share sheet
+///   - `.radialMenuCoordinatesCopied` → transient "Copied" HUD toast
+///
+/// Attached at `ATAKMapView.body` level (next to modalSheets / lifecycle
+/// handlers) so it fires on BOTH map engines, per the design law that modal
+/// sheets are the only chrome allowed over the sacred full-screen map. Lives
+/// in its own ViewModifier so the observers type-check independently of the
+/// already-maxed ATAKMapView body expression.
+struct MarkerRadialFeedback: ViewModifier {
+    @ObservedObject private var loc = LocalizationManager.shared
+    @State private var infoMarker: PointMarker?
+    @State private var shareItem: ShareTextItem?
+    @State private var toast: String?
+
+    /// Identifiable wrapper so `.sheet(item:)` accepts the share text.
+    private struct ShareTextItem: Identifiable {
+        let text: String
+        var id: String { text }
+    }
+
+    func body(content: Content) -> some View {
+        content
+            .onReceive(NotificationCenter.default.publisher(for: .radialMenuShowMarkerInfo)) { note in
+                if let marker = note.userInfo?["marker"] as? PointMarker {
+                    infoMarker = marker
+                }
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .radialMenuShareMarker)) { note in
+                if let text = note.userInfo?["shareText"] as? String {
+                    shareItem = ShareTextItem(text: text)
+                }
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .radialMenuCoordinatesCopied)) { _ in
+                showToast(loc.t("radial.copied"))
+            }
+            .sheet(item: $infoMarker) { marker in
+                MarkerInfoSheet(marker: marker)
+            }
+            .sheet(item: $shareItem) { item in
+                LassoShareSheet(activityItems: [item.text])
+            }
+            .overlay(alignment: .top) {
+                if let toast {
+                    Text(toast)
+                        .font(.footnote.weight(.medium))
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 14).padding(.vertical, 8)
+                        .background(Capsule().fill(Color.black.opacity(0.8)))
+                        .padding(.top, 60)
+                        .transition(.move(edge: .top).combined(with: .opacity))
+                        .allowsHitTesting(false)
+                }
+            }
+    }
+
+    private func showToast(_ text: String) {
+        withAnimation { toast = text }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.6) {
+            withAnimation { toast = nil }
+        }
+    }
+}
+
+// MARK: - Marker Info Sheet
+
+/// Read-only detail sheet for a point marker, presented by the radial "Info"
+/// action. Replaces the deleted MarkerInfoPanel (which depended on the dead
+/// EnhancedCoTMarker store) with a plain modal over the live PointMarker.
+struct MarkerInfoSheet: View {
+    let marker: PointMarker
+    @ObservedObject private var loc = LocalizationManager.shared
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationView {
+            List {
+                Section {
+                    infoRow(loc.t("markerInfo.name"), marker.name)
+                    infoRow(loc.t("markerInfo.affiliation"), marker.affiliation.displayName)
+                    // CoT is a bare acronym — intentionally untranslated.
+                    infoRow("CoT", marker.cotType)
+                }
+                Section(loc.t("markerInfo.coordinates")) {
+                    // MGRS / Lat-Lon labels are acronyms, left as-is (same
+                    // convention as the Settings coordinate-format picker).
+                    infoRow("MGRS", MGRSConverter.latLonToMGRS(marker.coordinate).formatted())
+                    infoRow("Lat / Lon", String(format: "%.6f, %.6f",
+                                                marker.coordinate.latitude,
+                                                marker.coordinate.longitude))
+                    if let alt = marker.altitude {
+                        infoRow(loc.t("markerInfo.altitude"), String(format: "%.0f m HAE", alt))
+                    }
+                }
+                Section {
+                    infoRow(loc.t("markerInfo.created"), marker.formattedTimestamp)
+                    if let remarks = marker.remarks, !remarks.isEmpty {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(loc.t("markerInfo.remarks"))
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                            Text(remarks)
+                        }
+                    }
+                }
+            }
+            .navigationTitle(loc.t("markerInfo.title"))
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button(loc.t("settings.done")) { dismiss() }
+                }
+            }
+        }
+    }
+
+    private func infoRow(_ label: String, _ value: String) -> some View {
+        HStack(alignment: .firstTextBaseline) {
+            Text(label)
+            Spacer()
+            Text(value)
+                .foregroundColor(.secondary)
+                .multilineTextAlignment(.trailing)
+        }
+    }
+}

@@ -640,6 +640,30 @@ class RadialMenuActionExecutor {
             )
             return true
 
+        case "save_location":
+            // Civilian-mode "Save" — drop a neutral favorite marker at the
+            // pressed point through the same PointDropperService path as
+            // executeAddWaypoint. Previously this fell through to the
+            // generic .radialMenuCustomAction post, whose only observer
+            // handles draw_shape/meshtastic — a dead tap.
+            guard let pointDropperService = services.pointDropperService else { return false }
+            let marker = pointDropperService.quickDrop(
+                at: context.mapCoordinate,
+                broadcast: false
+            )
+            var updatedMarker = marker
+            updatedMarker.affiliation = .neutral
+            updatedMarker.cotType = MarkerAffiliation.neutral.cotType
+            updatedMarker.iconName = "heart.fill"
+            updatedMarker.name = generateSavedLocationName()
+            pointDropperService.updateMarker(updatedMarker)
+            NotificationCenter.default.post(
+                name: .radialMenuWaypointAdded,
+                object: nil,
+                userInfo: ["marker": updatedMarker]
+            )
+            return true
+
         default:
             NotificationCenter.default.post(
                 name: .radialMenuCustomAction,
@@ -678,6 +702,12 @@ class RadialMenuActionExecutor {
         let dateFormatter = DateFormatter()
         dateFormatter.dateFormat = "HHmm"
         return "WP-\(dateFormatter.string(from: Date()))"
+    }
+
+    private static func generateSavedLocationName() -> String {
+        let dateFormatter = DateFormatter()
+        dateFormatter.dateFormat = "HHmm"
+        return "SAVED-\(dateFormatter.string(from: Date()))"
     }
 
     private static func formatCoordinate(_ coord: CLLocationCoordinate2D) -> String {

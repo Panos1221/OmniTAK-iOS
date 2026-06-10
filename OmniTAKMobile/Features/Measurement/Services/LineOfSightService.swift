@@ -446,34 +446,17 @@ class LineOfSightService: NSObject, ObservableObject {
     // MARK: - Utility Functions
 
     /// Calculate distance between two coordinates using Haversine formula
+    /// (canonical implementation in MeasurementCalculator)
     func calculateDistance(from start: CLLocationCoordinate2D,
                            to end: CLLocationCoordinate2D) -> Double {
-        let lat1 = start.latitude * .pi / 180
-        let lat2 = end.latitude * .pi / 180
-        let deltaLat = (end.latitude - start.latitude) * .pi / 180
-        let deltaLon = (end.longitude - start.longitude) * .pi / 180
-
-        let a = sin(deltaLat/2) * sin(deltaLat/2) +
-                cos(lat1) * cos(lat2) * sin(deltaLon/2) * sin(deltaLon/2)
-        let c = 2 * atan2(sqrt(a), sqrt(1-a))
-
-        return earthRadius * c
+        return MeasurementCalculator.haversineDistance(from: start, to: end)
     }
 
-    /// Calculate bearing from start to end point
+    /// Calculate bearing from start to end point (canonical formula in
+    /// MeasurementCalculator)
     func calculateBearing(from start: CLLocationCoordinate2D,
                           to end: CLLocationCoordinate2D) -> Double {
-        let lat1 = start.latitude * .pi / 180
-        let lat2 = end.latitude * .pi / 180
-        let deltaLon = (end.longitude - start.longitude) * .pi / 180
-
-        let y = sin(deltaLon) * cos(lat2)
-        let x = cos(lat1) * sin(lat2) - sin(lat1) * cos(lat2) * cos(deltaLon)
-
-        var bearing = atan2(y, x) * 180 / .pi
-        bearing = (bearing + 360).truncatingRemainder(dividingBy: 360)
-
-        return bearing
+        return MeasurementCalculator.bearing(from: start, to: end)
     }
 
     /// Calculate destination point given start, bearing, and distance

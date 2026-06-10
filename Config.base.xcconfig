@@ -10,9 +10,11 @@
 // CI: write Config.xcconfig before building, or pass values as build settings.
 
 // Empty defaults — let a clean clone / CI compile without any secrets.
-// (The Mapbox basemap needs a token to render tiles, but the app builds and
-//  runs without one; everything else works.)
+// (The Mapbox basemap needs a token to render tiles, and the Cesium 3D globe
+//  needs an Ion token for world terrain, but the app builds and runs without
+//  either; everything else works.)
 MBX_ACCESS_TOKEN =
+CESIUM_ION_TOKEN =
 DEFAULT_P12_PASSWORD =
 
 // Real values live here (gitignored). Optional include: the "?" means no build

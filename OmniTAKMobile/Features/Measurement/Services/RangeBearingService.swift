@@ -45,20 +45,8 @@ struct RangeBearingLine: Identifiable, Equatable {
         let destLocation = CLLocation(latitude: destination.latitude, longitude: destination.longitude)
         self.distanceMeters = originLocation.distance(from: destLocation)
 
-        // Calculate true bearing using spherical law of sines
-        let lat1 = origin.latitude.degreesToRadians
-        let lon1 = origin.longitude.degreesToRadians
-        let lat2 = destination.latitude.degreesToRadians
-        let lon2 = destination.longitude.degreesToRadians
-        let dLon = lon2 - lon1
-
-        let y = sin(dLon) * cos(lat2)
-        let x = cos(lat1) * sin(lat2) - sin(lat1) * cos(lat2) * cos(dLon)
-        let bearingRadians = atan2(y, x)
-        var bearingDegrees = bearingRadians.radiansToDegrees
-
-        // Normalize to 0-360
-        bearingDegrees = (bearingDegrees + 360).truncatingRemainder(dividingBy: 360)
+        // Calculate true bearing (canonical formula in MeasurementCalculator)
+        let bearingDegrees = MeasurementCalculator.bearing(from: origin, to: destination)
         self.trueBearing = bearingDegrees
 
         // Magnetic bearing = True bearing - Magnetic declination
@@ -264,25 +252,13 @@ class RangeBearingService: ObservableObject {
 
     /// Calculate distance between two points
     func calculateDistance(from: CLLocationCoordinate2D, to: CLLocationCoordinate2D) -> Double {
-        let location1 = CLLocation(latitude: from.latitude, longitude: from.longitude)
-        let location2 = CLLocation(latitude: to.latitude, longitude: to.longitude)
-        return location1.distance(from: location2)
+        return MeasurementCalculator.distance(from: from, to: to)
     }
 
-    /// Calculate true bearing between two points
+    /// Calculate true bearing between two points (canonical formula in
+    /// MeasurementCalculator)
     func calculateTrueBearing(from: CLLocationCoordinate2D, to: CLLocationCoordinate2D) -> Double {
-        let lat1 = from.latitude.degreesToRadians
-        let lon1 = from.longitude.degreesToRadians
-        let lat2 = to.latitude.degreesToRadians
-        let lon2 = to.longitude.degreesToRadians
-        let dLon = lon2 - lon1
-
-        let y = sin(dLon) * cos(lat2)
-        let x = cos(lat1) * sin(lat2) - sin(lat1) * cos(lat2) * cos(dLon)
-        let bearingRadians = atan2(y, x)
-        let bearingDegrees = bearingRadians.radiansToDegrees
-
-        return (bearingDegrees + 360).truncatingRemainder(dividingBy: 360)
+        return MeasurementCalculator.bearing(from: from, to: to)
     }
 
     /// Calculate magnetic bearing between two points

@@ -69,15 +69,9 @@ public class MeshtasticManager: ObservableObject {
     // MARK: - Initialization
 
     public init() {
-        // TCP and BLE clients are lazily initialized when needed
-        // Configure COT bridge to convert mesh nodes to map markers
-        configureCOTBridge()
-    }
-
-    /// Configure the COT bridge for converting Meshtastic data to TAK format
-    private func configureCOTBridge() {
-        MeshtasticCOTBridge.shared.configure(meshtasticManager: self)
-        print("MeshtasticManager: COT bridge configured")
+        // TCP and BLE clients are lazily initialized when needed.
+        // Node→map publishing is the single MeshtasticCoTConverter
+        // pipeline (enableAutoMapUpdates → publishMeshNodesToMap).
     }
 
     // MARK: - TCP Client Setup
@@ -497,11 +491,13 @@ public class MeshtasticManager: ObservableObject {
 
     private var mapUpdateCancellable: AnyCancellable?
 
-    /// Publish all mesh nodes with positions to the TAK map
+    /// Publish all mesh nodes with positions to the TAK map.
+    /// Routed through CoTEventHandler.handle so the events land in the
+    /// rendered store (TAKService.cotEvents) — same path as inbound CoT.
     public func publishMeshNodesToMap() {
         let cotEvents = MeshtasticCoTConverter.toCoTEvents(nodes: meshNodes, ownNodeId: myNodeNum)
         for event in cotEvents {
-            TAKService.shared.updateEnhancedMarker(from: event)
+            CoTEventHandler.shared.handle(event: .positionUpdate(event))
         }
         print("📍 Published \(cotEvents.count) mesh nodes to TAK map")
     }
@@ -510,7 +506,7 @@ public class MeshtasticManager: ObservableObject {
     public func publishNodeToMap(_ node: MeshNode) {
         let isOwn = node.id == myNodeNum
         if let event = MeshtasticCoTConverter.toCoTEvent(node: node, isOwnNode: isOwn) {
-            TAKService.shared.updateEnhancedMarker(from: event)
+            CoTEventHandler.shared.handle(event: .positionUpdate(event))
             print("📍 Published node \(node.shortName) to TAK map")
         }
     }
@@ -562,9 +558,9 @@ public class MeshtasticManager: ObservableObject {
 
     /// Remove all Meshtastic markers from TAK map
     public func clearMeshMarkersFromMap() {
-        // TAKService uses enhancedMarkers dictionary with UID as key
-        // We'd need TAKService to expose a remove method, but for now just let them expire
-        // meshNodes count: \(meshNodes.count) markers will expire
-        print("🗺️ Mesh markers will expire from map")
+        for node in meshNodes {
+            CoTEventHandler.shared.removeEvent(uid: node.takUID)
+        }
+        print("🗺️ Removed \(meshNodes.count) mesh markers from map")
     }
 }

@@ -26,11 +26,7 @@ class MeshtasticCoTConverter {
             return nil
         }
 
-        let dateFormatter = ISO8601DateFormatter()
-        dateFormatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-
         let now = Date()
-        let stale = now.addingTimeInterval(staleTime)
 
         // Create unique UID for the mesh node
         let uid = "mesh-\(String(format: "%08X", node.id).lowercased())"
@@ -39,13 +35,9 @@ class MeshtasticCoTConverter {
         // a-n-G = atom, neutral, ground
         let cotType = "a-n-G-U-C"
 
-        let lat = position.latitude
-        let lon = position.longitude
-        let hae = Double(position.altitude ?? 0)
-
         // Create callsign from node name
-        let callsign = escapeXML(node.longName.isEmpty ? node.shortName : node.longName)
-        let shortName = escapeXML(node.shortName)
+        let callsign = node.longName.isEmpty ? node.shortName : node.longName
+        let shortName = node.shortName
 
         // Build remarks with mesh-specific info
         var remarks = "Meshtastic Node\n"
@@ -67,70 +59,74 @@ class MeshtasticCoTConverter {
         let lastHeardStr = formatTimeAgo(from: node.lastHeard)
         remarks += "\nLast Heard: \(lastHeardStr)"
 
-        // Build the CoT XML
-        let xml = """
-        <?xml version="1.0" encoding="UTF-8"?>
-        <event version="2.0" uid="\(uid)" type="\(cotType)" time="\(dateFormatter.string(from: now))" start="\(dateFormatter.string(from: now))" stale="\(dateFormatter.string(from: stale))" how="m-g">
-            <point lat="\(lat)" lon="\(lon)" hae="\(hae)" ce="50.0" le="50.0"/>
-            <detail>
-                <contact callsign="\(callsign)"/>
+        let detail = """
+                <contact callsign="\(callsign.xmlEscaped)"/>
                 <usericon iconsetpath="COT_MAPPING_2525C/a-n-G"/>
                 <color argb="-16744320"/>
-                <remarks>\(escapeXML(remarks))</remarks>
+                <remarks>\(remarks.xmlEscaped)</remarks>
                 <precisionlocation altsrc="GPS" geopointsrc="Meshtastic"/>
                 <status readiness="true"/>
                 <__meshtastic__>
                     <node_id>\(String(format: "%08X", node.id))</node_id>
-                    <short_name>\(shortName)</short_name>
-                    <long_name>\(callsign)</long_name>
+                    <short_name>\(shortName.xmlEscaped)</short_name>
+                    <long_name>\(callsign.xmlEscaped)</long_name>
                     <snr>\(node.snr ?? 0)</snr>
                     <hop_distance>\(node.hopDistance ?? 0)</hop_distance>
                     <battery>\(node.batteryLevel ?? -1)</battery>
-                    <last_heard>\(dateFormatter.string(from: node.lastHeard))</last_heard>
+                    <last_heard>\(CoTXMLBuilder.timestamp(node.lastHeard))</last_heard>
                 </__meshtastic__>
                 <takv device="Meshtastic" platform="OmniTAK" os="iOS" version="\(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "2.0.0")"/>
-            </detail>
-        </event>
         """
 
-        return xml
+        return CoTXMLBuilder.buildEvent(
+            uid: uid,
+            type: cotType,
+            how: "m-g",
+            time: now,
+            staleAfter: staleTime,
+            lat: position.latitude,
+            lon: position.longitude,
+            hae: Double(position.altitude ?? 0),
+            ce: 50.0,
+            le: 50.0,
+            detail: detail
+        )
     }
 
     /// Generate CoT for self/local node
     static func generateSelfNodeCoT(nodeNum: UInt32, firmwareVersion: String, position: MeshPosition?, staleTime: TimeInterval = 300) -> String? {
         guard let position = position else { return nil }
 
-        let dateFormatter = ISO8601DateFormatter()
-        dateFormatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-
-        let now = Date()
-        let stale = now.addingTimeInterval(staleTime)
-
         let uid = "mesh-self-\(String(format: "%08X", nodeNum).lowercased())"
         let cotType = "a-f-G-U-C" // Friendly ground unit
 
-        let xml = """
-        <?xml version="1.0" encoding="UTF-8"?>
-        <event version="2.0" uid="\(uid)" type="\(cotType)" time="\(dateFormatter.string(from: now))" start="\(dateFormatter.string(from: now))" stale="\(dateFormatter.string(from: stale))" how="m-g">
-            <point lat="\(position.latitude)" lon="\(position.longitude)" hae="\(Double(position.altitude ?? 0))" ce="10.0" le="10.0"/>
-            <detail>
+        let detail = """
                 <contact callsign="Meshtastic !\(String(format: "%08x", nodeNum))"/>
                 <usericon iconsetpath="COT_MAPPING_2525C/a-f-G"/>
                 <color argb="-16711936"/>
-                <remarks>My Meshtastic Node\nFirmware: \(firmwareVersion)</remarks>
+                <remarks>My Meshtastic Node\nFirmware: \(firmwareVersion.xmlEscaped)</remarks>
                 <precisionlocation altsrc="GPS" geopointsrc="Meshtastic"/>
                 <status readiness="true"/>
                 <__meshtastic__>
                     <node_id>\(String(format: "%08X", nodeNum))</node_id>
                     <is_self>true</is_self>
-                    <firmware>\(firmwareVersion)</firmware>
+                    <firmware>\(firmwareVersion.xmlEscaped)</firmware>
                 </__meshtastic__>
                 <takv device="Meshtastic" platform="OmniTAK" os="iOS" version="\(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "2.0.0")"/>
-            </detail>
-        </event>
         """
 
-        return xml
+        return CoTXMLBuilder.buildEvent(
+            uid: uid,
+            type: cotType,
+            how: "m-g",
+            staleAfter: staleTime,
+            lat: position.latitude,
+            lon: position.longitude,
+            hae: Double(position.altitude ?? 0),
+            ce: 10.0,
+            le: 10.0,
+            detail: detail
+        )
     }
 
     /// Generate CoT events for all nodes in the mesh
@@ -226,17 +222,6 @@ class MeshtasticCoTConverter {
 
     // MARK: - Helper Methods
 
-    /// Escape XML special characters
-    private static func escapeXML(_ string: String) -> String {
-        var result = string
-        result = result.replacingOccurrences(of: "&", with: "&amp;")
-        result = result.replacingOccurrences(of: "<", with: "&lt;")
-        result = result.replacingOccurrences(of: ">", with: "&gt;")
-        result = result.replacingOccurrences(of: "\"", with: "&quot;")
-        result = result.replacingOccurrences(of: "'", with: "&apos;")
-        return result
-    }
-
     /// Format time ago string
     private static func formatTimeAgo(from date: Date) -> String {
         let seconds = Int(Date().timeIntervalSince(date))
@@ -257,7 +242,7 @@ class MeshtasticCoTConverter {
 
     // MARK: - Direct CoTEvent Generation
 
-    /// Convert a MeshNode directly to a CoTEvent for TAKService.updateEnhancedMarker()
+    /// Convert a MeshNode directly to a CoTEvent for CoTEventHandler.handle()
     /// - Parameter node: The mesh node to convert
     /// - Returns: CoTEvent object ready for TAKService, or nil if node has no position
     static func toCoTEvent(node: MeshNode, isOwnNode: Bool = false) -> CoTEvent? {

@@ -66,6 +66,21 @@ struct TrackListView: View {
                 Button("Cancel", role: .cancel) { }
             }
         }
+        // Persistence/export failures were print-only — a failed delete or
+        // export looked like a silent no-op. Surface the service's
+        // lastError as an alert (same binding pattern as lassoActionNotice).
+        .alert(
+            LocalizationManager.shared.t("tracks.error.title"),
+            isPresented: Binding(
+                get: { recordingService.lastError != nil },
+                set: { if !$0 { recordingService.lastError = nil } }
+            ),
+            presenting: recordingService.lastError
+        ) { _ in
+            Button("OK") { recordingService.lastError = nil }
+        } message: { msg in
+            Text(msg)
+        }
     }
 
     // MARK: - Empty State View
@@ -266,6 +281,21 @@ struct TrackDetailView: View {
                     shareKML()
                 }
                 Button("Cancel", role: .cancel) { }
+            }
+            // Save (rename/notes) and export failures surface here too —
+            // this detail view presents as a sheet over TrackListView, so
+            // the list's alert can't show while it's up.
+            .alert(
+                LocalizationManager.shared.t("tracks.error.title"),
+                isPresented: Binding(
+                    get: { recordingService.lastError != nil },
+                    set: { if !$0 { recordingService.lastError = nil } }
+                ),
+                presenting: recordingService.lastError
+            ) { _ in
+                Button("OK") { recordingService.lastError = nil }
+            } message: { msg in
+                Text(msg)
             }
         }
     }

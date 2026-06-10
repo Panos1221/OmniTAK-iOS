@@ -281,16 +281,12 @@ class CoTMessageParser {
             return nil
         }
 
-        // Try ISO8601 format first (2025-01-15T12:30:00Z)
-        let iso8601Formatter = ISO8601DateFormatter()
-        iso8601Formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        if let date = iso8601Formatter.date(from: timeStr) {
+        // Try ISO8601 format first (2025-01-15T12:30:00Z), with and
+        // without fractional seconds (shared formatters — thread-safe)
+        if let date = CoTXMLBuilder.timestampFormatter.date(from: timeStr) {
             return date
         }
-
-        // Try without fractional seconds
-        iso8601Formatter.formatOptions = [.withInternetDateTime]
-        if let date = iso8601Formatter.date(from: timeStr) {
+        if let date = CoTXMLBuilder.timestampFormatterNoFraction.date(from: timeStr) {
             return date
         }
 

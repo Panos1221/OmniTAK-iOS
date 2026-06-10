@@ -366,8 +366,9 @@ class ChatXMLParser {
             return nil
         }
 
-        let formatter = ISO8601DateFormatter()
-        return formatter.date(from: timeStr)
+        // Accept both fractional and whole-second CoT timestamps
+        return CoTXMLBuilder.timestampFormatter.date(from: timeStr)
+            ?? CoTXMLBuilder.timestampFormatterNoFraction.date(from: timeStr)
     }
 
     private static func createDirectConversationId(uid1: String, uid2: String) -> String {

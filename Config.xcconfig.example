@@ -13,6 +13,11 @@
 // Get yours at https://account.mapbox.com/access-tokens/
 MBX_ACCESS_TOKEN = pk.REPLACE_ME
 
+// Cesium Ion access token for the 3D globe's world terrain / Ion assets.
+// Get yours at https://ion.cesium.com/tokens — scope it to the minimum
+// assets needed. Without it the 3D globe still renders (no Ion terrain).
+CESIUM_ION_TOKEN = REPLACE_ME
+
 // Optional: default password used when extracting .p12 from imported TAK
 // data packages. Most public TAK servers use the well-known default "atakatak".
 // Leave blank to require explicit password every time.

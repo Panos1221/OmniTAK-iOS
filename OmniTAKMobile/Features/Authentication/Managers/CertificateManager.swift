@@ -225,21 +225,8 @@ class CertificateManager: ObservableObject {
     // MARK: - Certificate Parsing
 
     private func extractIdentity(from p12Data: Data, password: String) throws -> SecIdentity? {
-        let options: [String: Any] = [
-            kSecImportExportPassphrase as String: password
-        ]
-
-        var items: CFArray?
-        let status = SecPKCS12Import(p12Data as CFData, options as CFDictionary, &items)
-
-        guard status == errSecSuccess,
-              let itemsArray = items as? [[String: Any]],
-              let firstItem = itemsArray.first,
-              let identity = firstItem[kSecImportItemIdentity as String] as! SecIdentity? else {
-            return nil
-        }
-
-        return identity
+        // Single SecPKCS12Import owner: CertificateImportPipeline
+        return CertificateImportPipeline.parseIdentity(p12Data, password: password)
     }
 
     private func getCertificateExpiry(_ certificate: SecCertificate) -> Date? {

@@ -53,7 +53,9 @@ class TAKServiceTests: XCTestCase {
         let state = ConnectionStateSnapshot.disconnected
 
         XCTAssertFalse(state.isConnected)
-        XCTAssertEqual(state.status, "Not Connected")
+        // status string standardized to "Disconnected" in the
+        // ConnectionStateSnapshot consolidation (was "Not Connected").
+        XCTAssertEqual(state.status, "Disconnected")
         XCTAssertNil(state.serverName)
         XCTAssertFalse(state.reconnectionState.isReconnecting)
     }
@@ -186,75 +188,11 @@ class TAKServiceTests: XCTestCase {
         XCTAssertNil(detail.battery)
     }
 
-    // MARK: - Enhanced Marker Tests
-
-    func testEnhancedMarkerCreation() {
-        let coordinate = CLLocationCoordinate2D(latitude: 39.8283, longitude: -98.5795)
-
-        let marker = EnhancedCoTMarker(
-            id: UUID(),
-            uid: "marker-123",
-            type: "a-f-G-U-C",
-            timestamp: Date(),
-            coordinate: coordinate,
-            altitude: 1000,
-            ce: 10,
-            le: 10,
-            callsign: "TestMarker",
-            team: "Blue",
-            affiliation: .friend,
-            unitType: .ground,
-            speed: 5.0,
-            course: 180.0,
-            remarks: "Test",
-            battery: 85,
-            device: "iPhone",
-            platform: "iOS",
-            lastUpdate: Date(),
-            positionHistory: []
-        )
-
-        XCTAssertEqual(marker.uid, "marker-123")
-        XCTAssertEqual(marker.callsign, "TestMarker")
-        XCTAssertEqual(marker.affiliation, .friend)
-        XCTAssertEqual(marker.unitType, .ground)
-    }
-
-    func testGetAllMarkers_InitiallyEmpty() {
-        let markers = service.getAllMarkers()
-        // May not be empty if other tests ran, but should be an array
-        XCTAssertNotNil(markers)
-    }
-
-    func testGetMarkerByUID_NotFound() {
-        let marker = service.getMarker(uid: "nonexistent-uid")
-        XCTAssertNil(marker)
-    }
-
-    // MARK: - Stale Marker Removal Tests
-
-    func testRemoveStaleMarkers() {
-        // This should not crash even with no markers
-        service.removeStaleMarkers()
-
-        // Markers should still be accessible
-        XCTAssertNotNil(service.enhancedMarkers)
-    }
-
     // MARK: - Configuration Tests
 
-    func testHistoryConfiguration() {
-        // Default values
-        XCTAssertEqual(service.maxHistoryPerUnit, 100)
-        XCTAssertEqual(service.historyRetentionTime, 3600)  // 1 hour
-
-        // Should be configurable
-        service.maxHistoryPerUnit = 200
-        service.historyRetentionTime = 7200
-
-        XCTAssertEqual(service.maxHistoryPerUnit, 200)
-        XCTAssertEqual(service.historyRetentionTime, 7200)
-    }
+    // (testHistoryConfiguration deleted — maxHistoryPerUnit /
+    // historyRetentionTime were removed with the unrendered
+    // EnhancedCoTMarker store; cotEvents is the single source now.)
 
     // MARK: - Notification Settings Tests
 

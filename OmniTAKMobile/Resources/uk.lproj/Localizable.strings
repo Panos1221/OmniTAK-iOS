@@ -65,7 +65,6 @@
 "settings.done" = "Готово";
 "settings.section.userProfile" = "ПРОФІЛЬ КОРИСТУВАЧА";
 "settings.callsign" = "Позивний";
-"settings.name" = "Ім'я";
 "settings.section.servers" = "СЕРВЕРИ";
 "settings.manageServers" = "Керування серверами";
 "settings.section.navigation" = "НАВІГАЦІЯ";
@@ -120,3 +119,109 @@
 "quickstart.time.discover" = "< 1 хв";
 "quickstart.time.quick" = "< 2 хв";
 "quickstart.time.manual" = "~3 хв";
+
+/* --- Bottom bar + tools shortcuts (labels). Keyed by BarItem.id ("bar.<id>").
+       Military/technical acronyms (CASEVAC, 9-Line, SPOTREP, ADS-B, Self SA,
+       Mesh) stay English per the translation conventions. --- */
+"bar.tab.map" = "Карта";
+"bar.tab.chat" = "Чат";
+"bar.tab.servers" = "Сервери";
+"bar.tab.mesh" = "Mesh";
+"bar.tab.settings" = "Налаштування";
+"bar.cmd.tools" = "Інструменти";
+"bar.cmd.fulltools" = "Усі інструменти";
+"bar.cmd.droppin" = "Поставити мітку";
+"bar.cmd.measure" = "Вимірювання";
+"bar.cmd.drawing" = "Малювання";
+"bar.cmd.layers" = "Шари";
+"bar.cmd.drawingslist" = "Малюнки";
+"bar.cmd.lasso" = "Виділення";
+"bar.cmd.engine" = "2D / 3D";
+"bar.tool.pointer" = "Поставити точку";
+"bar.tool.routes" = "Маршрути";
+"bar.tool.navigation" = "Навігація";
+"bar.tool.teams" = "Команди";
+"bar.tool.contacts" = "Контакти";
+"bar.tool.casevac" = "CASEVAC";
+"bar.tool.nineline" = "9-Line";
+"bar.tool.spotrep" = "SPOTREP";
+"bar.tool.alert" = "Тривога";
+"bar.tool.tracks" = "Сліди";
+"bar.tool.geofence" = "Геозона";
+"bar.tool.adsb" = "ADS-B";
+"bar.tool.selfsa" = "Self SA";
+"bar.tool.elevation" = "Висота";
+"bar.tool.los" = "Лінія видимості";
+"bar.tool.missionsync" = "Синхр. місії";
+"bar.tool.plugins" = "Плагіни";
+"bar.tool.uas" = "Апарати";
+
+/* --- Bottom bar edit/coachmark chrome --- */
+"bar.coachmark" = "Натисніть і утримуйте, щоб зібрати власну панель інструментів";
+"bar.editHint" = "Перетягніть, щоб змінити порядок · торкніться −, щоб прибрати · ＋, щоб додати";
+"bar.done" = "Готово";
+"bar.add" = "Додати";
+
+/* --- Server edit: Advanced (TLS trust) --- */
+"serverEdit.advanced.title" = "РОЗШИРЕНІ";
+"serverEdit.trustUntrusted.title" = "Довіряти неперевіреним сертифікатам";
+"serverEdit.trustUntrusted.subtitle" = "Приймати будь-який сертифікат сервера (без перевірки CA)";
+"serverEdit.trustUntrusted.warning" = "Попередження: TLS-перевірку сервера вимкнено для цього сервера, тому трафік може бути перехоплено. Вмикайте лише для самопідписаного сервера TAK, який ви контролюєте, коли неможливо імпортувати сховище довіри.";
+
+/* Settings — hardcoded-English cleanup (2026-06) */
+"settings.section.toolbar" = "Панель інструментів";
+"settings.customizeToolbar" = "Налаштувати панель інструментів";
+"settings.customizeToolbar.hint" = "Зберіть власну";
+"settings.connected" = "Підключено";
+"settings.servers.count" = "%d серверів";
+"settings.gybDetector" = "Зовнішній детектор gyb";
+"settings.gybDetector.desc" = "Ловить Remote ID з WiFi-маяків через сенсор gyb і передає його по Bluetooth — дрони, яких ваш телефон сам не бачить.";
+"settings.gybConnect" = "Підключити детектор gyb";
+"settings.section.mission" = "МІСІЯ";
+"settings.createMission" = "Створити нову місію";
+"settings.mgrsGrid.2dOnly" = "Лише на 2D-карті";
+
+/* Marker radial Info / Share / Copy feedback (2026-06) */
+"radial.copied" = "Скопійовано";
+"markerInfo.title" = "Інформація про маркер";
+"markerInfo.name" = "Назва";
+"markerInfo.affiliation" = "Приналежність";
+"markerInfo.coordinates" = "Координати";
+"markerInfo.altitude" = "Висота";
+"markerInfo.created" = "Створено";
+"markerInfo.remarks" = "Примітки";
+
+/* Legacy 5x4 Tools grid i18n (2026-06) */
+"tools.grid.title" = "Інструменти";
+"tools.grid.showDisabled" = "Показувати вимкнені";
+"tools.grid.beta" = "БЕТА";
+"tools.chat.title" = "Чат";
+"tools.chat.subtitle" = "Командні повідомлення";
+"tools.data.title" = "Пакети даних";
+"tools.data.subtitle" = "Керування пакетами даних";
+"tools.video.title" = "Відео";
+"tools.video.subtitle" = "Відеотрансляція (бета — потрібен сервер TAK)";
+"tools.offline.title" = "Офлайн-карти";
+"tools.offline.subtitle" = "Завантаження карт для офлайн-використання";
+"tools.drawing.title" = "Малювання";
+"tools.drawing.subtitle" = "Малювати на карті";
+"tools.measure.title" = "Вимірювання";
+"tools.measure.subtitle" = "Вимірювання відстані та площі";
+"tools.lasso.title" = "Вибір";
+"tools.lasso.subtitle" = "Множинний вибір довільною областю (утримати + провести)";
+"tools.bloodhound.title" = "Bloodhound";
+"tools.bloodhound.subtitle" = "Відстеження своїх сил";
+"tools.meshtastic.title" = "Meshtastic";
+"tools.meshtastic.subtitle" = "Mesh-мережа Meshtastic";
+"tools.echelon.title" = "Ієрархія";
+"tools.echelon.subtitle" = "Ієрархія підрозділів / ешелон";
+"tools.uas.title" = "UAS Connect";
+"tools.uas.subtitle" = "Підключення до БПЛА";
+"tools.settings.title" = "Налаштування";
+"tools.settings.subtitle" = "Налаштування застосунку";
+
+/* Track persistence error surfacing (2026-06) */
+"tracks.error.title" = "Помилка треку";
+"tracks.error.save" = "Не вдалося зберегти трек: %@";
+"tracks.error.delete" = "Не вдалося видалити трек: %@";
+"tracks.error.export" = "Не вдалося експортувати трек: %@";

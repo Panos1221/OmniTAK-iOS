@@ -251,8 +251,9 @@ struct SimpleEnrollView: View {
 
     private var connectButton: some View {
         HStack(spacing: 12) {
-            // Cancel button (ATAK-style)
-            Button(action: { /* Cancel action */ }) {
+            // Cancel button (ATAK-style) — same effect as the toolbar
+            // Cancel. This was a placeholder no-op (dead tap) until 2026-06.
+            Button(action: { dismiss() }) {
                 Text("Cancel")
                     .font(.system(size: 16, weight: .semibold))
                     .foregroundColor(.white)
@@ -665,14 +666,19 @@ struct SimpleEnrollView: View {
             await MainActor.run {
                 ServerManager.shared.setActiveServer(server)
 
-                // Actually connect to the server
+                // Actually connect to the server. Pin the stream to the CA
+                // chain we just enrolled against so the server certificate is
+                // validated rather than blindly accepted.
                 TAKService.shared.connect(
                     host: server.host,
                     port: server.port,
                     protocolType: server.protocolType,
                     useTLS: server.useTLS,
                     certificateName: server.certificateName,
-                    certificatePassword: server.certificatePassword
+                    certificatePassword: server.certificatePassword,
+                    caCertificateName: server.caCertificateName,
+                    caCertificatePassword: server.caCertificatePassword,
+                    allowUntrustedTLS: server.allowUntrustedTLS
                 )
 
                 enrollmentState = .success
@@ -1110,14 +1116,19 @@ struct SimpleEnrollViewContent: View {
             await MainActor.run {
                 ServerManager.shared.setActiveServer(server)
 
-                // Actually connect to the server
+                // Actually connect to the server. Pin the stream to the CA
+                // chain we just enrolled against so the server certificate is
+                // validated rather than blindly accepted.
                 TAKService.shared.connect(
                     host: server.host,
                     port: server.port,
                     protocolType: server.protocolType,
                     useTLS: server.useTLS,
                     certificateName: server.certificateName,
-                    certificatePassword: server.certificatePassword
+                    certificatePassword: server.certificatePassword,
+                    caCertificateName: server.caCertificateName,
+                    caCertificatePassword: server.caCertificatePassword,
+                    allowUntrustedTLS: server.allowUntrustedTLS
                 )
 
                 enrollmentState = .success

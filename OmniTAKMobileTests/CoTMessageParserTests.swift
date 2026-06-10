@@ -304,52 +304,6 @@ class CoTMessageParserTests: XCTestCase {
     }
 }
 
-// MARK: - Unit Affiliation Tests
-
-class UnitAffiliationTests: XCTestCase {
-
-    func testFriendlyAffiliation() {
-        let affiliation = UnitAffiliation.from(cotType: "a-f-G-U-C")
-        XCTAssertEqual(affiliation, .friend)
-    }
-
-    func testHostileAffiliation() {
-        let affiliation = UnitAffiliation.from(cotType: "a-h-G")
-        XCTAssertEqual(affiliation, .hostile)
-    }
-
-    func testUnknownAffiliation() {
-        let affiliation = UnitAffiliation.from(cotType: "a-u-G")
-        XCTAssertEqual(affiliation, .unknown)
-    }
-
-    func testNeutralAffiliation() {
-        let affiliation = UnitAffiliation.from(cotType: "a-n-G")
-        XCTAssertEqual(affiliation, .neutral)
-    }
-
-    func testPendingAffiliation() {
-        let affiliation = UnitAffiliation.from(cotType: "a-p-G")
-        XCTAssertEqual(affiliation, .pending)
-    }
-}
-
-// MARK: - Unit Type Tests
-
-class UnitTypeTests: XCTestCase {
-
-    func testGroundUnitType() {
-        let unitType = UnitType.from(cotType: "a-f-G-U-C")
-        XCTAssertEqual(unitType, .ground)
-    }
-
-    func testAirUnitType() {
-        let unitType = UnitType.from(cotType: "a-f-A-M-F")
-        XCTAssertEqual(unitType, .air)
-    }
-
-    func testSeaUnitType() {
-        let unitType = UnitType.from(cotType: "a-f-S")
-        XCTAssertEqual(unitType, .sea)
-    }
-}
+// (UnitAffiliationTests and UnitTypeTests deleted — the UnitAffiliation and
+// UnitType enums were removed with the unrendered EnhancedCoTMarker store;
+// affiliation/type rendering now keys directly off the CoT type string.)

@@ -11,47 +11,32 @@ import CoreLocation
 class TeamCoTGenerator {
 
     static func generateTeamMembershipCoT(team: Team, member: TeamMember, callsign: String) -> String {
-        let dateFormatter = ISO8601DateFormatter()
-        dateFormatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-
-        let now = Date()
-        let stale = now.addingTimeInterval(3600) // 1 hour stale
-
-        let timeStr = dateFormatter.string(from: now)
-        let staleStr = dateFormatter.string(from: stale)
-
         let uid = "TEAM-\(team.id)-\(member.uid)"
 
         let lat = member.clCoordinate?.latitude ?? 0.0
         let lon = member.clCoordinate?.longitude ?? 0.0
 
-        let xml = """
-        <?xml version="1.0" encoding="UTF-8"?>
-        <event version="2.0" uid="\(uid)" type="a-f-G-U-C" time="\(timeStr)" start="\(timeStr)" stale="\(staleStr)" how="h-g-i-g-o">
-            <point lat="\(lat)" lon="\(lon)" hae="0.0" ce="9999999" le="9999999"/>
-            <detail>
-                <contact callsign="\(escapeXML(callsign))"/>
-                <__group name="\(escapeXML(team.name))" role="\(member.role.rawValue)"/>
-                <__team id="\(team.id)" name="\(escapeXML(team.name))" color="\(team.color.hexColor)"/>
-                <__member uid="\(member.uid)" callsign="\(escapeXML(member.callsign))" role="\(member.role.shortName)" online="\(member.isOnline)"/>
+        let detail = """
+                <contact callsign="\(callsign.xmlEscaped)"/>
+                <__group name="\(team.name.xmlEscaped)" role="\(member.role.rawValue)"/>
+                <__team id="\(team.id)" name="\(team.name.xmlEscaped)" color="\(team.color.hexColor)"/>
+                <__member uid="\(member.uid)" callsign="\(member.callsign.xmlEscaped)" role="\(member.role.shortName)" online="\(member.isOnline)"/>
                 <status readiness="true"/>
-            </detail>
-        </event>
         """
 
-        return xml
+        return CoTXMLBuilder.buildEvent(
+            uid: uid,
+            type: "a-f-G-U-C",
+            how: "h-g-i-g-o",
+            staleAfter: 3600, // 1 hour stale
+            lat: lat,
+            lon: lon,
+            detail: detail
+        )
     }
 
     static func generateTeamBroadcastCoT(broadcast: TeamBroadcast, team: Team, callsign: String) -> String {
-        let dateFormatter = ISO8601DateFormatter()
-        dateFormatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-
         let now = Date()
-        let stale = now.addingTimeInterval(3600) // 1 hour stale
-
-        let timeStr = dateFormatter.string(from: now)
-        let startStr = dateFormatter.string(from: broadcast.timestamp)
-        let staleStr = dateFormatter.string(from: stale)
 
         let uid = "TEAM-BROADCAST-\(broadcast.id)"
 
@@ -59,57 +44,45 @@ class TeamCoTGenerator {
         let lon = broadcast.coordinate?.clCoordinate.longitude ?? 0.0
 
         let typeCode = broadcast.isAlert ? "b-a-o-tbl" : "b-t-f"
+        let startStr = CoTXMLBuilder.timestamp(broadcast.timestamp)
 
-        let xml = """
-        <?xml version="1.0" encoding="UTF-8"?>
-        <event version="2.0" uid="\(uid)" type="\(typeCode)" time="\(timeStr)" start="\(startStr)" stale="\(staleStr)" how="h-g-i-g-o">
-            <point lat="\(lat)" lon="\(lon)" hae="0.0" ce="9999999" le="9999999"/>
-            <detail>
-                <contact callsign="\(escapeXML(callsign))"/>
-                <remarks source="\(broadcast.senderId)" time="\(startStr)">\(escapeXML(broadcast.message))</remarks>
-                <__team id="\(team.id)" name="\(escapeXML(team.name))"/>
-                <__broadcast id="\(broadcast.id)" sender="\(broadcast.senderId)" senderCallsign="\(escapeXML(broadcast.senderCallsign))" alert="\(broadcast.isAlert)"/>
-            </detail>
-        </event>
+        let detail = """
+                <contact callsign="\(callsign.xmlEscaped)"/>
+                <remarks source="\(broadcast.senderId)" time="\(startStr)">\(broadcast.message.xmlEscaped)</remarks>
+                <__team id="\(team.id)" name="\(team.name.xmlEscaped)"/>
+                <__broadcast id="\(broadcast.id)" sender="\(broadcast.senderId)" senderCallsign="\(broadcast.senderCallsign.xmlEscaped)" alert="\(broadcast.isAlert)"/>
         """
 
-        return xml
+        return CoTXMLBuilder.buildEvent(
+            uid: uid,
+            type: typeCode,
+            how: "h-g-i-g-o",
+            time: now,
+            start: broadcast.timestamp,
+            staleAfter: 3600, // 1 hour stale
+            lat: lat,
+            lon: lon,
+            detail: detail
+        )
     }
 
     static func generateTeamInviteCoT(invite: TeamInvite) -> String {
-        let dateFormatter = ISO8601DateFormatter()
-        dateFormatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-
-        let now = Date()
-        let stale = now.addingTimeInterval(86400) // 24 hour stale
-
-        let timeStr = dateFormatter.string(from: now)
-        let staleStr = dateFormatter.string(from: stale)
-
         let uid = "TEAM-INVITE-\(invite.id)"
 
-        let xml = """
-        <?xml version="1.0" encoding="UTF-8"?>
-        <event version="2.0" uid="\(uid)" type="b-t-f" time="\(timeStr)" start="\(timeStr)" stale="\(staleStr)" how="h-g-i-g-o">
-            <point lat="0.0" lon="0.0" hae="0.0" ce="9999999" le="9999999"/>
-            <detail>
-                <contact callsign="\(escapeXML(invite.inviterCallsign))"/>
-                <remarks>Team Invite: Join \(escapeXML(invite.teamName))</remarks>
-                <__team_invite id="\(invite.id)" teamId="\(invite.teamId)" teamName="\(escapeXML(invite.teamName))" teamColor="\(invite.teamColor.hexColor)" inviterId="\(invite.inviterId)" inviterCallsign="\(escapeXML(invite.inviterCallsign))" inviteeId="\(invite.inviteeId)" inviteeCallsign="\(escapeXML(invite.inviteeCallsign))" status="\(invite.status.rawValue)"/>
-            </detail>
-        </event>
+        let detail = """
+                <contact callsign="\(invite.inviterCallsign.xmlEscaped)"/>
+                <remarks>Team Invite: Join \(invite.teamName.xmlEscaped)</remarks>
+                <__team_invite id="\(invite.id)" teamId="\(invite.teamId)" teamName="\(invite.teamName.xmlEscaped)" teamColor="\(invite.teamColor.hexColor)" inviterId="\(invite.inviterId)" inviterCallsign="\(invite.inviterCallsign.xmlEscaped)" inviteeId="\(invite.inviteeId)" inviteeCallsign="\(invite.inviteeCallsign.xmlEscaped)" status="\(invite.status.rawValue)"/>
         """
 
-        return xml
-    }
-
-    private static func escapeXML(_ string: String) -> String {
-        var escaped = string
-        escaped = escaped.replacingOccurrences(of: "&", with: "&amp;")
-        escaped = escaped.replacingOccurrences(of: "<", with: "&lt;")
-        escaped = escaped.replacingOccurrences(of: ">", with: "&gt;")
-        escaped = escaped.replacingOccurrences(of: "\"", with: "&quot;")
-        escaped = escaped.replacingOccurrences(of: "'", with: "&apos;")
-        return escaped
+        return CoTXMLBuilder.buildEvent(
+            uid: uid,
+            type: "b-t-f",
+            how: "h-g-i-g-o",
+            staleAfter: 86400, // 24 hour stale
+            lat: 0.0,
+            lon: 0.0,
+            detail: detail
+        )
     }
 }

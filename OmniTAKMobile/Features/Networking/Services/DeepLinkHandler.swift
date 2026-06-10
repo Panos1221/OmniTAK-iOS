@@ -215,14 +215,16 @@ class DeepLinkHandler: ObservableObject {
     private let urlSession: URLSession
 
     init() {
-        // Configure URLSession to accept self-signed certificates
+        // Deep-link enrollment bootstraps the truststore from the server
+        // itself, so this session explicitly accepts untrusted certs
+        // (shared TAKTLSSessionDelegate, .acceptUntrusted mode).
         let configuration = URLSessionConfiguration.default
         configuration.timeoutIntervalForRequest = 30
         configuration.timeoutIntervalForResource = 60
 
         self.urlSession = URLSession(
             configuration: configuration,
-            delegate: SelfSignedCertDelegate(),
+            delegate: TAKTLSSessionDelegate(trustMode: .acceptUntrusted),
             delegateQueue: nil
         )
     }
@@ -292,7 +294,8 @@ class DeepLinkHandler: ObservableObject {
                     // Pin the stream to the CA chain enrolled above so the
                     // server certificate is validated, not blindly accepted.
                     caCertificateName: server.caCertificateName,
-                    caCertificatePassword: server.caCertificatePassword
+                    caCertificatePassword: server.caCertificatePassword,
+                    allowUntrustedTLS: server.allowUntrustedTLS
                 )
                 isProcessing = false
                 enrolledServerName = server.name
@@ -543,6 +546,13 @@ class DeepLinkHandler: ObservableObject {
             enabled: true,
             certificateName: certificateAlias,
             certificatePassword: "omnitak",
+            // Pin the stream to the CA chain stored during enrollment (the CA
+            // certs live under "\(certificateAlias)-ca-N"; the "-ca" prefix
+            // lets loadCACertificates collect them — same pattern as the CSR
+            // password-enrollment flow). Without this the stream would fall
+            // into the no-CA path and self-signed servers would be rejected
+            // by system trust.
+            caCertificateName: "\(certificateAlias)-ca",
             username: enrollment.username
         )
 
@@ -551,14 +561,17 @@ class DeepLinkHandler: ObservableObject {
             ServerManager.shared.addServer(serverInstance)
             ServerManager.shared.setActiveServer(serverInstance)
 
-            // Auto-connect to the server
+            // Auto-connect to the server, validating against the enrolled CA.
             TAKService.shared.connect(
                 host: serverInstance.host,
                 port: serverInstance.port,
                 protocolType: serverInstance.protocolType,
                 useTLS: serverInstance.useTLS,
                 certificateName: serverInstance.certificateName,
-                certificatePassword: serverInstance.certificatePassword
+                certificatePassword: serverInstance.certificatePassword,
+                caCertificateName: serverInstance.caCertificateName,
+                caCertificatePassword: serverInstance.caCertificatePassword,
+                allowUntrustedTLS: serverInstance.allowUntrustedTLS
             )
         }
 
@@ -726,20 +739,3 @@ enum DeepLinkError: LocalizedError {
     }
 }
 
-// MARK: - Self-Signed Certificate Delegate
-
-private class SelfSignedCertDelegate: NSObject, URLSessionDelegate {
-    func urlSession(
-        _ session: URLSession,
-        didReceive challenge: URLAuthenticationChallenge,
-        completionHandler: @escaping (URLSession.AuthChallengeDisposition, URLCredential?) -> Void
-    ) {
-        if challenge.protectionSpace.authenticationMethod == NSURLAuthenticationMethodServerTrust {
-            if let serverTrust = challenge.protectionSpace.serverTrust {
-                completionHandler(.useCredential, URLCredential(trust: serverTrust))
-                return
-            }
-        }
-        completionHandler(.performDefaultHandling, nil)
-    }
-}

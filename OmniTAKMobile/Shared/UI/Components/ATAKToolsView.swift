@@ -9,47 +9,9 @@ import CoreLocation
 struct ATAKToolsView: View {
     @Binding var isPresented: Bool
     @Binding var showMeasurement: Bool  // Shared measurement state from MapViewController
-    @State private var showAlertDialog = false
-    @State private var showBrightnessControl = false
 
-    // Feature sheet states
-    @State private var showTeamManagement = false
-    @State private var showRoutePlanning = false
-    @State private var showGeofences = false
-    @State private var showTrackRecording = false
-    @State private var showChat = false
-    @State private var showEmergencySOS = false
-    @State private var showDataPackages = false
-    @State private var showVideoStreaming = false
-    @State private var showOfflineMaps = false
-    @State private var showPointDropper = false
-    @State private var showSettings = false
-    @State private var showPlugins = false
-    @State private var showMEDEVAC = false
-    @State private var showCASRequest = false
-    @State private var showSPOTREP = false
-    @State private var showBloodhound = false
-    @State private var show3DView = false
-    @State private var showDigitalPointer = false
-    @State private var showTurnByTurnNav = false
-    @State private var showMeshtastic = false
-    @State private var showADSB = false
-    @State private var showContacts = false
-    @State private var showPositionBroadcast = false
-    @State private var showMissionSync = false
-    @State private var showElevationProfile = false
-    @State private var showLineOfSight = false
-    @State private var showEchelonHierarchy = false
-    @State private var showKMLOverlays = false
-
-    @ObservedObject private var chatManager = ChatManager.shared
-    @StateObject private var trackRecordingService = TrackRecordingService()
     @ObservedObject private var pluginManager = PluginSettingsManager.shared
     @AppStorage("showDisabledTools") private var showDisabledTools: Bool = true
-    // Same key ATAKMapView reads — toggle from the Tools sheet flips the
-    // map engine for the whole app.
-    @AppStorage("mapEngine") private var mapEngineRaw: String = MapEngine.cesium3D.rawValue
-    private var mapEngine: MapEngine { MapEngine(rawValue: mapEngineRaw) ?? .cesium3D }
 
     let columns = Array(repeating: GridItem(.flexible(), spacing: 0), count: 5)
 
@@ -95,119 +57,12 @@ struct ATAKToolsView: View {
                 }
             }
         }
-        .sheet(isPresented: $showTeamManagement) {
-            TeamListView()
-        }
-        .sheet(isPresented: $showRoutePlanning) {
-            RouteListView()
-        }
-        .sheet(isPresented: $showGeofences) {
-            GeofenceListView()
-        }
-        .sheet(isPresented: $showTrackRecording) {
-            TrackListView(recordingService: trackRecordingService)
-        }
-        .sheet(isPresented: $showChat) {
-            ChatView(chatManager: chatManager)
-        }
-        .sheet(isPresented: $showEmergencySOS) {
-            EmergencyBeaconView()
-        }
-        .sheet(isPresented: $showDataPackages) {
-            DataPackageSheetView(isPresented: $showDataPackages)
-        }
-        .sheet(isPresented: $showVideoStreaming) {
-            VideoFeedListView()
-        }
-        .sheet(isPresented: $showOfflineMaps) {
-            OfflineMapsView()
-        }
-        .sheet(isPresented: $showPointDropper) {
-            PointDropperSheetView(isPresented: $showPointDropper)
-        }
-        .sheet(isPresented: $showSettings) {
-            SettingsView()
-                .environmentObject(LocalizationManager.shared)
-        }
-        .sheet(isPresented: $showPlugins) {
-            PluginsListView()
-        }
-        .sheet(isPresented: $showMEDEVAC) {
-            MEDEVACRequestView()
-        }
-        .sheet(isPresented: $showCASRequest) {
-            CASRequestView()
-        }
-        .sheet(isPresented: $showSPOTREP) {
-            SPOTREPView()
-        }
-        .sheet(isPresented: $showBloodhound) {
-            BloodhoundSheetView()
-        }
-        .sheet(isPresented: $show3DView) {
-            // CesiumJS scene with Google Photorealistic 3D Tiles + Cesium
-            // World Terrain, served from the cesium.com CDN. Replaces the
-            // previous MapLibre flat-3D modal — Cesium gives true 3D globe
-            // + atmosphere + photoreal cities, none of which the Mapbox
-            // mobile SDK can match today.
-            CesiumScenePresenter()
-        }
-        .sheet(isPresented: $showDigitalPointer) {
-            DigitalPointerControlPanel()
-        }
-        .sheet(isPresented: $showTurnByTurnNav) {
-            TurnByTurnNavigationView()
-        }
-        .sheet(isPresented: $showMeshtastic) {
-            MeshtasticConnectionView()
-        }
-        .sheet(isPresented: $showADSB) {
-            ADSBTrafficView()
-        }
-        .sheet(isPresented: $showContacts) {
-            ContactListView(chatManager: chatManager)
-        }
-        .sheet(isPresented: $showPositionBroadcast) {
-            PositionBroadcastView()
-        }
-        .sheet(isPresented: $showMissionSync) {
-            MissionSyncView()
-        }
-        .sheet(isPresented: $showElevationProfile) {
-            ElevationProfileView()
-        }
-        .sheet(isPresented: $showLineOfSight) {
-            LineOfSightView()
-        }
-        .sheet(isPresented: $showEchelonHierarchy) {
-            EchelonHierarchyView()
-        }
-        .sheet(isPresented: $showKMLOverlays) {
-            KMLOverlaysPanel()
-        }
     }
 
     private func handleToolSelection(_ tool: ATAKTool) {
         switch tool.id {
-        // Core Features
-        case "teams":
-            showTeamManagement = true
-        case "chat":
-            showChat = true
-        case "routes":
-            showRoutePlanning = true
-        case "geofence":
-            showGeofences = true
-        case "tracks":
-            showTrackRecording = true
-
-        // Data & Media
-        case "data":
-            showDataPackages = true
-        case "video":
-            showVideoStreaming = true
-        case "offline":
-            showOfflineMaps = true
+        // Map-mode commands — these drive map state, not sheets, so they
+        // keep their notification/binding wiring.
         case "drawing":
             // Reuse the existing radial-menu notification that opens the drawing tools panel
             NotificationCenter.default.post(name: .radialMenuOpenDrawingTools, object: nil)
@@ -223,53 +78,16 @@ struct ATAKToolsView: View {
             NotificationCenter.default.post(name: .startLassoMode, object: nil)
             isPresented = false  // Dismiss tools menu so the user can draw
 
-        // Tactical
-        case "alert":
-            showEmergencySOS = true
-        case "pointer":
-            showPointDropper = true
-        case "casevac":
-            showMEDEVAC = true
-        case "nineline":
-            showCASRequest = true
-        case "bloodhound":
-            showBloodhound = true
-        case "spotrep":
-            showSPOTREP = true
-
-        // Utilities (engine toggle lives in ToolsLauncherSheet now)
-        case "brightness":
-            showBrightnessControl = true
-        case "plugins":
-            showPlugins = true
-        case "settings":
-            showSettings = true
-        case "turnbyturn":
-            showTurnByTurnNav = true
-        case "meshtastic":
-            showMeshtastic = true
-        case "adsb":
-            showADSB = true
-
-        // Drawer-absorbed map-driven destinations
-        case "contacts":
-            showContacts = true
-        case "selfsa":
-            showPositionBroadcast = true
-        case "missionsync":
-            showMissionSync = true
-        case "elevation":
-            showElevationProfile = true
-        case "los":
-            showLineOfSight = true
-        case "echelon":
-            showEchelonHierarchy = true
-        case "kml":
-            showKMLOverlays = true
-
         default:
-            // Unknown tool ids are a no-op — there is no fallback detail view.
-            break
+            // Everything else routes through the single dispatcher
+            // (ToolSheetHost via ToolRegistry) — exactly like
+            // ToolsLauncherSheet and the customizable toolbar. Dismiss the
+            // full-screen grid first, then post once it's off-screen.
+            let id = tool.id
+            isPresented = false
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.28) {
+                NotificationCenter.default.post(name: .openToolSheet, object: nil, userInfo: ["id": id])
+            }
         }
     }
 }
@@ -279,11 +97,12 @@ struct ATAKToolsView: View {
 struct ToolsHeader: View {
     @Binding var showDisabledTools: Bool
     let onClose: () -> Void
+    @ObservedObject private var loc = LocalizationManager.shared
 
     var body: some View {
         VStack(spacing: 0) {
             HStack {
-                Text("Tools")
+                Text(loc.t("tools.grid.title"))
                     .font(.system(size: 24, weight: .semibold))
                     .foregroundColor(.white)
 
@@ -300,7 +119,7 @@ struct ToolsHeader: View {
 
             // Toggle row
             HStack {
-                Text("Show disabled")
+                Text(loc.t("tools.grid.showDisabled"))
                     .font(.system(size: 13))
                     .foregroundColor(.gray)
 
@@ -323,6 +142,12 @@ struct ToolButton: View {
     let tool: ATAKTool
     var isEnabled: Bool = true
     let action: () -> Void
+    // Runtime i18n — the grid previously hardcoded English next to the
+    // fully localized launcher. Titles/subtitles resolve through the same
+    // tools.<id>.title/.subtitle keys ToolsLauncherSheet uses (with new
+    // keys for the grid-only tools); LocalizationManager falls back to
+    // the English catalog, then the key.
+    @ObservedObject private var loc = LocalizationManager.shared
 
     var body: some View {
         Button(action: action) {
@@ -333,13 +158,14 @@ struct ToolButton: View {
                         .foregroundColor(isEnabled ? .white : .gray.opacity(0.4))
                         .frame(height: 44)
 
-                    Text(tool.displayName)
+                    Text(loc.t("tools.\(tool.id).title"))
                         .font(.system(size: 12))
                         .foregroundColor(isEnabled ? .white : .gray.opacity(0.4))
                         .multilineTextAlignment(.center)
                         .lineLimit(2)
                         .frame(height: 32)
                 }
+                .accessibilityHint(Text(loc.t("tools.\(tool.id).subtitle")))
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 16)
                 .background(isEnabled ? Color(white: 0.15) : Color(white: 0.08))
@@ -358,7 +184,7 @@ struct ToolButton: View {
 
                 // "Beta" badge for disabled/experimental tools
                 if !isEnabled {
-                    Text("BETA")
+                    Text(loc.t("tools.grid.beta"))
                         .font(.system(size: 7, weight: .bold))
                         .foregroundColor(.black)
                         .padding(.horizontal, 4)
@@ -381,51 +207,47 @@ struct ATAKTool: Identifiable {
     let iconName: String
     let description: String
 
-    static let allTools: [ATAKTool] = [
-        // Row 1 - Core Features
-        ATAKTool(id: "teams", displayName: "Teams", iconName: "person.3.fill", description: "Team management and coordination"),
-        ATAKTool(id: "chat", displayName: "Chat", iconName: "message.fill", description: "Team chat messaging"),
-        ATAKTool(id: "routes", displayName: "Routes", iconName: "point.topleft.down.to.point.bottomright.curvepath.fill", description: "Route planning and navigation"),
-        ATAKTool(id: "geofence", displayName: "Geofence", iconName: "square.dashed", description: "Create geofence alerts"),
-        ATAKTool(id: "tracks", displayName: "Tracks", iconName: "record.circle", description: "Track recording and playback"),
-
-        // Row 2 - Data & Media
-        ATAKTool(id: "data", displayName: "Data Packages", iconName: "shippingbox.fill", description: "Manage data packages"),
-        ATAKTool(id: "video", displayName: "Video", iconName: "video.fill", description: "Video streaming (Beta - requires TAK server)"),
-        ATAKTool(id: "offline", displayName: "Offline Maps", iconName: "arrow.down.doc.fill", description: "Download maps for offline use"),
-        ATAKTool(id: "kml", displayName: "Map Overlays", iconName: "square.3.layers.3d", description: "Import & toggle KML/KMZ overlays (handles huge files)"),
+    /// Map-mode commands that live only in the grid (they drive map
+    /// state via notifications/bindings, not sheets, so they aren't in
+    /// ToolRegistry).
+    private static let mapCommandTools: [ATAKTool] = [
         ATAKTool(id: "drawing", displayName: "Drawing", iconName: "pencil.tip.crop.circle", description: "Draw on map"),
         ATAKTool(id: "measure", displayName: "Measure", iconName: "ruler", description: "Distance and area measurement"),
         ATAKTool(id: "lasso", displayName: "Select", iconName: "lasso", description: "Multi-select features in a freehand region (long-press + drag)"),
-
-        // Row 3 - Tactical
-        ATAKTool(id: "alert", displayName: "Emergency", iconName: "sos", description: "Emergency SOS beacon"),
-        ATAKTool(id: "pointer", displayName: "Point Drop", iconName: "mappin.and.ellipse", description: "Drop tactical markers"),
-        ATAKTool(id: "casevac", displayName: "CASEVAC", iconName: "cross.case.fill", description: "Request casualty evacuation"),
-        ATAKTool(id: "nineline", displayName: "9-Line CAS", iconName: "airplane", description: "Close Air Support request"),
-        ATAKTool(id: "bloodhound", displayName: "Bloodhound", iconName: "antenna.radiowaves.left.and.right", description: "Blue Force Tracking"),
-
-        // Row 4 - Utilities & Reports
-        ATAKTool(id: "spotrep", displayName: "SPOTREP", iconName: "doc.text.fill", description: "Quick tactical spot report"),
-        // Map-engine toggle deliberately omitted from the grid — it lives
-        // in the slick Tools popup (ToolsLauncherSheet). Mode switchers
-        // don't belong in Full Tools.
-        ATAKTool(id: "turnbyturn", displayName: "Navigation", iconName: "location.north.line.fill", description: "Turn-by-turn voice navigation"),
-        ATAKTool(id: "meshtastic", displayName: "Meshtastic", iconName: "dot.radiowaves.left.and.right", description: "Meshtastic mesh networking"),
-
-        // Row 5 - Map-driven destinations (absorbed from removed navigation drawer)
-        ATAKTool(id: "contacts", displayName: "Contacts", iconName: "person.2.fill", description: "Team contacts and presence"),
-        ATAKTool(id: "selfsa", displayName: "Self SA", iconName: "dot.radiowaves.up.forward", description: "Position broadcasting (PLI)"),
-        ATAKTool(id: "missionsync", displayName: "Mission Sync", iconName: "arrow.triangle.2.circlepath", description: "Mission package sync"),
-        ATAKTool(id: "elevation", displayName: "Elevation", iconName: "mountain.2.fill", description: "Elevation profile"),
-        ATAKTool(id: "los", displayName: "Line of Sight", iconName: "eye.fill", description: "Line of sight analysis"),
-
-        // Row 6 - Hierarchy & Utilities
-        ATAKTool(id: "echelon", displayName: "Hierarchy", iconName: "rectangle.connected.to.line.below", description: "Unit hierarchy / echelon"),
-        ATAKTool(id: "adsb", displayName: "ADS-B", iconName: "airplane.circle.fill", description: "ADS-B aircraft tracking"),
-        ATAKTool(id: "plugins", displayName: "Plugins", iconName: "puzzlepiece.extension.fill", description: "Manage plugins"),
-        ATAKTool(id: "settings", displayName: "Settings", iconName: "gearshape.fill", description: "App settings")
     ]
+
+    /// Grid layout order. Sheet tools resolve through ToolRegistry (the
+    /// single catalog), so name/icon/description live in ONE place.
+    /// Map-engine toggle deliberately omitted from the grid — it lives
+    /// in the slick Tools popup (ToolsLauncherSheet). Mode switchers
+    /// don't belong in Full Tools.
+    private static let gridOrder: [String] = [
+        // Row 1 - Core Features
+        "teams", "chat", "routes", "geofence", "tracks",
+        // Row 2 - Data & Media
+        "data", "video", "offline", "kml", "drawing", "measure", "lasso",
+        // Row 3 - Tactical
+        "alert", "pointer", "casevac", "nineline", "bloodhound",
+        // Row 4 - Utilities & Reports
+        "spotrep", "turnbyturn", "meshtastic",
+        // Row 5 - Map-driven destinations (absorbed from removed navigation drawer)
+        "contacts", "selfsa", "missionsync", "elevation", "los",
+        // Row 6 - Hierarchy & Utilities
+        "echelon", "adsb", "uas", "gotocoord", "plugins", "settings",
+    ]
+
+    static let allTools: [ATAKTool] = gridOrder.compactMap { id in
+        if let command = mapCommandTools.first(where: { $0.id == id }) {
+            return command
+        }
+        guard let descriptor = ToolRegistry.descriptor(for: id) else { return nil }
+        return ATAKTool(
+            id: descriptor.id,
+            displayName: descriptor.displayName,
+            iconName: descriptor.icon,
+            description: descriptor.description
+        )
+    }
 }
 
 // MARK: - Sheet Wrapper Views
@@ -518,8 +340,9 @@ private struct CesiumWebView: UIViewRepresentable {
 
     func updateUIView(_ webView: WKWebView, context: Context) {}
 
-    private static let cesiumIonToken =
-        "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqdGkiOiI3NDUwNGNjMy05ZGM2LTRhNjgtYWY1ZS0xNjdjMTI0OTYxMjYiLCJpZCI6NDMyNTU0LCJpc3MiOiJodHRwczovL2lvbi5jZXNpdW0uY29tIiwiYXVkIjoidW5kZWZpbmVkX2RlZmF1bHQiLCJpYXQiOjE3Nzg5OTYwNzd9.4MTmIKjioTboeXn02fm7i7Ftude-JVIg3RYW4jgIZ48"
+    /// Build-time injected from the gitignored Config.xcconfig — single source
+    /// of truth is `CesiumIonConfig` (MapViewController.swift). Never hardcode.
+    private static var cesiumIonToken: String { CesiumIonConfig.token }
 
     private static var html: String {
         """

@@ -44,6 +44,24 @@ final class GybBLEClient: NSObject, ObservableObject {
 
     /// Last connected peripheral UUID for auto-reconnect.
     private static let lastDeviceKey = "gyb_last_device_uuid"
+    /// Settings toggle key (@AppStorage in SettingsView / OmniTAKMobileApp).
+    /// The client consults it directly so a poweredOn callback at app
+    /// launch can't reconnect-and-plot while the feature is OFF.
+    private static let enabledKey = "gybDetectorEnabled"
+
+    /// Pending delayed reconnect attempt after an unexpected link drop.
+    /// Cancelled by an intentional disconnect (toggle off / user) or a
+    /// successful connect.
+    private var reconnectWork: DispatchWorkItem?
+    /// Consecutive failed-reconnect counter driving the backoff delay.
+    private var reconnectAttempts = 0
+    /// True while the last disconnect was deliberate, so the
+    /// didDisconnectPeripheral callback doesn't fight it with a retry.
+    private var userInitiatedDisconnect = false
+
+    private var featureEnabled: Bool {
+        UserDefaults.standard.bool(forKey: Self.enabledKey)
+    }
 
     override init() {
         super.init()
@@ -77,6 +95,8 @@ final class GybBLEClient: NSObject, ObservableObject {
 
     func connect(to device: DiscoveredBLEDevice) {
         stopScanning()
+        userInitiatedDisconnect = false
+        cancelPendingReconnect()
         peripheral = device.peripheral
         peripheral?.delegate = self
         central.connect(device.peripheral, options: nil)
@@ -84,6 +104,10 @@ final class GybBLEClient: NSObject, ObservableObject {
     }
 
     func disconnect() {
+        // Deliberate teardown (Settings toggle off / user action) — make
+        // sure no queued auto-reconnect resurrects the link.
+        userInitiatedDisconnect = true
+        cancelPendingReconnect()
         if let p = peripheral {
             central.cancelPeripheralConnection(p)
         }
@@ -93,11 +117,17 @@ final class GybBLEClient: NSObject, ObservableObject {
         connectedDeviceName = nil
     }
 
-    /// Try to silently reconnect to the last paired detector at launch.
+    /// Try to silently reconnect to the last paired detector. No-op while
+    /// the Settings toggle is OFF — GybManager.shared exists from app
+    /// launch, and the unconditional poweredOn reconnect used to re-link
+    /// the detector (and plot markers with no purge timer running) with
+    /// the feature disabled.
     func reconnectLast() {
+        guard featureEnabled else { return }
         guard central.state == .poweredOn,
               let uuidStr = UserDefaults.standard.string(forKey: Self.lastDeviceKey),
               let uuid = UUID(uuidString: uuidStr) else { return }
+        userInitiatedDisconnect = false
         let known = central.retrievePeripherals(withIdentifiers: [uuid])
         if let p = known.first {
             peripheral = p
@@ -105,6 +135,38 @@ final class GybBLEClient: NSObject, ObservableObject {
             central.connect(p, options: nil)
             log.info("auto-reconnecting to last gyb detector")
         }
+    }
+
+    // MARK: - Auto-reconnect (unexpected drops)
+
+    private func cancelPendingReconnect() {
+        reconnectWork?.cancel()
+        reconnectWork = nil
+        reconnectAttempts = 0
+    }
+
+    /// Schedule a delayed reconnect after an unexpected link drop (range,
+    /// detector reboot). The firmware restarts advertising on disconnect,
+    /// so the phone just has to try again — previously the stream silently
+    /// died until an app relaunch or toggle cycle. Backoff: 1s, 2s, 4s …
+    /// capped at 30s; cancelled by user disconnect, toggle off, or a
+    /// successful connect.
+    private func scheduleReconnectIfNeeded() {
+        guard !userInitiatedDisconnect,
+              featureEnabled,
+              UserDefaults.standard.string(forKey: Self.lastDeviceKey) != nil else { return }
+        reconnectWork?.cancel()
+        reconnectAttempts += 1
+        let delay = min(pow(2.0, Double(reconnectAttempts - 1)), 30.0)
+        log.info("gyb link dropped — reconnect attempt \(self.reconnectAttempts) in \(delay, privacy: .public)s")
+        let work = DispatchWorkItem {
+            Task { @MainActor [weak self] in
+                guard let self, !self.isConnected else { return }
+                self.reconnectLast()
+            }
+        }
+        reconnectWork = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: work)
     }
 
     // MARK: - RX reassembly
@@ -171,6 +233,8 @@ extension GybBLEClient: CBCentralManagerDelegate {
             self.isConnected = true
             self.connectedDeviceName = peripheral.name
             self.rxBuffer.removeAll()
+            self.cancelPendingReconnect()
+            self.userInitiatedDisconnect = false
             UserDefaults.standard.set(peripheral.identifier.uuidString, forKey: Self.lastDeviceKey)
             peripheral.discoverServices([GybBLEUUID.service])
             self.log.info("connected; discovering gyb service")
@@ -181,6 +245,7 @@ extension GybBLEClient: CBCentralManagerDelegate {
         Task { @MainActor in
             self.isConnected = false
             self.connectedDeviceName = nil
+            self.scheduleReconnectIfNeeded()
         }
     }
 
@@ -189,6 +254,10 @@ extension GybBLEClient: CBCentralManagerDelegate {
             self.isConnected = false
             self.connectedDeviceName = nil
             self.rxBuffer.removeAll()
+            // Unexpected drop (range / detector reboot) → retry with
+            // backoff while the feature is enabled. Intentional
+            // disconnects set userInitiatedDisconnect and skip this.
+            self.scheduleReconnectIfNeeded()
         }
     }
 }

@@ -312,53 +312,39 @@ class PositionBroadcastService: ObservableObject {
     // MARK: - CoT Message Generation
 
     private func generateSelfSACoT(location: CLLocation) -> String {
-        let dateFormatter = ISO8601DateFormatter()
-        dateFormatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-
-        let now = Date()
-        let stale = now.addingTimeInterval(staleTime)
-
-        let timeStr = dateFormatter.string(from: now)
-        let startStr = dateFormatter.string(from: now)
-        let staleStr = dateFormatter.string(from: stale)
-
-        let lat = location.coordinate.latitude
-        let lon = location.coordinate.longitude
-        let hae = location.altitude
-        let ce = location.horizontalAccuracy
-        let le = location.verticalAccuracy
-
         // Speed in m/s, course in degrees
         let speed = location.speed >= 0 ? location.speed : 0
         let course = location.course >= 0 ? location.course : 0
-
-        // CoT type: a-f-G-U-C (friendly ground unit combat)
-        let cotType = "a-f-G-U-C"
 
         // Team color in ARGB format (signed 32-bit integer)
         // Cyan: 0xFF00FFFF = -16711681
         let colorARGB = getARGBForTeamColor(teamColor)
 
-        // Generate XML
-        let xml = """
-        <?xml version="1.0" encoding="UTF-8"?>
-        <event version="2.0" uid="\(userUID)" type="\(cotType)" time="\(timeStr)" start="\(startStr)" stale="\(staleStr)" how="m-g">
-            <point lat="\(lat)" lon="\(lon)" hae="\(hae)" ce="\(ce)" le="\(le)"/>
-            <detail>
-                <contact callsign="\(escapeXML(userCallsign))" endpoint="*:-1:stcp"/>
-                <__group name="\(teamColor)" role="\(teamRole)"/>
+        let detail = """
+                <contact callsign="\(userCallsign.xmlEscaped)" endpoint="*:-1:stcp"/>
+                <__group name="\(teamColor.xmlEscaped)" role="\(teamRole.xmlEscaped)"/>
                 <status battery="\(Int(batteryLevel * 100))"/>
-                <takv device="\(deviceModel)" platform="OmniTAK-iOS" os="iOS \(iosVersion)" version="\(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "2.0.0")"/>
+                <takv device="\(deviceModel.xmlEscaped)" platform="OmniTAK-iOS" os="iOS \(iosVersion)" version="\(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "2.0.0")"/>
                 <track speed="\(String(format: "%.2f", speed))" course="\(String(format: "%.2f", course))"/>
                 <precisionlocation altsrc="GPS" geopointsrc="GPS"/>
-                <uid Droid="\(escapeXML(userCallsign))"/>
+                <uid Droid="\(userCallsign.xmlEscaped)"/>
                 <usericon iconsetpath="COT_MAPPING_2525B/a-f/a-f-G-U-C"/>
                 <color argb="\(colorARGB)"/>
-            </detail>
-        </event>
         """
 
-        return xml
+        // CoT type: a-f-G-U-C (friendly ground unit combat)
+        return CoTXMLBuilder.buildEvent(
+            uid: userUID,
+            type: "a-f-G-U-C",
+            how: "m-g",
+            staleAfter: staleTime,
+            lat: location.coordinate.latitude,
+            lon: location.coordinate.longitude,
+            hae: location.altitude,
+            ce: location.horizontalAccuracy,
+            le: location.verticalAccuracy,
+            detail: detail
+        )
     }
 
     // MARK: - Battery Monitoring
@@ -505,16 +491,6 @@ class PositionBroadcastService: ObservableObject {
         default:
             return -16711681  // Default to Cyan
         }
-    }
-
-    private func escapeXML(_ string: String) -> String {
-        var escaped = string
-        escaped = escaped.replacingOccurrences(of: "&", with: "&amp;")
-        escaped = escaped.replacingOccurrences(of: "<", with: "&lt;")
-        escaped = escaped.replacingOccurrences(of: ">", with: "&gt;")
-        escaped = escaped.replacingOccurrences(of: "\"", with: "&quot;")
-        escaped = escaped.replacingOccurrences(of: "'", with: "&apos;")
-        return escaped
     }
 
     // MARK: - Manual Broadcast

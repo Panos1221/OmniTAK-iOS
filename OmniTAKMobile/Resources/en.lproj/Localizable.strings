@@ -66,7 +66,6 @@
 "settings.done" = "Done";
 "settings.section.userProfile" = "USER PROFILE";
 "settings.callsign" = "Callsign";
-"settings.name" = "Name";
 "settings.section.servers" = "SERVERS";
 "settings.manageServers" = "Manage Servers";
 "settings.section.navigation" = "NAVIGATION";
@@ -242,3 +241,67 @@
 "coordentry.grid5.note" = "5+5 is relative to the current map center (100 km cell).";
 "coordentry.invalid" = "Coordinate out of range or unparseable.";
 "coordentry.enterprompt" = "Enter a coordinate to preview the location.";
+
+/* --- Server edit: Advanced (TLS trust) --- */
+"serverEdit.advanced.title" = "ADVANCED";
+"serverEdit.trustUntrusted.title" = "Trust Untrusted Certificates";
+"serverEdit.trustUntrusted.subtitle" = "Accept any server certificate (no CA check)";
+"serverEdit.trustUntrusted.warning" = "Warning: TLS server verification is disabled for this server, so traffic can be intercepted. Enable only for a self-signed TAK server you control, when no truststore can be imported.";
+
+/* Settings — hardcoded-English cleanup (2026-06) */
+"settings.section.toolbar" = "Toolbar";
+"settings.customizeToolbar" = "Customize Toolbar";
+"settings.customizeToolbar.hint" = "Build your own";
+"settings.connected" = "Connected";
+"settings.servers.count" = "%d servers";
+"settings.gybDetector" = "External gyb Detector";
+"settings.gybDetector.desc" = "Catches WiFi-beacon Remote ID via a gyb sensor and streams it over Bluetooth — the drones your phone can't see on its own.";
+"settings.gybConnect" = "Connect gyb Detector";
+"settings.section.mission" = "MISSION";
+"settings.createMission" = "Create new mission";
+"settings.mgrsGrid.2dOnly" = "2D map only";
+
+/* Marker radial Info / Share / Copy feedback (2026-06) */
+"radial.copied" = "Copied";
+"markerInfo.title" = "Marker Info";
+"markerInfo.name" = "Name";
+"markerInfo.affiliation" = "Affiliation";
+"markerInfo.coordinates" = "Coordinates";
+"markerInfo.altitude" = "Altitude";
+"markerInfo.created" = "Created";
+"markerInfo.remarks" = "Remarks";
+
+/* Legacy 5x4 Tools grid i18n (2026-06) */
+"tools.grid.title" = "Tools";
+"tools.grid.showDisabled" = "Show disabled";
+"tools.grid.beta" = "BETA";
+"tools.chat.title" = "Chat";
+"tools.chat.subtitle" = "Team chat messaging";
+"tools.data.title" = "Data Packages";
+"tools.data.subtitle" = "Manage data packages";
+"tools.video.title" = "Video";
+"tools.video.subtitle" = "Video streaming (Beta - requires TAK server)";
+"tools.offline.title" = "Offline Maps";
+"tools.offline.subtitle" = "Download maps for offline use";
+"tools.drawing.title" = "Drawing";
+"tools.drawing.subtitle" = "Draw on map";
+"tools.measure.title" = "Measure";
+"tools.measure.subtitle" = "Distance and area measurement";
+"tools.lasso.title" = "Select";
+"tools.lasso.subtitle" = "Multi-select features in a freehand region (long-press + drag)";
+"tools.bloodhound.title" = "Bloodhound";
+"tools.bloodhound.subtitle" = "Blue Force Tracking";
+"tools.meshtastic.title" = "Meshtastic";
+"tools.meshtastic.subtitle" = "Meshtastic mesh networking";
+"tools.echelon.title" = "Hierarchy";
+"tools.echelon.subtitle" = "Unit hierarchy / echelon";
+"tools.uas.title" = "UAS Connect";
+"tools.uas.subtitle" = "Connect to UAS / drone vehicles";
+"tools.settings.title" = "Settings";
+"tools.settings.subtitle" = "App settings";
+
+/* Track persistence error surfacing (2026-06) */
+"tracks.error.title" = "Track Error";
+"tracks.error.save" = "Couldn't save track: %@";
+"tracks.error.delete" = "Couldn't delete track: %@";
+"tracks.error.export" = "Couldn't export track: %@";

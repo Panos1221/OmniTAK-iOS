@@ -21,7 +21,7 @@ enum ConnectionProtocol {
 /// CSR-enrolled (easy-connect) identities live in the keychain under a label
 /// equal to the cert's name and are NOT tracked by `CertificateManager`. Both
 /// the streaming path (`DirectTCPSender.loadCSREnrolledIdentity`) and the REST
-/// mTLS path (`TAKAPIURLSessionDelegate.resolveClientIdentity`) must resolve
+/// mTLS path (`TAKTLSSessionDelegate.resolveClientIdentity`) must resolve
 /// them identically, so this is the single source of truth.
 ///
 /// Tries three lookups in order:
@@ -227,7 +227,7 @@ class DirectTCPSender {
     private var connectTimeoutTask: DispatchWorkItem?
     private var connectCompleted = false
 
-    func connect(host: String, port: UInt16, protocolType: String = "tcp", useTLS: Bool = false, certificateName: String? = nil, certificatePassword: String? = nil, caCertificateName: String? = nil, caCertificatePassword: String? = nil, allowLegacyTLS: Bool = false, completion: @escaping (Bool) -> Void) {
+    func connect(host: String, port: UInt16, protocolType: String = "tcp", useTLS: Bool = false, certificateName: String? = nil, certificatePassword: String? = nil, caCertificateName: String? = nil, caCertificatePassword: String? = nil, allowLegacyTLS: Bool = false, allowUntrustedTLS: Bool = false, completion: @escaping (Bool) -> Void) {
         // Create endpoint with explicit IPv4 if possible
         let nwHost: NWEndpoint.Host
         if let ipv4 = IPv4Address(host) {
@@ -293,7 +293,7 @@ class DirectTCPSender {
                 #if DEBUG
                 print("🔐 Loading CA certificate: \(caName)")
                 #endif
-                if let caCerts = loadCACertificates(name: caName) {
+                if let caCerts = DirectTCPSender.loadCACertificates(name: caName) {
                     caCertificates = caCerts
                     #if DEBUG
                     print("✅ Loaded \(caCerts.count) CA certificate(s)")
@@ -341,22 +341,48 @@ class DirectTCPSender {
                     // a CA we trust is rejected (prevents MITM on the stream).
                     complete(trusted)
                 }, .global())
-            } else {
-                // No CA certificate - disable peer authentication and accept all certs
-                // IMPORTANT: This allows connection to TAK servers with custom/self-signed certificates
+            } else if allowUntrustedTLS {
+                // No CA certificate AND the user explicitly enabled
+                // "Trust untrusted certificates" for this server — accept any
+                // server certificate (self-signed without a truststore).
+                // MITM risk; surfaced with a warning in the server form UI.
                 sec_protocol_options_set_peer_authentication_required(secOptions, false)
 
                 #if DEBUG
-                print("🔓 No CA certificate - accepting all server certificates")
+                print("🔓 allowUntrustedTLS enabled for this server - accepting ANY server certificate (MITM risk)")
                 #endif
 
-                // Set verify block that always accepts the server certificate
                 sec_protocol_options_set_verify_block(secOptions, { (metadata, trust, complete) in
                     #if DEBUG
-                    print("🔓 TLS verify block called - accepting server certificate (no CA)")
+                    print("🔓 TLS verify block called - accepting server certificate (explicit user opt-in)")
                     #endif
-                    // Always accept the server certificate for TAK server compatibility
                     complete(true)
+                }, .global())
+            } else {
+                // No CA certificate and no explicit opt-in: DEFAULT is proper
+                // system trust evaluation against the device's root store.
+                // Self-signed TAK servers must either provide a truststore
+                // (data package / enrollment) or the user must explicitly
+                // enable "Trust untrusted certificates" in the server form.
+                #if DEBUG
+                print("🔒 No CA certificate - using system trust evaluation (default)")
+                #endif
+
+                sec_protocol_options_set_verify_block(secOptions, { (metadata, trust, complete) in
+                    let secTrust = sec_trust_copy_ref(trust).takeRetainedValue()
+
+                    var error: CFError?
+                    let trusted = SecTrustEvaluateWithError(secTrust, &error)
+
+                    #if DEBUG
+                    if trusted {
+                        print("✅ Server certificate verified against system roots")
+                    } else {
+                        print("❌ Server certificate REJECTED by system trust: \(error?.localizedDescription ?? "unknown") — enable 'Trust untrusted certificates' for this server if it uses a self-signed cert without a truststore")
+                    }
+                    #endif
+
+                    complete(trusted)
                 }, .global())
             }
 
@@ -756,41 +782,25 @@ class DirectTCPSender {
 
     private func loadP12Identity(from url: URL, password: String) -> sec_identity_t? {
         // Load certificate data
-        guard let certData = try? Data(contentsOf: url) as CFData else {
+        guard let certData = try? Data(contentsOf: url) else {
             print("❌ Failed to read certificate data from: \(url.path)")
             return nil
         }
 
-        // Import options with password
-        let options: [String: Any] = [
-            kSecImportExportPassphrase as String: password
-        ]
-
-        // Import identity
-        var items: CFArray?
-        let status = SecPKCS12Import(certData, options as CFDictionary, &items)
-
-        guard status == errSecSuccess else {
-            print("❌ Failed to import certificate: \(status)")
-            if status == errSecAuthFailed {
-                print("   Incorrect password for certificate")
-            }
-            return nil
-        }
-
-        guard let itemsArray = items as? [[String: Any]],
-              let firstItem = itemsArray.first,
-              let identity = firstItem[kSecImportItemIdentity as String] else {
-            print("❌ No identity found in certificate")
+        // Single SecPKCS12Import owner: CertificateImportPipeline
+        guard let identity = CertificateImportPipeline.parseIdentity(certData, password: password) else {
+            print("❌ No identity found in certificate (or wrong password)")
             return nil
         }
 
         // Convert SecIdentity to sec_identity_t
-        return sec_identity_create(identity as! SecIdentity)
+        return sec_identity_create(identity)
     }
 
-    /// Load CA certificates from keychain by label
-    private func loadCACertificates(name: String) -> [SecCertificate]? {
+    /// Load CA certificates from keychain by label.
+    /// Static + internal (not private): TAKAPIConfiguration derives the
+    /// REST session's CA-anchored trust mode from the same truststore.
+    static func loadCACertificates(name: String) -> [SecCertificate]? {
         #if DEBUG
         print("🔐 Looking for CA certificate with label: \(name)")
         #endif
@@ -885,7 +895,7 @@ struct ConnectionStateSnapshot {
     static var disconnected: ConnectionStateSnapshot {
         ConnectionStateSnapshot(
             isConnected: false,
-            status: "Not Connected",
+            status: "Disconnected",
             reconnectionState: ReconnectionState(),
             serverName: nil,
             protocolType: nil,
@@ -974,20 +984,37 @@ class TAKService: ObservableObject {
     // Shared singleton for global access
     static let shared = TAKService()
 
-    @Published var connectionStatus = "Disconnected"
-    @Published var isConnected = false  // True if ANY server is connected
+    /// The single published source of connection status. The legacy
+    /// String/Bool/Set projections below are computed off it (or off
+    /// serverConnections) so they can never desync from the snapshot —
+    /// previously all four were @Published and had to be written in
+    /// lockstep at every transition site.
     @Published var connectionState: ConnectionStateSnapshot = .disconnected
+
+    /// True if ANY server is connected (computed off connectionState)
+    var isConnected: Bool { connectionState.isConnected }
+    /// Human-readable status string (computed off connectionState)
+    var connectionStatus: String { connectionState.status }
+
     @Published var lastError = ""
     @Published var messagesReceived: Int = 0
     @Published var messagesSent: Int = 0
     @Published var cotEvents: [CoTEvent] = []
-    @Published var enhancedMarkers: [String: EnhancedCoTMarker] = [:]  // UID -> Marker map
     @Published var bytesReceived: Int = 0
 
     // Multi-server connection tracking
-    @Published var connectedServerIds: Set<UUID> = []
     private var serverConnections: [UUID: ServerConnectionState] = [:]
     private let connectionsLock = NSLock()
+
+    /// IDs of currently-connected servers, derived from serverConnections
+    /// (cached state, refreshed by updateOverallConnectionState's sync
+    /// sweep — the same freshness the old stored set had). Views observing
+    /// TAKService re-render when connectionState publishes.
+    var connectedServerIds: Set<UUID> {
+        connectionsLock.lock()
+        defer { connectionsLock.unlock() }
+        return Set(serverConnections.filter { $0.value.isConnected }.keys)
+    }
 
     // Legacy single-server tracking (for backward compatibility)
     private var currentServerName: String = ""
@@ -996,17 +1023,18 @@ class TAKService: ObservableObject {
     private var connectionHandle: UInt64 = 0
     private var directTCP: DirectTCPSender?  // Legacy single connection (will be deprecated)
     var onCoTReceived: ((CoTEvent) -> Void)?
-    var onMarkerUpdated: ((EnhancedCoTMarker) -> Void)?
     var onChatMessageReceived: ((ChatMessage) -> Void)?
 
     // CoT Event Handler for routing
     private let eventHandler = CoTEventHandler.shared
 
-    // History tracking configuration
-    var maxHistoryPerUnit: Int = 100
-    var historyRetentionTime: TimeInterval = 3600  // 1 hour
-
-    init() {
+    /// TAKService is a strict singleton: init() runs omnitak_init(), wires
+    /// the CoT event handler, and registers app-lifecycle observers — a
+    /// second instance re-runs all of that and creates competing
+    /// connection/PPLI state divorced from the `.shared` the UI observes
+    /// (the audit found live screens doing exactly this). `private` makes
+    /// the compiler enforce `.shared`-only access.
+    private init() {
         // Initialize the omnitak library
         let result = omnitak_init()
         if result != 0 {
@@ -1180,7 +1208,8 @@ class TAKService: ObservableObject {
             certificatePassword: server.certificatePassword,
             caCertificateName: server.caCertificateName,
             caCertificatePassword: server.caCertificatePassword,
-            allowLegacyTLS: server.allowLegacyTLS
+            allowLegacyTLS: server.allowLegacyTLS,
+            allowUntrustedTLS: server.allowUntrustedTLS
         ) { [weak self] success in
             DispatchQueue.main.async {
                 guard let self = self else { return }
@@ -1262,19 +1291,17 @@ class TAKService: ObservableObject {
         connectionsLock.unlock()
 
         DispatchQueue.main.async {
-            self.connectedServerIds = connectedIds
-            self.isConnected = anyConnected
-
             if anyConnected {
                 let count = connectedIds.count
-                if count == 1 {
-                    self.connectionStatus = "Connected to \(serverNames.first ?? "server")"
-                } else {
-                    self.connectionStatus = "Connected to \(count) servers"
-                }
-                self.connectionState = .connected(serverName: serverNames.joined(separator: ", "), protocolType: "Multi")
+                var snapshot = ConnectionStateSnapshot.connected(
+                    serverName: serverNames.joined(separator: ", "),
+                    protocolType: "Multi"
+                )
+                snapshot.status = count == 1
+                    ? "Connected to \(serverNames.first ?? "server")"
+                    : "Connected to \(count) servers"
+                self.connectionState = snapshot
             } else {
-                self.connectionStatus = "Disconnected"
                 self.connectionState = .disconnected
             }
 
@@ -1369,7 +1396,7 @@ class TAKService: ObservableObject {
         omnitak_shutdown()
     }
 
-    func connect(host: String, port: UInt16, protocolType: String, useTLS: Bool, certificateName: String? = nil, certificatePassword: String? = nil, caCertificateName: String? = nil, caCertificatePassword: String? = nil) {
+    func connect(host: String, port: UInt16, protocolType: String, useTLS: Bool, certificateName: String? = nil, certificatePassword: String? = nil, caCertificateName: String? = nil, caCertificatePassword: String? = nil, allowUntrustedTLS: Bool = false) {
         #if DEBUG
         print("🔌 TAKService.connect() called with host=\(host), port=\(port), protocol=\(protocolType), tls=\(useTLS), cert=\(certificateName ?? "none"), ca=\(caCertificateName ?? "none")")
         #endif
@@ -1379,16 +1406,13 @@ class TAKService: ObservableObject {
         currentProtocolType = useTLS ? "TLS" : protocolType.uppercased()
 
         // Use DirectTCPSender for actual network communication
-        connectionStatus = "Connecting..."
         connectionState = .connecting(serverName: currentServerName)
 
-        directTCP?.connect(host: host, port: port, protocolType: protocolType, useTLS: useTLS, certificateName: certificateName, certificatePassword: certificatePassword, caCertificateName: caCertificateName, caCertificatePassword: caCertificatePassword) { [weak self] success in
+        directTCP?.connect(host: host, port: port, protocolType: protocolType, useTLS: useTLS, certificateName: certificateName, certificatePassword: certificatePassword, caCertificateName: caCertificateName, caCertificatePassword: caCertificatePassword, allowUntrustedTLS: allowUntrustedTLS) { [weak self] success in
             DispatchQueue.main.async {
                 guard let self = self else { return }
 
                 if success {
-                    self.isConnected = true
-                    self.connectionStatus = "Connected"
                     self.connectionState = .connected(serverName: self.currentServerName, protocolType: self.currentProtocolType)
                     self.lastError = ""
                     #if DEBUG
@@ -1440,9 +1464,9 @@ class TAKService: ObservableObject {
                         #endif
                     }
                 } else {
-                    self.isConnected = false
-                    self.connectionStatus = "Connection Failed"
-                    self.connectionState = .disconnected
+                    var failed = ConnectionStateSnapshot.disconnected
+                    failed.status = "Connection Failed"
+                    self.connectionState = failed
                     self.lastError = "Failed to connect to \(host):\(port)"
                     print("❌ Connection failed")
                 }
@@ -1469,9 +1493,6 @@ class TAKService: ObservableObject {
             connectionHandle = 0
         }
 
-        connectedServerIds.removeAll()
-        isConnected = false
-        connectionStatus = "Disconnected"
         connectionState = .disconnected
 
         // Stop the auto-PPLI keepalive — no connection, no heartbeat needed
@@ -1644,148 +1665,6 @@ class TAKService: ObservableObject {
         omnitak_register_callback(connectionHandle, cotCallback, context)
     }
 
-    // MARK: - Enhanced Marker Management
-
-    func updateEnhancedMarker(from event: CoTEvent) {
-        let coordinate = CLLocationCoordinate2D(
-            latitude: event.point.lat,
-            longitude: event.point.lon
-        )
-
-        let affiliation = UnitAffiliation.from(cotType: event.type)
-        let unitType = UnitType.from(cotType: event.type)
-
-        // Check if marker exists
-        if let existingMarker = enhancedMarkers[event.uid] {
-            // Update existing marker
-            var updatedHistory = existingMarker.positionHistory
-
-            // Add new position if it's different enough
-            let newPosition = CoTPosition(
-                coordinate: coordinate,
-                altitude: event.point.hae,
-                timestamp: event.time,
-                speed: event.detail.speed,
-                course: event.detail.course
-            )
-
-            // Only add if position changed significantly
-            if shouldAddToHistory(newPosition: newPosition, existingHistory: updatedHistory) {
-                updatedHistory.append(newPosition)
-
-                // Trim history to max length
-                if updatedHistory.count > maxHistoryPerUnit {
-                    updatedHistory = Array(updatedHistory.suffix(maxHistoryPerUnit))
-                }
-
-                // Remove old positions
-                let cutoffTime = Date().addingTimeInterval(-historyRetentionTime)
-                updatedHistory.removeAll { $0.timestamp < cutoffTime }
-            }
-
-            // Create updated marker
-            let updatedMarker = EnhancedCoTMarker(
-                id: existingMarker.id,
-                uid: event.uid,
-                type: event.type,
-                timestamp: event.time,
-                coordinate: coordinate,
-                altitude: event.point.hae,
-                ce: event.point.ce,
-                le: event.point.le,
-                callsign: event.detail.callsign,
-                team: event.detail.team,
-                affiliation: affiliation,
-                unitType: unitType,
-                speed: event.detail.speed,
-                course: event.detail.course,
-                remarks: event.detail.remarks,
-                battery: event.detail.battery,
-                device: event.detail.device,
-                platform: event.detail.platform,
-                lastUpdate: Date(),
-                positionHistory: updatedHistory
-            )
-
-            enhancedMarkers[event.uid] = updatedMarker
-            onMarkerUpdated?(updatedMarker)
-
-        } else {
-            // Create new marker
-            let initialPosition = CoTPosition(
-                coordinate: coordinate,
-                altitude: event.point.hae,
-                timestamp: event.time,
-                speed: event.detail.speed,
-                course: event.detail.course
-            )
-
-            let newMarker = EnhancedCoTMarker(
-                id: UUID(),
-                uid: event.uid,
-                type: event.type,
-                timestamp: event.time,
-                coordinate: coordinate,
-                altitude: event.point.hae,
-                ce: event.point.ce,
-                le: event.point.le,
-                callsign: event.detail.callsign,
-                team: event.detail.team,
-                affiliation: affiliation,
-                unitType: unitType,
-                speed: event.detail.speed,
-                course: event.detail.course,
-                remarks: event.detail.remarks,
-                battery: event.detail.battery,
-                device: event.detail.device,
-                platform: event.detail.platform,
-                lastUpdate: Date(),
-                positionHistory: [initialPosition]
-            )
-
-            enhancedMarkers[event.uid] = newMarker
-            onMarkerUpdated?(newMarker)
-        }
-    }
-
-    private func shouldAddToHistory(newPosition: CoTPosition, existingHistory: [CoTPosition]) -> Bool {
-        guard let lastPosition = existingHistory.last else { return true }
-
-        // Calculate distance from last position
-        let loc1 = CLLocation(
-            latitude: lastPosition.coordinate.latitude,
-            longitude: lastPosition.coordinate.longitude
-        )
-        let loc2 = CLLocation(
-            latitude: newPosition.coordinate.latitude,
-            longitude: newPosition.coordinate.longitude
-        )
-
-        let distance = loc1.distance(from: loc2)
-
-        // Add if moved more than 5 meters or more than 30 seconds passed
-        let timeDiff = newPosition.timestamp.timeIntervalSince(lastPosition.timestamp)
-        return distance > 5.0 || timeDiff > 30
-    }
-
-    /// Remove stale markers (older than 15 minutes)
-    func removeStaleMarkers() {
-        let cutoffTime = Date().addingTimeInterval(-900)  // 15 minutes
-        enhancedMarkers = enhancedMarkers.filter { _, marker in
-            marker.lastUpdate > cutoffTime
-        }
-    }
-
-    /// Get marker by UID
-    func getMarker(uid: String) -> EnhancedCoTMarker? {
-        return enhancedMarkers[uid]
-    }
-
-    /// Get all markers as array
-    func getAllMarkers() -> [EnhancedCoTMarker] {
-        return Array(enhancedMarkers.values)
-    }
-
     // MARK: - Receive Statistics
 
     /// Get current receive buffer size (aggregated from all connections)
@@ -1933,9 +1812,6 @@ private func cotCallback(
                     service.cotEvents.append(event)
                 }
                 service.onCoTReceived?(event)
-
-                // Update enhanced marker
-                service.updateEnhancedMarker(from: event)
 
                 // Also parse participant info for chat (skip own echoed PPLI)
                 if event.uid != PositionBroadcastService.shared.userUID,
