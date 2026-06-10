@@ -120,3 +120,45 @@
 "quickstart.time.discover" = "< 1 хв";
 "quickstart.time.quick" = "< 2 хв";
 "quickstart.time.manual" = "~3 хв";
+
+/* --- Bottom bar + tools shortcuts (labels). Keyed by BarItem.id ("bar.<id>").
+       Military/technical acronyms (CASEVAC, 9-Line, SPOTREP, ADS-B, Self SA,
+       Mesh) stay English per the translation conventions. --- */
+"bar.tab.map" = "Карта";
+"bar.tab.chat" = "Чат";
+"bar.tab.servers" = "Сервери";
+"bar.tab.mesh" = "Mesh";
+"bar.tab.settings" = "Налаштування";
+"bar.cmd.tools" = "Інструменти";
+"bar.cmd.fulltools" = "Усі інструменти";
+"bar.cmd.droppin" = "Поставити мітку";
+"bar.cmd.measure" = "Вимірювання";
+"bar.cmd.drawing" = "Малювання";
+"bar.cmd.layers" = "Шари";
+"bar.cmd.drawingslist" = "Малюнки";
+"bar.cmd.lasso" = "Виділення";
+"bar.cmd.engine" = "2D / 3D";
+"bar.tool.pointer" = "Поставити точку";
+"bar.tool.routes" = "Маршрути";
+"bar.tool.navigation" = "Навігація";
+"bar.tool.teams" = "Команди";
+"bar.tool.contacts" = "Контакти";
+"bar.tool.casevac" = "CASEVAC";
+"bar.tool.nineline" = "9-Line";
+"bar.tool.spotrep" = "SPOTREP";
+"bar.tool.alert" = "Тривога";
+"bar.tool.tracks" = "Сліди";
+"bar.tool.geofence" = "Геозона";
+"bar.tool.adsb" = "ADS-B";
+"bar.tool.selfsa" = "Self SA";
+"bar.tool.elevation" = "Висота";
+"bar.tool.los" = "Лінія видимості";
+"bar.tool.missionsync" = "Синхр. місії";
+"bar.tool.plugins" = "Плагіни";
+"bar.tool.uas" = "Апарати";
+
+/* --- Bottom bar edit/coachmark chrome --- */
+"bar.coachmark" = "Натисніть і утримуйте, щоб зібрати власну панель інструментів";
+"bar.editHint" = "Перетягніть, щоб змінити порядок · торкніться −, щоб прибрати · ＋, щоб додати";
+"bar.done" = "Готово";
+"bar.add" = "Додати";

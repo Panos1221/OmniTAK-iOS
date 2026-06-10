@@ -120,3 +120,45 @@
 "quickstart.time.discover" = "< 1 Min.";
 "quickstart.time.quick" = "< 2 Min.";
 "quickstart.time.manual" = "~3 Min.";
+
+/* --- Bottom bar + tools shortcuts (labels). Keyed by BarItem.id ("bar.<id>").
+       Military/technical acronyms (CASEVAC, 9-Line, SPOTREP, ADS-B, Self SA,
+       Mesh) stay English per the translation conventions. --- */
+"bar.tab.map" = "Karte";
+"bar.tab.chat" = "Chat";
+"bar.tab.servers" = "Server";
+"bar.tab.mesh" = "Mesh";
+"bar.tab.settings" = "Einstellungen";
+"bar.cmd.tools" = "Werkzeuge";
+"bar.cmd.fulltools" = "Alle Werkzeuge";
+"bar.cmd.droppin" = "Pin setzen";
+"bar.cmd.measure" = "Messen";
+"bar.cmd.drawing" = "Zeichnen";
+"bar.cmd.layers" = "Ebenen";
+"bar.cmd.drawingslist" = "Zeichnungen";
+"bar.cmd.lasso" = "Auswahl";
+"bar.cmd.engine" = "2D / 3D";
+"bar.tool.pointer" = "Punkt setzen";
+"bar.tool.routes" = "Routen";
+"bar.tool.navigation" = "Navigation";
+"bar.tool.teams" = "Teams";
+"bar.tool.contacts" = "Kontakte";
+"bar.tool.casevac" = "CASEVAC";
+"bar.tool.nineline" = "9-Line";
+"bar.tool.spotrep" = "SPOTREP";
+"bar.tool.alert" = "Notfall";
+"bar.tool.tracks" = "Spuren";
+"bar.tool.geofence" = "Geofence";
+"bar.tool.adsb" = "ADS-B";
+"bar.tool.selfsa" = "Self SA";
+"bar.tool.elevation" = "Höhe";
+"bar.tool.los" = "Sichtlinie";
+"bar.tool.missionsync" = "Missions-Sync";
+"bar.tool.plugins" = "Plugins";
+"bar.tool.uas" = "Fahrzeuge";
+
+/* --- Bottom bar edit/coachmark chrome --- */
+"bar.coachmark" = "Gedrückt halten, um deine eigene Symbolleiste zu erstellen";
+"bar.editHint" = "Ziehen zum Sortieren · − tippen zum Entfernen · ＋ zum Hinzufügen";
+"bar.done" = "Fertig";
+"bar.add" = "Hinzufügen";
