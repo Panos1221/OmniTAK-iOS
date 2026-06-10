@@ -187,6 +187,9 @@ class CoTEventHandler: ObservableObject {
                 object: self,
                 userInfo: ["event": event]
             )
+            // Plugin SDK — fire registered CoT handlers AFTER the core store
+            // ingested the event (runs on main, same as the rest of handle()).
+            _ = AppPluginHost.shared.dispatchCoT(event)
             takService?.onCoTReceived?(event)
             return
         }
@@ -225,6 +228,11 @@ class CoTEventHandler: ObservableObject {
             object: self,
             userInfo: ["event": event]
         )
+
+        // Plugin SDK — fire registered CoT handlers AFTER the core store
+        // ingested the event (and after the core publishers). Handlers run on
+        // main; a handler returning true marks the event consumed.
+        _ = AppPluginHost.shared.dispatchCoT(event)
 
         // Trigger callback
         takService?.onCoTReceived?(event)

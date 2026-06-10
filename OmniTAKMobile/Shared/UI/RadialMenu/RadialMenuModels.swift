@@ -417,6 +417,13 @@ extension RadialMenuAction {
             return "alert"
         case .custom(let id) where id == "meshtastic":
             return "meshtastic"
+        case .custom(let id) where id.hasPrefix("plugin_"):
+            // Plugin SDK radial actions. Resolve to the OWNING plugin's
+            // reverse-DNS id so the entry is gated by that plugin's enable
+            // flag (a disabled plugin must not leak its radial entry).
+            return AppPluginHost.shared.radialActions
+                .first { $0.item.action.identifier == "custom_\(id)" }?
+                .pluginId
         default:
             return nil
         }
