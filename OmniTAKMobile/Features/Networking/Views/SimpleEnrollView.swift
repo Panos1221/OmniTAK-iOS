@@ -665,14 +665,19 @@ struct SimpleEnrollView: View {
             await MainActor.run {
                 ServerManager.shared.setActiveServer(server)
 
-                // Actually connect to the server
+                // Actually connect to the server. Pin the stream to the CA
+                // chain we just enrolled against so the server certificate is
+                // validated rather than blindly accepted.
                 TAKService.shared.connect(
                     host: server.host,
                     port: server.port,
                     protocolType: server.protocolType,
                     useTLS: server.useTLS,
                     certificateName: server.certificateName,
-                    certificatePassword: server.certificatePassword
+                    certificatePassword: server.certificatePassword,
+                    caCertificateName: server.caCertificateName,
+                    caCertificatePassword: server.caCertificatePassword,
+                    allowUntrustedTLS: server.allowUntrustedTLS
                 )
 
                 enrollmentState = .success
@@ -1110,14 +1115,19 @@ struct SimpleEnrollViewContent: View {
             await MainActor.run {
                 ServerManager.shared.setActiveServer(server)
 
-                // Actually connect to the server
+                // Actually connect to the server. Pin the stream to the CA
+                // chain we just enrolled against so the server certificate is
+                // validated rather than blindly accepted.
                 TAKService.shared.connect(
                     host: server.host,
                     port: server.port,
                     protocolType: server.protocolType,
                     useTLS: server.useTLS,
                     certificateName: server.certificateName,
-                    certificatePassword: server.certificatePassword
+                    certificatePassword: server.certificatePassword,
+                    caCertificateName: server.caCertificateName,
+                    caCertificatePassword: server.caCertificatePassword,
+                    allowUntrustedTLS: server.allowUntrustedTLS
                 )
 
                 enrollmentState = .success

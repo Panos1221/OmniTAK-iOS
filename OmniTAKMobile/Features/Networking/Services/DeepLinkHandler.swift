@@ -292,7 +292,8 @@ class DeepLinkHandler: ObservableObject {
                     // Pin the stream to the CA chain enrolled above so the
                     // server certificate is validated, not blindly accepted.
                     caCertificateName: server.caCertificateName,
-                    caCertificatePassword: server.caCertificatePassword
+                    caCertificatePassword: server.caCertificatePassword,
+                    allowUntrustedTLS: server.allowUntrustedTLS
                 )
                 isProcessing = false
                 enrolledServerName = server.name
@@ -543,6 +544,13 @@ class DeepLinkHandler: ObservableObject {
             enabled: true,
             certificateName: certificateAlias,
             certificatePassword: "omnitak",
+            // Pin the stream to the CA chain stored during enrollment (the CA
+            // certs live under "\(certificateAlias)-ca-N"; the "-ca" prefix
+            // lets loadCACertificates collect them — same pattern as the CSR
+            // password-enrollment flow). Without this the stream would fall
+            // into the no-CA path and self-signed servers would be rejected
+            // by system trust.
+            caCertificateName: "\(certificateAlias)-ca",
             username: enrollment.username
         )
 
@@ -551,14 +559,17 @@ class DeepLinkHandler: ObservableObject {
             ServerManager.shared.addServer(serverInstance)
             ServerManager.shared.setActiveServer(serverInstance)
 
-            // Auto-connect to the server
+            // Auto-connect to the server, validating against the enrolled CA.
             TAKService.shared.connect(
                 host: serverInstance.host,
                 port: serverInstance.port,
                 protocolType: serverInstance.protocolType,
                 useTLS: serverInstance.useTLS,
                 certificateName: serverInstance.certificateName,
-                certificatePassword: serverInstance.certificatePassword
+                certificatePassword: serverInstance.certificatePassword,
+                caCertificateName: serverInstance.caCertificateName,
+                caCertificatePassword: serverInstance.caCertificatePassword,
+                allowUntrustedTLS: serverInstance.allowUntrustedTLS
             )
         }
 

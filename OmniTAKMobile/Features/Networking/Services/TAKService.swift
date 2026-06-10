@@ -227,7 +227,7 @@ class DirectTCPSender {
     private var connectTimeoutTask: DispatchWorkItem?
     private var connectCompleted = false
 
-    func connect(host: String, port: UInt16, protocolType: String = "tcp", useTLS: Bool = false, certificateName: String? = nil, certificatePassword: String? = nil, caCertificateName: String? = nil, caCertificatePassword: String? = nil, allowLegacyTLS: Bool = false, completion: @escaping (Bool) -> Void) {
+    func connect(host: String, port: UInt16, protocolType: String = "tcp", useTLS: Bool = false, certificateName: String? = nil, certificatePassword: String? = nil, caCertificateName: String? = nil, caCertificatePassword: String? = nil, allowLegacyTLS: Bool = false, allowUntrustedTLS: Bool = false, completion: @escaping (Bool) -> Void) {
         // Create endpoint with explicit IPv4 if possible
         let nwHost: NWEndpoint.Host
         if let ipv4 = IPv4Address(host) {
@@ -341,22 +341,48 @@ class DirectTCPSender {
                     // a CA we trust is rejected (prevents MITM on the stream).
                     complete(trusted)
                 }, .global())
-            } else {
-                // No CA certificate - disable peer authentication and accept all certs
-                // IMPORTANT: This allows connection to TAK servers with custom/self-signed certificates
+            } else if allowUntrustedTLS {
+                // No CA certificate AND the user explicitly enabled
+                // "Trust untrusted certificates" for this server — accept any
+                // server certificate (self-signed without a truststore).
+                // MITM risk; surfaced with a warning in the server form UI.
                 sec_protocol_options_set_peer_authentication_required(secOptions, false)
 
                 #if DEBUG
-                print("🔓 No CA certificate - accepting all server certificates")
+                print("🔓 allowUntrustedTLS enabled for this server - accepting ANY server certificate (MITM risk)")
                 #endif
 
-                // Set verify block that always accepts the server certificate
                 sec_protocol_options_set_verify_block(secOptions, { (metadata, trust, complete) in
                     #if DEBUG
-                    print("🔓 TLS verify block called - accepting server certificate (no CA)")
+                    print("🔓 TLS verify block called - accepting server certificate (explicit user opt-in)")
                     #endif
-                    // Always accept the server certificate for TAK server compatibility
                     complete(true)
+                }, .global())
+            } else {
+                // No CA certificate and no explicit opt-in: DEFAULT is proper
+                // system trust evaluation against the device's root store.
+                // Self-signed TAK servers must either provide a truststore
+                // (data package / enrollment) or the user must explicitly
+                // enable "Trust untrusted certificates" in the server form.
+                #if DEBUG
+                print("🔒 No CA certificate - using system trust evaluation (default)")
+                #endif
+
+                sec_protocol_options_set_verify_block(secOptions, { (metadata, trust, complete) in
+                    let secTrust = sec_trust_copy_ref(trust).takeRetainedValue()
+
+                    var error: CFError?
+                    let trusted = SecTrustEvaluateWithError(secTrust, &error)
+
+                    #if DEBUG
+                    if trusted {
+                        print("✅ Server certificate verified against system roots")
+                    } else {
+                        print("❌ Server certificate REJECTED by system trust: \(error?.localizedDescription ?? "unknown") — enable 'Trust untrusted certificates' for this server if it uses a self-signed cert without a truststore")
+                    }
+                    #endif
+
+                    complete(trusted)
                 }, .global())
             }
 
@@ -1180,7 +1206,8 @@ class TAKService: ObservableObject {
             certificatePassword: server.certificatePassword,
             caCertificateName: server.caCertificateName,
             caCertificatePassword: server.caCertificatePassword,
-            allowLegacyTLS: server.allowLegacyTLS
+            allowLegacyTLS: server.allowLegacyTLS,
+            allowUntrustedTLS: server.allowUntrustedTLS
         ) { [weak self] success in
             DispatchQueue.main.async {
                 guard let self = self else { return }
@@ -1369,7 +1396,7 @@ class TAKService: ObservableObject {
         omnitak_shutdown()
     }
 
-    func connect(host: String, port: UInt16, protocolType: String, useTLS: Bool, certificateName: String? = nil, certificatePassword: String? = nil, caCertificateName: String? = nil, caCertificatePassword: String? = nil) {
+    func connect(host: String, port: UInt16, protocolType: String, useTLS: Bool, certificateName: String? = nil, certificatePassword: String? = nil, caCertificateName: String? = nil, caCertificatePassword: String? = nil, allowUntrustedTLS: Bool = false) {
         #if DEBUG
         print("🔌 TAKService.connect() called with host=\(host), port=\(port), protocol=\(protocolType), tls=\(useTLS), cert=\(certificateName ?? "none"), ca=\(caCertificateName ?? "none")")
         #endif
@@ -1382,7 +1409,7 @@ class TAKService: ObservableObject {
         connectionStatus = "Connecting..."
         connectionState = .connecting(serverName: currentServerName)
 
-        directTCP?.connect(host: host, port: port, protocolType: protocolType, useTLS: useTLS, certificateName: certificateName, certificatePassword: certificatePassword, caCertificateName: caCertificateName, caCertificatePassword: caCertificatePassword) { [weak self] success in
+        directTCP?.connect(host: host, port: port, protocolType: protocolType, useTLS: useTLS, certificateName: certificateName, certificatePassword: certificatePassword, caCertificateName: caCertificateName, caCertificatePassword: caCertificatePassword, allowUntrustedTLS: allowUntrustedTLS) { [weak self] success in
             DispatchQueue.main.async {
                 guard let self = self else { return }
 

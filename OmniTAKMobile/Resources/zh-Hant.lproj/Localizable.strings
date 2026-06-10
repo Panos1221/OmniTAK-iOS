@@ -242,3 +242,9 @@
 "coordentry.grid5.note" = "5+5 以目前地圖中心（100 公里網格）為基準。";
 "coordentry.invalid" = "座標超出範圍或無法解析。";
 "coordentry.enterprompt" = "輸入座標以預覽位置。";
+
+/* --- Server edit: Advanced (TLS trust) --- */
+"serverEdit.advanced.title" = "進階";
+"serverEdit.trustUntrusted.title" = "信任未驗證的憑證";
+"serverEdit.trustUntrusted.subtitle" = "接受任何伺服器憑證（不檢查 CA）";
+"serverEdit.trustUntrusted.warning" = "警告：此伺服器的 TLS 伺服器驗證已停用，流量可能遭到攔截。僅在無法匯入信任庫、且該自簽憑證 TAK 伺服器由您掌控時才啟用。";

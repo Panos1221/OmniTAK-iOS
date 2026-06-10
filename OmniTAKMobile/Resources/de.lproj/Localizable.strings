@@ -162,3 +162,9 @@
 "bar.editHint" = "Ziehen zum Sortieren · − tippen zum Entfernen · ＋ zum Hinzufügen";
 "bar.done" = "Fertig";
 "bar.add" = "Hinzufügen";
+
+/* --- Server edit: Advanced (TLS trust) --- */
+"serverEdit.advanced.title" = "ERWEITERT";
+"serverEdit.trustUntrusted.title" = "Nicht vertrauenswürdigen Zertifikaten vertrauen";
+"serverEdit.trustUntrusted.subtitle" = "Beliebiges Serverzertifikat akzeptieren (keine CA-Prüfung)";
+"serverEdit.trustUntrusted.warning" = "Warnung: Die TLS-Serververifizierung ist für diesen Server deaktiviert, der Datenverkehr kann abgefangen werden. Nur für einen selbstsignierten TAK-Server aktivieren, den Sie kontrollieren, wenn kein Truststore importiert werden kann.";

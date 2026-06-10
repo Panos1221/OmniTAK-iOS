@@ -162,3 +162,9 @@
 "bar.editHint" = "Arrastra para reordenar · toca − para quitar · ＋ para añadir";
 "bar.done" = "Listo";
 "bar.add" = "Añadir";
+
+/* --- Server edit: Advanced (TLS trust) --- */
+"serverEdit.advanced.title" = "AVANZADO";
+"serverEdit.trustUntrusted.title" = "Confiar en certificados no verificados";
+"serverEdit.trustUntrusted.subtitle" = "Aceptar cualquier certificado del servidor (sin comprobación de CA)";
+"serverEdit.trustUntrusted.warning" = "Advertencia: la verificación TLS del servidor está desactivada para este servidor, por lo que el tráfico puede ser interceptado. Actívalo solo para un servidor TAK autofirmado que controles, cuando no se pueda importar un almacén de confianza.";

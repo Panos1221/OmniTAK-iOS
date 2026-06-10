@@ -268,7 +268,10 @@ struct ConnectionDetailsView: View {
                                 protocolType: server.protocolType,
                                 useTLS: server.useTLS,
                                 certificateName: server.certificateName,
-                                certificatePassword: server.certificatePassword
+                                certificatePassword: server.certificatePassword,
+                                caCertificateName: server.caCertificateName,
+                                caCertificatePassword: server.caCertificatePassword,
+                                allowUntrustedTLS: server.allowUntrustedTLS
                             )
                         }
                     }

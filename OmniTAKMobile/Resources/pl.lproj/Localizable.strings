@@ -162,3 +162,9 @@
 "bar.editHint" = "Przeciągnij, aby zmienić kolejność · dotknij −, aby usunąć · ＋, aby dodać";
 "bar.done" = "Gotowe";
 "bar.add" = "Dodaj";
+
+/* --- Server edit: Advanced (TLS trust) --- */
+"serverEdit.advanced.title" = "ZAAWANSOWANE";
+"serverEdit.trustUntrusted.title" = "Ufaj niezaufanym certyfikatom";
+"serverEdit.trustUntrusted.subtitle" = "Akceptuj dowolny certyfikat serwera (bez weryfikacji CA)";
+"serverEdit.trustUntrusted.warning" = "Ostrzeżenie: weryfikacja TLS serwera jest wyłączona dla tego serwera, więc ruch może zostać przechwycony. Włącz tylko dla samopodpisanego serwera TAK, który kontrolujesz, gdy nie można zaimportować magazynu zaufania.";

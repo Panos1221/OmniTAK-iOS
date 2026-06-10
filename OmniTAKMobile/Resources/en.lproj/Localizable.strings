@@ -242,3 +242,9 @@
 "coordentry.grid5.note" = "5+5 is relative to the current map center (100 km cell).";
 "coordentry.invalid" = "Coordinate out of range or unparseable.";
 "coordentry.enterprompt" = "Enter a coordinate to preview the location.";
+
+/* --- Server edit: Advanced (TLS trust) --- */
+"serverEdit.advanced.title" = "ADVANCED";
+"serverEdit.trustUntrusted.title" = "Trust Untrusted Certificates";
+"serverEdit.trustUntrusted.subtitle" = "Accept any server certificate (no CA check)";
+"serverEdit.trustUntrusted.warning" = "Warning: TLS server verification is disabled for this server, so traffic can be intercepted. Enable only for a self-signed TAK server you control, when no truststore can be imported.";
