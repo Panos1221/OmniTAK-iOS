@@ -38,30 +38,12 @@ Regression tests for OmniTAK Mobile networking and connection functionality.
 - Certificate manager state
 - TLS configuration
 
-## Adding Test Target to Xcode
+## Test Target
 
-### Option 1: Using Xcode (Recommended)
-
-1. Open `OmniTAKMobile.xcodeproj` in Xcode
-2. Go to **File → New → Target**
-3. Select **iOS → Unit Testing Bundle**
-4. Name it `OmniTAKMobileTests`
-5. Set the target to test as `OmniTAKMobile`
-6. Delete the auto-generated test file
-7. Add existing files from `OmniTAKMobileTests/` folder:
-   - ServerValidatorTests.swift
-   - CSREnrollmentTests.swift
-   - TAKServiceTests.swift
-   - CoTMessageParserTests.swift
-   - CertificateHandlingTests.swift
-
-### Option 2: Using Script
-
-```bash
-cd OmniTAK-iOS
-# The test files are already in OmniTAKMobileTests/
-# Add them to Xcode project manually or using ruby-xcodeproj gem
-```
+These suites are compiled into the `OmniTAKMobileTests` unit-test target
+(unit-test bundle hosted in the app), wired into the `OmniTAKMobile`
+scheme's Testables. CI runs them on every push/PR via
+`.github/workflows/ci.yml`.
 
 ## Running Tests
 

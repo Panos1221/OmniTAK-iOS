@@ -256,11 +256,12 @@ private extension Data {
 #endif
 
 // MARK: - Standalone runner guard
-// The function below is only compiled when this file is run directly via swift CLI.
-// When compiled as part of the test target, it is dead code.
-#if swift(>=5.9)
-// Detect if we're running standalone (no test host)
-// This block runs only when invoked as: swift TAKPacketCodecTests.swift
+// The block below is ONLY for running this file directly as a script:
+//   swift -D STANDALONE_REPRODUCER OmniTAKMobileTests/TAKPacketCodecTests.swift
+// It must NOT compile inside the test bundle — runStandaloneReproducer() is
+// called at top level, which is illegal in a compiled target. (The old guard
+// was `#if swift(>=5.9)`, which is always true.)
+#if STANDALONE_REPRODUCER
 
 private func runStandaloneReproducer() {
     print("=== TAKPacket Phase 2 — Golden Vector Reproducer ===\n")
@@ -525,6 +526,10 @@ private func decodeStandalone(_ data: [UInt8]) -> StandaloneDecoded? {
     return decodeStandaloneRaw(data)
 }
 
-// Entry point when run standalone
-runStandaloneReproducer()
+// Entry point when run standalone. This must stay commented even inside the
+// inactive #if branch — Swift parses inactive branches, and a top-level
+// expression is a parse error in any file that isn't main.swift. Uncomment
+// only when running this file directly:
+//   swift -D STANDALONE_REPRODUCER OmniTAKMobileTests/TAKPacketCodecTests.swift
+// runStandaloneReproducer()
 #endif

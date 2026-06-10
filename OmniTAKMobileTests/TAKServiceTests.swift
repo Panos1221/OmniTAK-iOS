@@ -53,7 +53,9 @@ class TAKServiceTests: XCTestCase {
         let state = ConnectionStateSnapshot.disconnected
 
         XCTAssertFalse(state.isConnected)
-        XCTAssertEqual(state.status, "Not Connected")
+        // status string standardized to "Disconnected" in the
+        // ConnectionStateSnapshot consolidation (was "Not Connected").
+        XCTAssertEqual(state.status, "Disconnected")
         XCTAssertNil(state.serverName)
         XCTAssertFalse(state.reconnectionState.isReconnecting)
     }
@@ -188,18 +190,9 @@ class TAKServiceTests: XCTestCase {
 
     // MARK: - Configuration Tests
 
-    func testHistoryConfiguration() {
-        // Default values
-        XCTAssertEqual(service.maxHistoryPerUnit, 100)
-        XCTAssertEqual(service.historyRetentionTime, 3600)  // 1 hour
-
-        // Should be configurable
-        service.maxHistoryPerUnit = 200
-        service.historyRetentionTime = 7200
-
-        XCTAssertEqual(service.maxHistoryPerUnit, 200)
-        XCTAssertEqual(service.historyRetentionTime, 7200)
-    }
+    // (testHistoryConfiguration deleted — maxHistoryPerUnit /
+    // historyRetentionTime were removed with the unrendered
+    // EnhancedCoTMarker store; cotEvents is the single source now.)
 
     // MARK: - Notification Settings Tests
 
