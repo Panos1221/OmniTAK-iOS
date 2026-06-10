@@ -190,3 +190,32 @@
 "markerInfo.altitude" = "Wysokość";
 "markerInfo.created" = "Utworzono";
 "markerInfo.remarks" = "Uwagi";
+
+/* Legacy 5x4 Tools grid i18n (2026-06) */
+"tools.grid.title" = "Narzędzia";
+"tools.grid.showDisabled" = "Pokaż wyłączone";
+"tools.grid.beta" = "BETA";
+"tools.chat.title" = "Czat";
+"tools.chat.subtitle" = "Wiadomości zespołu";
+"tools.data.title" = "Pakiety danych";
+"tools.data.subtitle" = "Zarządzaj pakietami danych";
+"tools.video.title" = "Wideo";
+"tools.video.subtitle" = "Strumieniowanie wideo (beta — wymaga serwera TAK)";
+"tools.offline.title" = "Mapy offline";
+"tools.offline.subtitle" = "Pobierz mapy do użytku offline";
+"tools.drawing.title" = "Rysowanie";
+"tools.drawing.subtitle" = "Rysuj na mapie";
+"tools.measure.title" = "Pomiar";
+"tools.measure.subtitle" = "Pomiar odległości i powierzchni";
+"tools.lasso.title" = "Zaznacz";
+"tools.lasso.subtitle" = "Zaznaczanie wielu obiektów odręcznym obszarem (przytrzymaj + przeciągnij)";
+"tools.bloodhound.title" = "Bloodhound";
+"tools.bloodhound.subtitle" = "Śledzenie sił własnych";
+"tools.meshtastic.title" = "Meshtastic";
+"tools.meshtastic.subtitle" = "Sieć mesh Meshtastic";
+"tools.echelon.title" = "Hierarchia";
+"tools.echelon.subtitle" = "Hierarchia jednostek / szczebel";
+"tools.uas.title" = "UAS Connect";
+"tools.uas.subtitle" = "Połączenie z UAS / dronami";
+"tools.settings.title" = "Ustawienia";
+"tools.settings.subtitle" = "Ustawienia aplikacji";

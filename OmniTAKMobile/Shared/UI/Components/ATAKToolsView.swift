@@ -97,11 +97,12 @@ struct ATAKToolsView: View {
 struct ToolsHeader: View {
     @Binding var showDisabledTools: Bool
     let onClose: () -> Void
+    @ObservedObject private var loc = LocalizationManager.shared
 
     var body: some View {
         VStack(spacing: 0) {
             HStack {
-                Text("Tools")
+                Text(loc.t("tools.grid.title"))
                     .font(.system(size: 24, weight: .semibold))
                     .foregroundColor(.white)
 
@@ -118,7 +119,7 @@ struct ToolsHeader: View {
 
             // Toggle row
             HStack {
-                Text("Show disabled")
+                Text(loc.t("tools.grid.showDisabled"))
                     .font(.system(size: 13))
                     .foregroundColor(.gray)
 
@@ -141,6 +142,12 @@ struct ToolButton: View {
     let tool: ATAKTool
     var isEnabled: Bool = true
     let action: () -> Void
+    // Runtime i18n — the grid previously hardcoded English next to the
+    // fully localized launcher. Titles/subtitles resolve through the same
+    // tools.<id>.title/.subtitle keys ToolsLauncherSheet uses (with new
+    // keys for the grid-only tools); LocalizationManager falls back to
+    // the English catalog, then the key.
+    @ObservedObject private var loc = LocalizationManager.shared
 
     var body: some View {
         Button(action: action) {
@@ -151,13 +158,14 @@ struct ToolButton: View {
                         .foregroundColor(isEnabled ? .white : .gray.opacity(0.4))
                         .frame(height: 44)
 
-                    Text(tool.displayName)
+                    Text(loc.t("tools.\(tool.id).title"))
                         .font(.system(size: 12))
                         .foregroundColor(isEnabled ? .white : .gray.opacity(0.4))
                         .multilineTextAlignment(.center)
                         .lineLimit(2)
                         .frame(height: 32)
                 }
+                .accessibilityHint(Text(loc.t("tools.\(tool.id).subtitle")))
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 16)
                 .background(isEnabled ? Color(white: 0.15) : Color(white: 0.08))
@@ -176,7 +184,7 @@ struct ToolButton: View {
 
                 // "Beta" badge for disabled/experimental tools
                 if !isEnabled {
-                    Text("BETA")
+                    Text(loc.t("tools.grid.beta"))
                         .font(.system(size: 7, weight: .bold))
                         .foregroundColor(.black)
                         .padding(.horizontal, 4)

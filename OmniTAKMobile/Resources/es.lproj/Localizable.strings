@@ -190,3 +190,32 @@
 "markerInfo.altitude" = "Altitud";
 "markerInfo.created" = "Creado";
 "markerInfo.remarks" = "Observaciones";
+
+/* Legacy 5x4 Tools grid i18n (2026-06) */
+"tools.grid.title" = "Herramientas";
+"tools.grid.showDisabled" = "Mostrar desactivadas";
+"tools.grid.beta" = "BETA";
+"tools.chat.title" = "Chat";
+"tools.chat.subtitle" = "Mensajería del equipo";
+"tools.data.title" = "Paquetes de datos";
+"tools.data.subtitle" = "Gestionar paquetes de datos";
+"tools.video.title" = "Vídeo";
+"tools.video.subtitle" = "Transmisión de vídeo (beta: requiere servidor TAK)";
+"tools.offline.title" = "Mapas sin conexión";
+"tools.offline.subtitle" = "Descargar mapas para uso sin conexión";
+"tools.drawing.title" = "Dibujar";
+"tools.drawing.subtitle" = "Dibujar en el mapa";
+"tools.measure.title" = "Medir";
+"tools.measure.subtitle" = "Medición de distancia y área";
+"tools.lasso.title" = "Seleccionar";
+"tools.lasso.subtitle" = "Selección múltiple a mano alzada (mantener pulsado + arrastrar)";
+"tools.bloodhound.title" = "Bloodhound";
+"tools.bloodhound.subtitle" = "Seguimiento de fuerzas amigas";
+"tools.meshtastic.title" = "Meshtastic";
+"tools.meshtastic.subtitle" = "Red en malla Meshtastic";
+"tools.echelon.title" = "Jerarquía";
+"tools.echelon.subtitle" = "Jerarquía de unidades / escalón";
+"tools.uas.title" = "UAS Connect";
+"tools.uas.subtitle" = "Conectar con UAS / drones";
+"tools.settings.title" = "Ajustes";
+"tools.settings.subtitle" = "Ajustes de la app";

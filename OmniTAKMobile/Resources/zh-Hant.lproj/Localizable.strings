@@ -270,3 +270,32 @@
 "markerInfo.altitude" = "高度";
 "markerInfo.created" = "建立時間";
 "markerInfo.remarks" = "備註";
+
+/* Legacy 5x4 Tools grid i18n (2026-06) */
+"tools.grid.title" = "工具";
+"tools.grid.showDisabled" = "顯示已停用";
+"tools.grid.beta" = "BETA";
+"tools.chat.title" = "聊天";
+"tools.chat.subtitle" = "團隊聊天訊息";
+"tools.data.title" = "資料套件";
+"tools.data.subtitle" = "管理資料套件";
+"tools.video.title" = "影片";
+"tools.video.subtitle" = "影片串流（Beta，需要 TAK 伺服器）";
+"tools.offline.title" = "離線地圖";
+"tools.offline.subtitle" = "下載地圖供離線使用";
+"tools.drawing.title" = "繪圖";
+"tools.drawing.subtitle" = "在地圖上繪圖";
+"tools.measure.title" = "測量";
+"tools.measure.subtitle" = "距離與面積測量";
+"tools.lasso.title" = "選取";
+"tools.lasso.subtitle" = "以手繪範圍多選（長按並拖曳）";
+"tools.bloodhound.title" = "Bloodhound";
+"tools.bloodhound.subtitle" = "友軍追蹤";
+"tools.meshtastic.title" = "Meshtastic";
+"tools.meshtastic.subtitle" = "Meshtastic 網狀網路";
+"tools.echelon.title" = "層級";
+"tools.echelon.subtitle" = "單位層級／梯隊";
+"tools.uas.title" = "UAS 連線";
+"tools.uas.subtitle" = "連接 UAS／無人機";
+"tools.settings.title" = "設定";
+"tools.settings.subtitle" = "App 設定";

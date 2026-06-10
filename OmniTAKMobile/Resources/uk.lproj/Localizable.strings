@@ -190,3 +190,32 @@
 "markerInfo.altitude" = "Висота";
 "markerInfo.created" = "Створено";
 "markerInfo.remarks" = "Примітки";
+
+/* Legacy 5x4 Tools grid i18n (2026-06) */
+"tools.grid.title" = "Інструменти";
+"tools.grid.showDisabled" = "Показувати вимкнені";
+"tools.grid.beta" = "БЕТА";
+"tools.chat.title" = "Чат";
+"tools.chat.subtitle" = "Командні повідомлення";
+"tools.data.title" = "Пакети даних";
+"tools.data.subtitle" = "Керування пакетами даних";
+"tools.video.title" = "Відео";
+"tools.video.subtitle" = "Відеотрансляція (бета — потрібен сервер TAK)";
+"tools.offline.title" = "Офлайн-карти";
+"tools.offline.subtitle" = "Завантаження карт для офлайн-використання";
+"tools.drawing.title" = "Малювання";
+"tools.drawing.subtitle" = "Малювати на карті";
+"tools.measure.title" = "Вимірювання";
+"tools.measure.subtitle" = "Вимірювання відстані та площі";
+"tools.lasso.title" = "Вибір";
+"tools.lasso.subtitle" = "Множинний вибір довільною областю (утримати + провести)";
+"tools.bloodhound.title" = "Bloodhound";
+"tools.bloodhound.subtitle" = "Відстеження своїх сил";
+"tools.meshtastic.title" = "Meshtastic";
+"tools.meshtastic.subtitle" = "Mesh-мережа Meshtastic";
+"tools.echelon.title" = "Ієрархія";
+"tools.echelon.subtitle" = "Ієрархія підрозділів / ешелон";
+"tools.uas.title" = "UAS Connect";
+"tools.uas.subtitle" = "Підключення до БПЛА";
+"tools.settings.title" = "Налаштування";
+"tools.settings.subtitle" = "Налаштування застосунку";

@@ -270,3 +270,32 @@
 "markerInfo.altitude" = "Altitude";
 "markerInfo.created" = "Created";
 "markerInfo.remarks" = "Remarks";
+
+/* Legacy 5x4 Tools grid i18n (2026-06) */
+"tools.grid.title" = "Tools";
+"tools.grid.showDisabled" = "Show disabled";
+"tools.grid.beta" = "BETA";
+"tools.chat.title" = "Chat";
+"tools.chat.subtitle" = "Team chat messaging";
+"tools.data.title" = "Data Packages";
+"tools.data.subtitle" = "Manage data packages";
+"tools.video.title" = "Video";
+"tools.video.subtitle" = "Video streaming (Beta - requires TAK server)";
+"tools.offline.title" = "Offline Maps";
+"tools.offline.subtitle" = "Download maps for offline use";
+"tools.drawing.title" = "Drawing";
+"tools.drawing.subtitle" = "Draw on map";
+"tools.measure.title" = "Measure";
+"tools.measure.subtitle" = "Distance and area measurement";
+"tools.lasso.title" = "Select";
+"tools.lasso.subtitle" = "Multi-select features in a freehand region (long-press + drag)";
+"tools.bloodhound.title" = "Bloodhound";
+"tools.bloodhound.subtitle" = "Blue Force Tracking";
+"tools.meshtastic.title" = "Meshtastic";
+"tools.meshtastic.subtitle" = "Meshtastic mesh networking";
+"tools.echelon.title" = "Hierarchy";
+"tools.echelon.subtitle" = "Unit hierarchy / echelon";
+"tools.uas.title" = "UAS Connect";
+"tools.uas.subtitle" = "Connect to UAS / drone vehicles";
+"tools.settings.title" = "Settings";
+"tools.settings.subtitle" = "App settings";
