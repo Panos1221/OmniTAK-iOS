@@ -84,6 +84,7 @@
 		38FCC16B78867B6617B2B329 /* ServerValidator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6CB754FA0C8506C4D22450CE /* ServerValidator.swift */; };
 		396485B8DEDCA74EB40645BA /* ChatModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = E0F8125D0B514F0BD09467A8 /* ChatModels.swift */; };
 		39BFA71EE7DA696050952ECA /* ToolSheetHost.swift in Sources */ = {isa = PBXBuildFile; fileRef = 341557E70705872E61DF6310 /* ToolSheetHost.swift */; };
+		E5F60718293A4B5C6D7E8F90 /* ToolRegistry.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5F60718293A4B5C6D7E8F91 /* ToolRegistry.swift */; };
 		39E5BA9BBA5EDD186729E499 /* GeofenceManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 33BE217D66F59D9E9606C20A /* GeofenceManager.swift */; };
 		39FEDA5607D661F389177B31 /* OmniTAKMobile.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = 8E63BBCFD2826242AD21153A /* OmniTAKMobile.xcframework */; };
 		3B8DA9F0EDA91EFCA89EC904 /* SFAPC------.svg in Resources */ = {isa = PBXBuildFile; fileRef = 52D432E4C3428F0F0A4BF379 /* SFAPC------.svg */; };
@@ -438,6 +439,7 @@
 		3370233EDA8C5D193E4F794E /* ServerManager.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = ServerManager.swift; path = OmniTAKMobile/Features/Networking/Managers/ServerManager.swift; sourceTree = "<group>"; };
 		33BE217D66F59D9E9606C20A /* GeofenceManager.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = GeofenceManager.swift; path = OmniTAKMobile/Features/Geofencing/Managers/GeofenceManager.swift; sourceTree = "<group>"; };
 		341557E70705872E61DF6310 /* ToolSheetHost.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = OmniTAKMobile/Core/App/ToolSheetHost.swift; sourceTree = "<group>"; };
+		E5F60718293A4B5C6D7E8F91 /* ToolRegistry.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = OmniTAKMobile/Core/App/ToolRegistry.swift; sourceTree = "<group>"; };
 		343A9DB3612DAF9A47999950 /* OfflineTileCache.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = OfflineTileCache.swift; path = OmniTAKMobile/Features/Map/TileSources/OfflineTileCache.swift; sourceTree = "<group>"; };
 		358A8322D6B0A02926268368 /* SHARED_INTERFACES.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = SHARED_INTERFACES.swift; path = OmniTAKMobile/Resources/Documentation/SHARED_INTERFACES.swift; sourceTree = "<group>"; };
 		3611027C930D5BCF88C9FB3B /* BloodhoundView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = BloodhoundView.swift; path = OmniTAKMobile/Features/Tracking/Views/BloodhoundView.swift; sourceTree = "<group>"; };
@@ -2236,6 +2238,7 @@
 				FE0BF08DA781B87F179C32EF /* DataPackageBootstrap.swift */,
 				2B9E95A9D23FB68454E3A330 /* ToolbarCustomization.swift */,
 				341557E70705872E61DF6310 /* ToolSheetHost.swift */,
+				E5F60718293A4B5C6D7E8F91 /* ToolRegistry.swift */,
 				AD202A5275CE529F7E53F55B /* CustomToolbar.swift */,
 				8CE9342858430C8B11A6138F /* ToolbarAddPalette.swift */,
 			);
@@ -2713,6 +2716,7 @@
 				7FB3B16574296B84A7731FF4 /* LassoShareSheet.swift in Sources */,
 				C34D49043A5E553DDA359F8A /* ToolbarCustomization.swift in Sources */,
 				39BFA71EE7DA696050952ECA /* ToolSheetHost.swift in Sources */,
+				E5F60718293A4B5C6D7E8F90 /* ToolRegistry.swift in Sources */,
 				9B13BA7009C824D9D69DE4E8 /* CustomToolbar.swift in Sources */,
 				42B40E22FFA4AE412996AE66 /* ToolbarAddPalette.swift in Sources */,
 				E955D31B3785A13C9CF3832E /* KMLVectorOverlay.swift in Sources */,

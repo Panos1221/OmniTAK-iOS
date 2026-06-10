@@ -78,6 +78,14 @@ struct ToolsLauncherSheet: View {
             .padding(.bottom, 12)
         }
         .frame(maxHeight: 560)
+        .onAppear {
+            #if DEBUG
+            ToolRegistry.validate(
+                ids: Self.toolSections.flatMap { $0.tools.map(\.id) },
+                from: "ToolsLauncherSheet"
+            )
+            #endif
+        }
     }
 
     // MARK: - Tool catalog

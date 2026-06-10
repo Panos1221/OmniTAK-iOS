@@ -15,8 +15,6 @@ private struct ToolSheetID: Identifiable, Equatable { let id: String }
 
 struct ToolSheetHost: ViewModifier {
     @State private var active: ToolSheetID?
-    @StateObject private var trackRecordingService = TrackRecordingService()
-    @ObservedObject private var chatManager = ChatManager.shared
 
     func body(content: Content) -> some View {
         content
@@ -32,32 +30,12 @@ struct ToolSheetHost: ViewModifier {
 
     @ViewBuilder
     private func sheetView(for id: String) -> some View {
-        switch id {
-        case "routes":       RouteListView()
-        case "turnbyturn":   TurnByTurnNavigationView()
-        case "teams":        TeamListView()
-        case "contacts":     ContactListView(chatManager: chatManager)
-        case "casevac":      MEDEVACRequestView()
-        case "nineline":     CASRequestView()
-        case "spotrep":      SPOTREPView()
-        case "alert":        EmergencyBeaconView()
-        case "tracks":       TrackListView(recordingService: trackRecordingService)
-        case "geofence":     GeofenceListView()
-        case "adsb":         ADSBTrafficView()
-        case "selfsa":       PositionBroadcastView()
-        case "elevation":    ElevationProfileView()
-        case "los":          LineOfSightView()
-        case "missionsync":  MissionSyncView()
-        case "plugins":      PluginsListView()
-        case "kml":          KMLOverlaysPanel()
-        case "uas":          UASConnectView()
-        case "gotocoord":    CoordinateEntryView()
-        case "pointer":
-            PointDropperSheetView(isPresented: Binding(
-                get: { active != nil },
-                set: { if !$0 { active = nil } }
-            ))
-        default:
+        // ToolRegistry is the single tool catalog; this host is the single
+        // dispatcher. Unknown ids resolve to an empty sheet (same behavior
+        // the old hand-written switch had).
+        if let descriptor = ToolRegistry.descriptor(for: id) {
+            descriptor.destination({ active = nil })
+        } else {
             EmptyView()
         }
     }

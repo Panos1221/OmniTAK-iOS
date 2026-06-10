@@ -132,6 +132,19 @@ extension BarItem {
     ]
 
     static func item(for id: String) -> BarItem? { catalog.first { $0.id == id } }
+
+    #if DEBUG
+    /// Every openTool shortcut id must resolve in ToolRegistry (the single
+    /// catalog ToolSheetHost dispatches from). Called from the config store
+    /// at startup so drift fails fast in debug builds.
+    static func validateToolShortcuts() {
+        let ids: [String] = toolShortcuts.compactMap {
+            if case .command(.openTool(let id)) = $0.kind { return id }
+            return nil
+        }
+        ToolRegistry.validate(ids: ids, from: "ToolbarCustomization.toolShortcuts")
+    }
+    #endif
 }
 
 // MARK: - Config store
@@ -171,6 +184,10 @@ final class ToolbarConfigStore: ObservableObject {
         } else {
             itemIDs = ToolbarConfigStore.defaultIDs
         }
+
+        #if DEBUG
+        BarItem.validateToolShortcuts()
+        #endif
     }
 
     /// Resolved, render-ready items in the user's chosen order.
