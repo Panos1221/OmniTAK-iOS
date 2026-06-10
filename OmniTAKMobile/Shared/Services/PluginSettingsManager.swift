@@ -28,7 +28,10 @@ enum PluginID: String, CaseIterable {
     case spotrep = "spotrep"
     case view3d = "3dview"
     case turnByTurn = "turnbyturn"
-    case adsb = "adsb"
+    // NOTE: `.adsb` was REMOVED here — ADS-B is now a registered
+    // OmniTAKPlugin (ADSBPlugin, "soy.engindearing.adsb"). It is listed once,
+    // under Settings → Plugins → PLUGINS, not in this fixed FEATURES enum.
+    // See PluginRegistry + the registered-plugin API below.
 
     var displayName: String {
         switch self {
@@ -50,7 +53,6 @@ enum PluginID: String, CaseIterable {
         case .spotrep: return "SPOTREP"
         case .view3d: return "3D View"
         case .turnByTurn: return "Navigation"
-        case .adsb: return "ADS-B"
         }
     }
 
@@ -74,7 +76,6 @@ enum PluginID: String, CaseIterable {
         case .spotrep: return "doc.text.fill"
         case .view3d: return "view.3d"
         case .turnByTurn: return "location.north.line.fill"
-        case .adsb: return "airplane.circle.fill"
         }
     }
 
@@ -98,7 +99,6 @@ enum PluginID: String, CaseIterable {
         case .spotrep: return "Quick tactical spot report"
         case .view3d: return "Real 3D terrain visualization with MapLibre"
         case .turnByTurn: return "Turn-by-turn voice navigation"
-        case .adsb: return "ADS-B aircraft traffic overlay"
         }
     }
 }
@@ -120,8 +120,68 @@ class PluginSettingsManager: ObservableObject {
         .video,         // Video streaming - requires TAK server video feeds
     ]
 
+    // MARK: - Registered OmniTAKPlugins (SDK)
+
+    /// Registered plugins (by reverse-DNS pluginId) that should be OFF on
+    /// first run. Everything else defaults ON so first-time users see plugin
+    /// features. ADS-B is intentionally absent → defaults ON.
+    private static let registeredDisabledByDefault: Set<String> = [
+        "soy.engindearing.diagnostics",   // internal SDK probe, never on for shipping users
+    ]
+
+    /// One-time migration: copy any legacy fixed-capability ADS-B enable flag
+    /// (`plugin_enabled_adsb`) onto the new registered-plugin key
+    /// (`plugin_enabled_soy.engindearing.adsb`) so existing testers keep their
+    /// toggle when ADS-B becomes a registered plugin.
+    private static let adsbMigrationDoneKey = "plugin_migrated_adsb_to_registered_v1"
+
     private init() {
+        migrateLegacyADSBEnableFlagIfNeeded()
         loadSettings()
+    }
+
+    private func migrateLegacyADSBEnableFlagIfNeeded() {
+        guard !userDefaults.bool(forKey: Self.adsbMigrationDoneKey) else { return }
+        let legacyKey = keyPrefix + "adsb"   // plugin_enabled_adsb
+        let newKey = keyPrefix + "soy.engindearing.adsb"
+        if userDefaults.object(forKey: legacyKey) != nil,
+           userDefaults.object(forKey: newKey) == nil {
+            userDefaults.set(userDefaults.bool(forKey: legacyKey), forKey: newKey)
+        }
+        userDefaults.set(true, forKey: Self.adsbMigrationDoneKey)
+    }
+
+    /// Whether a registered OmniTAKPlugin is enabled. Keyed by pluginId under
+    /// the SAME `plugin_enabled_` prefix the fixed capabilities use, so the
+    /// whole toggle system is one consistent store.
+    func isRegisteredPluginEnabled(_ pluginId: String) -> Bool {
+        let key = keyPrefix + pluginId
+        if userDefaults.object(forKey: key) == nil {
+            return !Self.registeredDisabledByDefault.contains(pluginId)
+        }
+        return userDefaults.bool(forKey: key)
+    }
+
+    /// Persist a registered plugin's enable state.
+    func setRegisteredPlugin(_ pluginId: String, enabled: Bool) {
+        userDefaults.set(enabled, forKey: keyPrefix + pluginId)
+        objectWillChange.send()
+    }
+
+    /// Binding for a registered plugin's Toggle. The `set` side persists the
+    /// flag AND drives live activation/deactivation through the registry.
+    func registeredBinding(for pluginId: String) -> Binding<Bool> {
+        Binding(
+            get: { self.isRegisteredPluginEnabled(pluginId) },
+            set: { enabled in
+                self.setRegisteredPlugin(pluginId, enabled: enabled)
+                if enabled {
+                    PluginRegistry.shared.activate(pluginId: pluginId, host: AppPluginHost.shared)
+                } else {
+                    PluginRegistry.shared.deactivate(pluginId: pluginId, host: AppPluginHost.shared)
+                }
+            }
+        )
     }
 
     /// Load settings from UserDefaults
@@ -156,6 +216,14 @@ class PluginSettingsManager: ObservableObject {
         // Map tool ID to plugin
         if let plugin = PluginID(rawValue: toolID) {
             return isEnabled(plugin)
+        }
+
+        // Registered OmniTAKPlugin (reverse-DNS id, e.g. a radial action's
+        // owning pluginId from RadialMenuAction.pluginToolID) — gate by the
+        // registered-plugin enable flag so a disabled plugin's radial entry
+        // is filtered out exactly like a fixed capability's.
+        if toolID.contains(".") {
+            return isRegisteredPluginEnabled(toolID)
         }
 
         // Unknown tools default to enabled

@@ -34,6 +34,9 @@ struct ATAKMapView: View {
     @StateObject private var mapStateManager = MapStateManager()
     @StateObject private var measurementManager = MeasurementManager()
     @ObservedObject private var adsbService = ADSBTrafficService.shared
+    // Plugin SDK — registered map overlays render in the engine-agnostic
+    // chrome (see `registeredPluginOverlays`), so they appear on BOTH engines.
+    @ObservedObject private var pluginHost = AppPluginHost.shared
     @ObservedObject private var pointDropperService = PointDropperService.shared
     @ObservedObject private var serverManager = ServerManager.shared
     // Issue #16 — lasso multi-select. Singleton so the pill, ring
@@ -1203,11 +1206,33 @@ struct ATAKMapView: View {
         sidePanels
         statusIndicators
         mapOverlayComponents
+        registeredPluginOverlays
         radialMenu
         gpsFollowButton
         lassoSelectionPill
         measurementChrome
         routeNavigationChrome
+    }
+
+    /// Plugin SDK map-overlay seam. Renders every overlay a plugin registered
+    /// via `host.registerMapOverlay(...)`. Because it mounts inside the
+    /// engine-agnostic `mapChrome` (NOT inside cesiumEngineView /
+    /// mapboxEngineView), every plugin overlay shows on BOTH engines. zIndex
+    /// 1500 keeps it above the map / static chrome and below the radial menu
+    /// (3000). Overlays are non-interactive by default so they never steal
+    /// map gestures; a plugin that needs hit-testing renders its own
+    /// interactive controls.
+    @ViewBuilder
+    private var registeredPluginOverlays: some View {
+        if !pluginHost.mapOverlays.isEmpty {
+            ForEach(pluginHost.mapOverlays) { entry in
+                Color.clear
+                    .overlay(entry.view())
+                    .ignoresSafeArea()
+                    .allowsHitTesting(false)
+                    .zIndex(1500)
+            }
+        }
     }
 
     private var modalSheets: some View {

@@ -130,7 +130,12 @@ class RadialMenuMapCoordinator: ObservableObject {
     // MARK: - Menu Configuration
 
     private func configureMapMenu(at coordinate: CLLocationCoordinate2D) {
-        menuConfiguration = .mapContextMenu(at: coordinate)
+        var config = RadialMenuConfiguration.mapContextMenu(at: coordinate)
+        // Plugin SDK — append every registered plugin radial action to the
+        // empty-map menu. Appended BEFORE the caller's filteringDisabledPlugins()
+        // pass so a disabled plugin's entry is still dropped.
+        config.items += AppPluginHost.shared.radialActions.map { $0.item }
+        menuConfiguration = config
     }
 
     private func configureMarkerMenu(for marker: PointMarker) {

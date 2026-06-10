@@ -665,6 +665,16 @@ class RadialMenuActionExecutor {
             return true
 
         default:
+            // Plugin SDK — registered radial action. `RadialMenuAction.custom`
+            // wraps the identifier as "custom_<id>"; look it up in the host and
+            // fire its onSelect with the pressed coordinate.
+            if AppPluginHost.shared.fireRadialAction(
+                identifier: "custom_\(identifier)",
+                at: context.mapCoordinate
+            ) {
+                return true
+            }
+
             NotificationCenter.default.post(
                 name: .radialMenuCustomAction,
                 object: nil,

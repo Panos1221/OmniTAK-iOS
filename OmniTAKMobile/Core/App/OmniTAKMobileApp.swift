@@ -35,6 +35,14 @@ struct OmniTAKMobileApp: App {
         // Wire the external gyb_detect sensor bridge (BLE GATT WiFi-RID
         // stream). On/off mirrors @AppStorage("gybDetectorEnabled") below.
         _ = GybManager.shared
+
+        // Plugin SDK — populate the COMPILE-TIME registry and activate the
+        // plugins the user has enabled. There is NO dynamic / downloadable
+        // code: bundled plugins are Swift types linked into the binary
+        // (loadBundledPlugins) — App-Store compliant. Plugins run IN-PROCESS
+        // with the host's full permissions; there is no sandbox.
+        PluginRegistry.shared.loadBundledPlugins()
+        PluginRegistry.shared.activateEnabled(host: AppPluginHost.shared)
     }
 
     var body: some Scene {
