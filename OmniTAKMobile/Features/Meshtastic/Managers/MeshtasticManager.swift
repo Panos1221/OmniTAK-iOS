@@ -558,9 +558,9 @@ public class MeshtasticManager: ObservableObject {
 
     /// Remove all Meshtastic markers from TAK map
     public func clearMeshMarkersFromMap() {
-        // TAKService uses enhancedMarkers dictionary with UID as key
-        // We'd need TAKService to expose a remove method, but for now just let them expire
-        // meshNodes count: \(meshNodes.count) markers will expire
-        print("🗺️ Mesh markers will expire from map")
+        for node in meshNodes {
+            CoTEventHandler.shared.removeEvent(uid: node.takUID)
+        }
+        print("🗺️ Removed \(meshNodes.count) mesh markers from map")
     }
 }

@@ -186,61 +186,6 @@ class TAKServiceTests: XCTestCase {
         XCTAssertNil(detail.battery)
     }
 
-    // MARK: - Enhanced Marker Tests
-
-    func testEnhancedMarkerCreation() {
-        let coordinate = CLLocationCoordinate2D(latitude: 39.8283, longitude: -98.5795)
-
-        let marker = EnhancedCoTMarker(
-            id: UUID(),
-            uid: "marker-123",
-            type: "a-f-G-U-C",
-            timestamp: Date(),
-            coordinate: coordinate,
-            altitude: 1000,
-            ce: 10,
-            le: 10,
-            callsign: "TestMarker",
-            team: "Blue",
-            affiliation: .friend,
-            unitType: .ground,
-            speed: 5.0,
-            course: 180.0,
-            remarks: "Test",
-            battery: 85,
-            device: "iPhone",
-            platform: "iOS",
-            lastUpdate: Date(),
-            positionHistory: []
-        )
-
-        XCTAssertEqual(marker.uid, "marker-123")
-        XCTAssertEqual(marker.callsign, "TestMarker")
-        XCTAssertEqual(marker.affiliation, .friend)
-        XCTAssertEqual(marker.unitType, .ground)
-    }
-
-    func testGetAllMarkers_InitiallyEmpty() {
-        let markers = service.getAllMarkers()
-        // May not be empty if other tests ran, but should be an array
-        XCTAssertNotNil(markers)
-    }
-
-    func testGetMarkerByUID_NotFound() {
-        let marker = service.getMarker(uid: "nonexistent-uid")
-        XCTAssertNil(marker)
-    }
-
-    // MARK: - Stale Marker Removal Tests
-
-    func testRemoveStaleMarkers() {
-        // This should not crash even with no markers
-        service.removeStaleMarkers()
-
-        // Markers should still be accessible
-        XCTAssertNotNil(service.enhancedMarkers)
-    }
-
     // MARK: - Configuration Tests
 
     func testHistoryConfiguration() {

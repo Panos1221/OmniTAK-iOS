@@ -92,7 +92,6 @@ class CoTEventHandler: ObservableObject {
     func removeEvent(uid: String) {
         guard let service = takService else { return }
         service.cotEvents.removeAll { $0.uid == uid }
-        service.enhancedMarkers.removeValue(forKey: uid)
     }
 
     // MARK: - Setup
@@ -150,10 +149,8 @@ class CoTEventHandler: ObservableObject {
         }
         #endif
 
-        // Update TAKService markers
-        takService?.updateEnhancedMarker(from: event)
-
-        // Update or add to cotEvents array (deduplicate by UID)
+        // Update or add to cotEvents array (deduplicate by UID).
+        // cotEvents is the single marker store — the map renders it directly.
         if let service = takService {
             if let existingIndex = service.cotEvents.firstIndex(where: { $0.uid == event.uid }) {
                 // Update existing event with new position/data
@@ -171,7 +168,6 @@ class CoTEventHandler: ObservableObject {
 
             #if DEBUG
             print("   📊 cotEvents now contains \(service.cotEvents.count) unique events")
-            print("   📊 enhancedMarkers now contains \(service.enhancedMarkers.count) markers")
             #endif
         }
 
@@ -314,9 +310,6 @@ class CoTEventHandler: ObservableObject {
             altitude: event.point.hae,
             remarks: event.detail.remarks
         )
-
-        // Update marker
-        takService?.updateEnhancedMarker(from: event)
 
         // Publish to Combine subscribers
         waypointPublisher.send(event)

@@ -991,7 +991,6 @@ class TAKService: ObservableObject {
     @Published var messagesReceived: Int = 0
     @Published var messagesSent: Int = 0
     @Published var cotEvents: [CoTEvent] = []
-    @Published var enhancedMarkers: [String: EnhancedCoTMarker] = [:]  // UID -> Marker map
     @Published var bytesReceived: Int = 0
 
     // Multi-server connection tracking
@@ -1006,15 +1005,10 @@ class TAKService: ObservableObject {
     private var connectionHandle: UInt64 = 0
     private var directTCP: DirectTCPSender?  // Legacy single connection (will be deprecated)
     var onCoTReceived: ((CoTEvent) -> Void)?
-    var onMarkerUpdated: ((EnhancedCoTMarker) -> Void)?
     var onChatMessageReceived: ((ChatMessage) -> Void)?
 
     // CoT Event Handler for routing
     private let eventHandler = CoTEventHandler.shared
-
-    // History tracking configuration
-    var maxHistoryPerUnit: Int = 100
-    var historyRetentionTime: TimeInterval = 3600  // 1 hour
 
     init() {
         // Initialize the omnitak library
@@ -1655,148 +1649,6 @@ class TAKService: ObservableObject {
         omnitak_register_callback(connectionHandle, cotCallback, context)
     }
 
-    // MARK: - Enhanced Marker Management
-
-    func updateEnhancedMarker(from event: CoTEvent) {
-        let coordinate = CLLocationCoordinate2D(
-            latitude: event.point.lat,
-            longitude: event.point.lon
-        )
-
-        let affiliation = UnitAffiliation.from(cotType: event.type)
-        let unitType = UnitType.from(cotType: event.type)
-
-        // Check if marker exists
-        if let existingMarker = enhancedMarkers[event.uid] {
-            // Update existing marker
-            var updatedHistory = existingMarker.positionHistory
-
-            // Add new position if it's different enough
-            let newPosition = CoTPosition(
-                coordinate: coordinate,
-                altitude: event.point.hae,
-                timestamp: event.time,
-                speed: event.detail.speed,
-                course: event.detail.course
-            )
-
-            // Only add if position changed significantly
-            if shouldAddToHistory(newPosition: newPosition, existingHistory: updatedHistory) {
-                updatedHistory.append(newPosition)
-
-                // Trim history to max length
-                if updatedHistory.count > maxHistoryPerUnit {
-                    updatedHistory = Array(updatedHistory.suffix(maxHistoryPerUnit))
-                }
-
-                // Remove old positions
-                let cutoffTime = Date().addingTimeInterval(-historyRetentionTime)
-                updatedHistory.removeAll { $0.timestamp < cutoffTime }
-            }
-
-            // Create updated marker
-            let updatedMarker = EnhancedCoTMarker(
-                id: existingMarker.id,
-                uid: event.uid,
-                type: event.type,
-                timestamp: event.time,
-                coordinate: coordinate,
-                altitude: event.point.hae,
-                ce: event.point.ce,
-                le: event.point.le,
-                callsign: event.detail.callsign,
-                team: event.detail.team,
-                affiliation: affiliation,
-                unitType: unitType,
-                speed: event.detail.speed,
-                course: event.detail.course,
-                remarks: event.detail.remarks,
-                battery: event.detail.battery,
-                device: event.detail.device,
-                platform: event.detail.platform,
-                lastUpdate: Date(),
-                positionHistory: updatedHistory
-            )
-
-            enhancedMarkers[event.uid] = updatedMarker
-            onMarkerUpdated?(updatedMarker)
-
-        } else {
-            // Create new marker
-            let initialPosition = CoTPosition(
-                coordinate: coordinate,
-                altitude: event.point.hae,
-                timestamp: event.time,
-                speed: event.detail.speed,
-                course: event.detail.course
-            )
-
-            let newMarker = EnhancedCoTMarker(
-                id: UUID(),
-                uid: event.uid,
-                type: event.type,
-                timestamp: event.time,
-                coordinate: coordinate,
-                altitude: event.point.hae,
-                ce: event.point.ce,
-                le: event.point.le,
-                callsign: event.detail.callsign,
-                team: event.detail.team,
-                affiliation: affiliation,
-                unitType: unitType,
-                speed: event.detail.speed,
-                course: event.detail.course,
-                remarks: event.detail.remarks,
-                battery: event.detail.battery,
-                device: event.detail.device,
-                platform: event.detail.platform,
-                lastUpdate: Date(),
-                positionHistory: [initialPosition]
-            )
-
-            enhancedMarkers[event.uid] = newMarker
-            onMarkerUpdated?(newMarker)
-        }
-    }
-
-    private func shouldAddToHistory(newPosition: CoTPosition, existingHistory: [CoTPosition]) -> Bool {
-        guard let lastPosition = existingHistory.last else { return true }
-
-        // Calculate distance from last position
-        let loc1 = CLLocation(
-            latitude: lastPosition.coordinate.latitude,
-            longitude: lastPosition.coordinate.longitude
-        )
-        let loc2 = CLLocation(
-            latitude: newPosition.coordinate.latitude,
-            longitude: newPosition.coordinate.longitude
-        )
-
-        let distance = loc1.distance(from: loc2)
-
-        // Add if moved more than 5 meters or more than 30 seconds passed
-        let timeDiff = newPosition.timestamp.timeIntervalSince(lastPosition.timestamp)
-        return distance > 5.0 || timeDiff > 30
-    }
-
-    /// Remove stale markers (older than 15 minutes)
-    func removeStaleMarkers() {
-        let cutoffTime = Date().addingTimeInterval(-900)  // 15 minutes
-        enhancedMarkers = enhancedMarkers.filter { _, marker in
-            marker.lastUpdate > cutoffTime
-        }
-    }
-
-    /// Get marker by UID
-    func getMarker(uid: String) -> EnhancedCoTMarker? {
-        return enhancedMarkers[uid]
-    }
-
-    /// Get all markers as array
-    func getAllMarkers() -> [EnhancedCoTMarker] {
-        return Array(enhancedMarkers.values)
-    }
-
     // MARK: - Receive Statistics
 
     /// Get current receive buffer size (aggregated from all connections)
@@ -1944,9 +1796,6 @@ private func cotCallback(
                     service.cotEvents.append(event)
                 }
                 service.onCoTReceived?(event)
-
-                // Update enhanced marker
-                service.updateEnhancedMarker(from: event)
 
                 // Also parse participant info for chat (skip own echoed PPLI)
                 if event.uid != PositionBroadcastService.shared.userUID,

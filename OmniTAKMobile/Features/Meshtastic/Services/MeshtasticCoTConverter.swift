@@ -242,7 +242,7 @@ class MeshtasticCoTConverter {
 
     // MARK: - Direct CoTEvent Generation
 
-    /// Convert a MeshNode directly to a CoTEvent for TAKService.updateEnhancedMarker()
+    /// Convert a MeshNode directly to a CoTEvent for CoTEventHandler.handle()
     /// - Parameter node: The mesh node to convert
     /// - Returns: CoTEvent object ready for TAKService, or nil if node has no position
     static func toCoTEvent(node: MeshNode, isOwnNode: Bool = false) -> CoTEvent? {
