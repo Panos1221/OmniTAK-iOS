@@ -28,9 +28,21 @@
 			</array>
 		</dict>
 	</array>
+	<!-- ATS: no global NSAllowsArbitraryLoads. What each consumer needs:
+	     - TAK streams (DirectTCPSender) use Network.framework NWConnection,
+	       not the URL loading system — ATS does not govern them.
+	     - RTSP/SRT video goes through VLCKit's own sockets — also not ATS-governed.
+	     - Enrollment/Marti REST, Cesium WebView, tile downloads are all https.
+	     - The local MBTiles tile server is http://127.0.0.1 (exception below;
+	       IP-address hosts are ATS-exempt anyway) and LAN gear is covered by
+	       NSAllowsLocalNetworking.
+	     - User-entered HTTP/HLS video feeds play via AVPlayer, which IS
+	       ATS-governed — NSAllowsArbitraryLoadsForMedia scopes the exemption
+	       to AVFoundation media loads only (drone/bodycam feeds are routinely
+	       plain http on field networks). -->
 	<key>NSAppTransportSecurity</key>
 	<dict>
-		<key>NSAllowsArbitraryLoads</key>
+		<key>NSAllowsArbitraryLoadsForMedia</key>
 		<true/>
 		<key>NSAllowsLocalNetworking</key>
 		<true/>
