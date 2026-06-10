@@ -1028,7 +1028,13 @@ class TAKService: ObservableObject {
     // CoT Event Handler for routing
     private let eventHandler = CoTEventHandler.shared
 
-    init() {
+    /// TAKService is a strict singleton: init() runs omnitak_init(), wires
+    /// the CoT event handler, and registers app-lifecycle observers — a
+    /// second instance re-runs all of that and creates competing
+    /// connection/PPLI state divorced from the `.shared` the UI observes
+    /// (the audit found live screens doing exactly this). `private` makes
+    /// the compiler enforce `.shared`-only access.
+    private init() {
         // Initialize the omnitak library
         let result = omnitak_init()
         if result != 0 {

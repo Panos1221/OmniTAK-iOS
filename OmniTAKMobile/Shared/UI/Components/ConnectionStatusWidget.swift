@@ -397,8 +397,8 @@ struct CompactStatusBadge: View {
 struct ConnectionStatusWidget_Previews: PreviewProvider {
     static var previews: some View {
         VStack(spacing: 20) {
-            ConnectionStatusWidget(takService: TAKService())
-            CompactStatusBadge(takService: TAKService())
+            ConnectionStatusWidget(takService: TAKService.shared)
+            CompactStatusBadge(takService: TAKService.shared)
         }
         .padding()
         .background(Color.black)
