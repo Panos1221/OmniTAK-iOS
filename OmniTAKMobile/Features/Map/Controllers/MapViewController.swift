@@ -97,6 +97,11 @@ struct ATAKMapView: View {
 
     // User settings
     @AppStorage("userCallsign") private var userCallsign = "ALPHA-1"
+    // Self-position marker style (Settings → "Self-position marker").
+    // "milstd" = MIL-STD-2525 friendly-combat frame, "bullseye" = legacy
+    // tactical bullseye. Consumed by both engines: the Mapbox puck image
+    // and the Cesium self-pip billboard.
+    @AppStorage("selfMarkerStyle") private var selfMarkerStyle = "milstd"
     @State private var showLineOfSight = false
     @State private var showEchelonHierarchy = false
     @State private var showMissionSync = false
@@ -1096,6 +1101,9 @@ struct ATAKMapView: View {
                 // panel switches the globe's imagery, not just the 2D style.
                 baseLayer: activeMapLayer,
                 selfCallsign: userCallsign,
+                // Self-pip style parity with the Mapbox puck (Settings →
+                // Self-position marker).
+                selfMarkerStyle: selfMarkerStyle,
                 // Phase 3b — saved distance / area measurements mirrored
                 // through the Cesium bridge as dashed polylines + segment
                 // labels.
@@ -2737,11 +2745,12 @@ struct TacticalMapView: UIViewRepresentable {
             )
         )
 
-        // Native user-location puck — replaces the custom self-position
-        // MKAnnotation we used to maintain. Bullseye/MIL-STD style is
-        // available via Mapbox v11 puck customisation if we want it
-        // later.
-        mapView.location.options.puckType = .puck2D()
+        // Native user-location puck, styled per the Settings "Self-position
+        // marker" picker (selfMarkerStyle). Previously the picker persisted
+        // a value nothing read and the puck was always the default dot.
+        mapView.location.options.puckType = TacticalMapView.selfPuckType()
+        context.coordinator.lastSelfMarkerStyle =
+            UserDefaults.standard.string(forKey: "selfMarkerStyle") ?? "milstd"
         if !showsUserLocation { mapView.location.options.puckType = nil }
 
         // Sane defaults for tactical use — let the operator pan, zoom,
@@ -2857,6 +2866,17 @@ struct TacticalMapView: UIViewRepresentable {
             }
         }
 
+        // Self-position puck style (Settings → "Self-position marker").
+        // Re-apply when the persisted style changes so the picker takes
+        // effect live, without rebuilding the map view.
+        if showsUserLocation {
+            let style = UserDefaults.standard.string(forKey: "selfMarkerStyle") ?? "milstd"
+            if context.coordinator.lastSelfMarkerStyle != style {
+                context.coordinator.lastSelfMarkerStyle = style
+                mapView.location.options.puckType = TacticalMapView.selfPuckType()
+            }
+        }
+
         // Re-publish all annotation layers from the latest model state.
         context.coordinator.refreshAll()
 
@@ -2868,6 +2888,19 @@ struct TacticalMapView: UIViewRepresentable {
     }
 
     func makeCoordinator() -> Coordinator { Coordinator(self) }
+
+    /// User-location puck honoring the Settings "Self-position marker"
+    /// picker: "milstd" → MIL-STD-2525 friendly-combat frame, "bullseye" →
+    /// legacy tactical bullseye (both from `SelfPositionMarkerImage`).
+    static func selfPuckType() -> PuckType {
+        let style = UserDefaults.standard.string(forKey: "selfMarkerStyle") ?? "milstd"
+        let image = style == "bullseye"
+            ? SelfPositionMarkerImage.bullseye
+            : SelfPositionMarkerImage.milStdFriendlyCombat
+        var config = Puck2DConfiguration(topImage: image)
+        config.showsAccuracyRing = true
+        return .puck2D(config)
+    }
 
     // MARK: - Style mapping
 
@@ -2930,6 +2963,9 @@ struct TacticalMapView: UIViewRepresentable {
         var styleLoadedToken: AnyCancelable?
         var cameraChangedToken: AnyCancelable?
         var lastAppliedStyle: StyleURI = .standard
+        /// Last applied self-puck style ("milstd" | "bullseye") so
+        /// updateUIView only re-pushes the puck config on change.
+        var lastSelfMarkerStyle: String = "milstd"
 
         // Camera feedback-loop guards
         var isUserInteracting = false
@@ -4543,6 +4579,11 @@ struct CesiumMainMap: UIViewRepresentable {
     /// Base imagery layer for the globe ("satellite" | "hybrid" | "standard").
     var baseLayer: String = "satellite"
     let selfCallsign: String
+    /// Self-position marker style from Settings ("milstd" | "bullseye").
+    /// "milstd" renders the SFGPUCI---- milsymbol frame; "bullseye" falls
+    /// back to the friendly canvas disc + center dot (the bullseye analog
+    /// in the HTML's `_billboard` path).
+    var selfMarkerStyle: String = "milstd"
     // Phase 3b — measurement sessions to mirror as dashed polylines with
     // per-segment distance labels. Sourced from `MeasurementManager`.
     let measurements: [Measurement]
@@ -5074,7 +5115,10 @@ struct CesiumMainMap: UIViewRepresentable {
                 heading: nil,
                 // Self renders as a friendly ground combat unit so milsymbol
                 // draws the standard friendly frame the operator expects.
-                sidc: "SFGPUCI----",
+                // The "bullseye" Settings style suppresses the SIDC so the
+                // HTML falls back to the green disc + center-dot canvas
+                // billboard — the globe's bullseye analog.
+                sidc: selfMarkerStyle == "bullseye" ? nil : "SFGPUCI----",
                 leader: false
             ))
         }

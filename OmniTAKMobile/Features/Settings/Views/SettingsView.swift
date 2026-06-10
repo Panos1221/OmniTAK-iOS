@@ -24,8 +24,9 @@ struct SettingsView: View {
     @AppStorage("trailMaxLength") private var trailMaxLength = 100
     @AppStorage("trailColorName") private var trailColorName = "cyan"
     // Self-position marker style — "milstd" = friendly-combat MIL-STD-2525
-    // frame (default), "bullseye" = legacy tactical bullseye. Read by
-    // MapViewController.Coordinator's MKUserLocation handler.
+    // frame (default), "bullseye" = legacy tactical bullseye. Read by the
+    // Mapbox puck (TacticalMapView.selfPuckType) and the Cesium self-pip
+    // billboard (CesiumMainMap.selfMarkerStyle).
     @AppStorage("selfMarkerStyle") private var selfMarkerStyle = "milstd"
     // Phase 2 of the gy6 plan — toggles the CoreBluetooth FAA Remote ID
     // scanner. Default off because BLE scanning has a battery cost.
