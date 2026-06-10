@@ -22,7 +22,6 @@ enum MapEngine: String, CaseIterable, Identifiable, Codable {
 // ATAK-style Map View with tactical interface
 struct ATAKMapView: View {
     @ObservedObject private var takService = TAKService.shared
-    @StateObject private var federation = MultiServerFederation()  // Multi-server support
     @StateObject private var locationManager = LocationManager()
     @StateObject private var drawingStore: DrawingStore
     @StateObject private var drawingManager: DrawingToolsManager
@@ -1764,39 +1763,6 @@ struct ATAKMapView: View {
         }
     }
 
-    private func sendSelfPosition() {
-        guard let location = locationManager.location else { return }
-
-        // Send to all connected servers via federation
-        if federation.getConnectedCount() > 0 {
-            let cotEvent = CoTEvent(
-                uid: "SELF-\(UUID().uuidString)",
-                type: "a-f-G-E-S",
-                time: Date(),
-                point: CoTPoint(
-                    lat: location.coordinate.latitude,
-                    lon: location.coordinate.longitude,
-                    hae: location.altitude,
-                    ce: location.horizontalAccuracy,
-                    le: location.verticalAccuracy
-                ),
-                detail: CoTDetail(
-                    callsign: "OmniTAK-iOS",
-                    team: "Cyan",
-                    teamRole: nil,
-                    speed: location.speed >= 0 ? location.speed : nil,
-                    course: location.course >= 0 ? location.course : nil,
-                    remarks: nil,
-                    battery: 100,
-                    device: "iPhone",
-                    platform: "OmniTAK"
-                )
-            )
-
-            federation.broadcast(event: cotEvent)
-        }
-    }
-
     private func zoomIn() {
         // On the Cesium globe the camera is driven over the JS bridge, not by
         // mapRegion — push a zoom command instead. mapRegion is then refreshed
@@ -1921,38 +1887,40 @@ struct ATAKMapView: View {
 
     // MARK: - Multi-Server Helpers
 
-    // Multi-server connection status for status bar
+    // Multi-server connection status for status bar (reads TAKService.shared
+    // native multi-server state — the dead MultiServerFederation stack that
+    // previously fed these helpers always reported zero servers)
     private func multiServerConnectionStatus() -> String {
-        let connectedCount = federation.getConnectedCount()
-        let totalCount = federation.getTotalCount()
+        let connectedIds = takService.connectedServerIds
+        let totalCount = ServerManager.shared.servers.count
 
-        if connectedCount == 0 {
+        if connectedIds.isEmpty {
             return "Disconnected"
-        } else if connectedCount == 1 {
-            if let connectedServer = federation.servers.first(where: { $0.status == .connected }) {
-                return "Connected - \(connectedServer.name)"
+        } else if connectedIds.count == 1 {
+            if let id = connectedIds.first,
+               let server = ServerManager.shared.servers.first(where: { $0.id == id }) {
+                return "Connected - \(server.name)"
             }
             return "Connected"
         } else {
-            return "Connected to \(connectedCount)/\(totalCount) servers"
+            return "Connected to \(connectedIds.count)/\(totalCount) servers"
         }
     }
 
     // Multi-server display name for status bar
     private func multiServerDisplayName() -> String? {
-        let connectedCount = federation.getConnectedCount()
+        let connectedIds = takService.connectedServerIds
+        let connectedNames = ServerManager.shared.servers
+            .filter { connectedIds.contains($0.id) }
+            .map { $0.name }
 
-        if connectedCount == 0 {
+        if connectedNames.isEmpty {
             return ServerManager.shared.activeServer?.name
-        } else if connectedCount == 1 {
-            return federation.servers.first(where: { $0.status == .connected })?.name
+        } else if connectedNames.count == 1 {
+            return connectedNames.first
         } else {
-            let connectedNames = federation.servers
-                .filter { $0.status == .connected }
-                .map { $0.name }
-                .prefix(2)
-                .joined(separator: ", ")
-            return connectedCount > 2 ? "\(connectedNames) +\(connectedCount - 2)" : connectedNames
+            let shown = connectedNames.prefix(2).joined(separator: ", ")
+            return connectedNames.count > 2 ? "\(shown) +\(connectedNames.count - 2)" : shown
         }
     }
 
