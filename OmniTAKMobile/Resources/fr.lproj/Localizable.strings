@@ -65,7 +65,6 @@
 "settings.done" = "Terminé";
 "settings.section.userProfile" = "PROFIL UTILISATEUR";
 "settings.callsign" = "Indicatif";
-"settings.name" = "Nom";
 "settings.section.servers" = "SERVEURS";
 "settings.manageServers" = "Gérer les serveurs";
 "settings.section.navigation" = "NAVIGATION";
@@ -168,3 +167,16 @@
 "serverEdit.trustUntrusted.title" = "Faire confiance aux certificats non vérifiés";
 "serverEdit.trustUntrusted.subtitle" = "Accepter n'importe quel certificat serveur (aucune vérification CA)";
 "serverEdit.trustUntrusted.warning" = "Avertissement : la vérification TLS du serveur est désactivée pour ce serveur, le trafic peut donc être intercepté. À activer uniquement pour un serveur TAK auto-signé que vous contrôlez, lorsqu'aucun magasin de confiance ne peut être importé.";
+
+/* Settings — hardcoded-English cleanup (2026-06) */
+"settings.section.toolbar" = "Barre d'outils";
+"settings.customizeToolbar" = "Personnaliser la barre d'outils";
+"settings.customizeToolbar.hint" = "Composez la vôtre";
+"settings.connected" = "Connecté";
+"settings.servers.count" = "%d serveurs";
+"settings.gybDetector" = "Détecteur gyb externe";
+"settings.gybDetector.desc" = "Capte le Remote ID en balise WiFi via un capteur gyb et le diffuse en Bluetooth — les drones que votre téléphone ne peut pas voir seul.";
+"settings.gybConnect" = "Connecter le détecteur gyb";
+"settings.section.mission" = "MISSION";
+"settings.createMission" = "Créer une nouvelle mission";
+"settings.mgrsGrid.2dOnly" = "Carte 2D uniquement";

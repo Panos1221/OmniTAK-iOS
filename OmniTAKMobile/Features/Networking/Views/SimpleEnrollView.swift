@@ -251,8 +251,9 @@ struct SimpleEnrollView: View {
 
     private var connectButton: some View {
         HStack(spacing: 12) {
-            // Cancel button (ATAK-style)
-            Button(action: { /* Cancel action */ }) {
+            // Cancel button (ATAK-style) — same effect as the toolbar
+            // Cancel. This was a placeholder no-op (dead tap) until 2026-06.
+            Button(action: { dismiss() }) {
                 Text("Cancel")
                     .font(.system(size: 16, weight: .semibold))
                     .foregroundColor(.white)

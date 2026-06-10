@@ -66,7 +66,6 @@
 "settings.done" = "完成";
 "settings.section.userProfile" = "使用者資料";
 "settings.callsign" = "呼號";
-"settings.name" = "姓名";
 "settings.section.servers" = "伺服器";
 "settings.manageServers" = "管理伺服器";
 "settings.section.navigation" = "導航";
@@ -248,3 +247,16 @@
 "serverEdit.trustUntrusted.title" = "信任未驗證的憑證";
 "serverEdit.trustUntrusted.subtitle" = "接受任何伺服器憑證（不檢查 CA）";
 "serverEdit.trustUntrusted.warning" = "警告：此伺服器的 TLS 伺服器驗證已停用，流量可能遭到攔截。僅在無法匯入信任庫、且該自簽憑證 TAK 伺服器由您掌控時才啟用。";
+
+/* Settings — hardcoded-English cleanup (2026-06) */
+"settings.section.toolbar" = "工具列";
+"settings.customizeToolbar" = "自訂工具列";
+"settings.customizeToolbar.hint" = "打造你自己的";
+"settings.connected" = "已連線";
+"settings.servers.count" = "%d 個伺服器";
+"settings.gybDetector" = "外接 gyb 偵測器";
+"settings.gybDetector.desc" = "透過 gyb 感測器接收 WiFi 信標 Remote ID 並以藍牙串流——偵測手機自身看不到的無人機。";
+"settings.gybConnect" = "連接 gyb 偵測器";
+"settings.section.mission" = "任務";
+"settings.createMission" = "建立新任務";
+"settings.mgrsGrid.2dOnly" = "僅限 2D 地圖";

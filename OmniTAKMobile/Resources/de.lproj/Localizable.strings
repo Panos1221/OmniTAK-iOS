@@ -65,7 +65,6 @@
 "settings.done" = "Fertig";
 "settings.section.userProfile" = "BENUTZERPROFIL";
 "settings.callsign" = "Rufzeichen";
-"settings.name" = "Name";
 "settings.section.servers" = "SERVER";
 "settings.manageServers" = "Server verwalten";
 "settings.section.navigation" = "NAVIGATION";
@@ -168,3 +167,16 @@
 "serverEdit.trustUntrusted.title" = "Nicht vertrauenswürdigen Zertifikaten vertrauen";
 "serverEdit.trustUntrusted.subtitle" = "Beliebiges Serverzertifikat akzeptieren (keine CA-Prüfung)";
 "serverEdit.trustUntrusted.warning" = "Warnung: Die TLS-Serververifizierung ist für diesen Server deaktiviert, der Datenverkehr kann abgefangen werden. Nur für einen selbstsignierten TAK-Server aktivieren, den Sie kontrollieren, wenn kein Truststore importiert werden kann.";
+
+/* Settings — hardcoded-English cleanup (2026-06) */
+"settings.section.toolbar" = "Werkzeugleiste";
+"settings.customizeToolbar" = "Werkzeugleiste anpassen";
+"settings.customizeToolbar.hint" = "Selbst zusammenstellen";
+"settings.connected" = "Verbunden";
+"settings.servers.count" = "%d Server";
+"settings.gybDetector" = "Externer gyb-Detektor";
+"settings.gybDetector.desc" = "Erfasst WLAN-Beacon-Remote-ID über einen gyb-Sensor und streamt sie per Bluetooth — Drohnen, die dein Telefon allein nicht sehen kann.";
+"settings.gybConnect" = "gyb-Detektor verbinden";
+"settings.section.mission" = "MISSION";
+"settings.createMission" = "Neue Mission erstellen";
+"settings.mgrsGrid.2dOnly" = "Nur 2D-Karte";

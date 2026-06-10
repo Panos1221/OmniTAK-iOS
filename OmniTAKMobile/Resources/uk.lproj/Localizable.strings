@@ -65,7 +65,6 @@
 "settings.done" = "Готово";
 "settings.section.userProfile" = "ПРОФІЛЬ КОРИСТУВАЧА";
 "settings.callsign" = "Позивний";
-"settings.name" = "Ім'я";
 "settings.section.servers" = "СЕРВЕРИ";
 "settings.manageServers" = "Керування серверами";
 "settings.section.navigation" = "НАВІГАЦІЯ";
@@ -168,3 +167,16 @@
 "serverEdit.trustUntrusted.title" = "Довіряти неперевіреним сертифікатам";
 "serverEdit.trustUntrusted.subtitle" = "Приймати будь-який сертифікат сервера (без перевірки CA)";
 "serverEdit.trustUntrusted.warning" = "Попередження: TLS-перевірку сервера вимкнено для цього сервера, тому трафік може бути перехоплено. Вмикайте лише для самопідписаного сервера TAK, який ви контролюєте, коли неможливо імпортувати сховище довіри.";
+
+/* Settings — hardcoded-English cleanup (2026-06) */
+"settings.section.toolbar" = "Панель інструментів";
+"settings.customizeToolbar" = "Налаштувати панель інструментів";
+"settings.customizeToolbar.hint" = "Зберіть власну";
+"settings.connected" = "Підключено";
+"settings.servers.count" = "%d серверів";
+"settings.gybDetector" = "Зовнішній детектор gyb";
+"settings.gybDetector.desc" = "Ловить Remote ID з WiFi-маяків через сенсор gyb і передає його по Bluetooth — дрони, яких ваш телефон сам не бачить.";
+"settings.gybConnect" = "Підключити детектор gyb";
+"settings.section.mission" = "МІСІЯ";
+"settings.createMission" = "Створити нову місію";
+"settings.mgrsGrid.2dOnly" = "Лише на 2D-карті";

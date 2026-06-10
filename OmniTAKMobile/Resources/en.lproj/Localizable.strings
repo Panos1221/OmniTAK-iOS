@@ -66,7 +66,6 @@
 "settings.done" = "Done";
 "settings.section.userProfile" = "USER PROFILE";
 "settings.callsign" = "Callsign";
-"settings.name" = "Name";
 "settings.section.servers" = "SERVERS";
 "settings.manageServers" = "Manage Servers";
 "settings.section.navigation" = "NAVIGATION";
@@ -248,3 +247,16 @@
 "serverEdit.trustUntrusted.title" = "Trust Untrusted Certificates";
 "serverEdit.trustUntrusted.subtitle" = "Accept any server certificate (no CA check)";
 "serverEdit.trustUntrusted.warning" = "Warning: TLS server verification is disabled for this server, so traffic can be intercepted. Enable only for a self-signed TAK server you control, when no truststore can be imported.";
+
+/* Settings — hardcoded-English cleanup (2026-06) */
+"settings.section.toolbar" = "Toolbar";
+"settings.customizeToolbar" = "Customize Toolbar";
+"settings.customizeToolbar.hint" = "Build your own";
+"settings.connected" = "Connected";
+"settings.servers.count" = "%d servers";
+"settings.gybDetector" = "External gyb Detector";
+"settings.gybDetector.desc" = "Catches WiFi-beacon Remote ID via a gyb sensor and streams it over Bluetooth — the drones your phone can't see on its own.";
+"settings.gybConnect" = "Connect gyb Detector";
+"settings.section.mission" = "MISSION";
+"settings.createMission" = "Create new mission";
+"settings.mgrsGrid.2dOnly" = "2D map only";

@@ -1384,6 +1384,13 @@ struct ATAKMapView: View {
             .onChange(of: overlayCoordinator.mgrsGridEnabled) { newValue in
                 DispatchQueue.main.async {
                     showGrid = newValue
+                    // The MGRS grid renders only on the 2D engine; enabling
+                    // it on the Cesium globe used to silently no-op. Auto-
+                    // switch to the 2D map instead (same prompt-free
+                    // precedent as kmlZoomToOverlay above).
+                    if newValue && mapEngine == .cesium3D {
+                        mapEngineRaw = MapEngine.mapbox2D.rawValue
+                    }
                 }
             }
             .onChange(of: locationManager.location?.coordinate.latitude) { _ in
@@ -4275,6 +4282,7 @@ class DrawingTempPointAnnotation: MKPointAnnotation {}
 struct OverlaySettingsPanel: View {
     @ObservedObject var overlayCoordinator: MapOverlayCoordinator
     @ObservedObject var mapStateManager: MapStateManager
+    @ObservedObject private var loc = LocalizationManager.shared
 
     @Binding var showMGRSGrid: Bool
     @Binding var showBreadcrumbTrails: Bool
@@ -4299,7 +4307,8 @@ struct OverlaySettingsPanel: View {
             .padding(.horizontal, 10)
             .padding(.top, 8)
 
-            // MGRS Grid Toggle
+            // MGRS Grid Toggle. 2D-engine-only: the map auto-switches to
+            // 2D when the grid is enabled while on the Cesium globe.
             OverlayToggleButton(
                 icon: "grid",
                 title: "MGRS Grid",
@@ -4308,6 +4317,11 @@ struct OverlaySettingsPanel: View {
                 showMGRSGrid.toggle()
                 overlayCoordinator.saveSettings()
             }
+
+            Text(loc.t("settings.mgrsGrid.2dOnly"))
+                .font(.system(size: 9))
+                .foregroundColor(.gray)
+                .padding(.horizontal, 10)
 
             // Grid Density Picker (only show when grid is active)
             if showMGRSGrid {

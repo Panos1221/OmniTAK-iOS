@@ -11,7 +11,6 @@ struct SettingsView: View {
     @Environment(\.dismiss) var dismiss
     @EnvironmentObject private var loc: LocalizationManager
     @AppStorage("userCallsign") private var userCallsign = "ALPHA-1"
-    @AppStorage("userName") private var userName = "Operator"
     @AppStorage("unitSystem") private var unitSystemString = "Metric"
     @State private var cacheSizeText: String = "—"
     @State private var showCacheCleared = false
@@ -56,14 +55,6 @@ struct SettingsView: View {
                                 ChatManager.shared.currentUserCallsign = newValue
                             }
                     }
-
-                    HStack {
-                        Text(loc.t("settings.name"))
-                        Spacer()
-                        TextField(loc.t("settings.name"), text: $userName)
-                            .multilineTextAlignment(.trailing)
-                            .foregroundColor(.blue)
-                    }
                 }
 
                 // Servers (Streamlined)
@@ -81,7 +72,7 @@ struct SettingsView: View {
                             Spacer()
 
                             // Server count/status
-                            Text(TAKService.shared.isConnected ? "Connected" : "\(ServerManager.shared.servers.count) servers")
+                            Text(TAKService.shared.isConnected ? loc.t("settings.connected") : loc.t("settings.servers.count", ServerManager.shared.servers.count))
                                 .font(.system(size: 14))
                                 .foregroundColor(.gray)
 
@@ -109,7 +100,7 @@ struct SettingsView: View {
                 }
 
                 // Customizable bottom toolbar
-                Section("Toolbar") {
+                Section(loc.t("settings.section.toolbar")) {
                     Button {
                         dismiss()
                         NotificationCenter.default.post(name: .enterToolbarEditMode, object: nil)
@@ -118,10 +109,10 @@ struct SettingsView: View {
                             Image(systemName: "slider.horizontal.3")
                                 .foregroundColor(Color(hex: "#FFCC00"))
                                 .frame(width: 24)
-                            Text("Customize Toolbar")
+                            Text(loc.t("settings.customizeToolbar"))
                                 .foregroundColor(.primary)
                             Spacer()
-                            Text("Build your own")
+                            Text(loc.t("settings.customizeToolbar.hint"))
                                 .font(.system(size: 12))
                                 .foregroundColor(.gray)
                             Image(systemName: "chevron.right")
@@ -134,8 +125,14 @@ struct SettingsView: View {
 
                 // Map Overlay Settings
                 Section(loc.t("settings.section.mapOverlays")) {
-                    // MGRS Grid Settings
+                    // MGRS Grid Settings. The grid renders on the 2D engine
+                    // only — flag that here, and the map auto-switches to 2D
+                    // when the grid is enabled while the 3D globe is active.
                     Toggle(loc.t("settings.mgrsGridOverlay"), isOn: $mgrsGridEnabled)
+
+                    Text(loc.t("settings.mgrsGrid.2dOnly"))
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
 
                     if mgrsGridEnabled {
                         Picker(loc.t("settings.gridDensity"), selection: $mgrsGridDensityString) {
@@ -200,9 +197,9 @@ struct SettingsView: View {
 
                     // External gyb_detect sensor (WiFi-beacon Remote ID over
                     // BLE GATT) — the phone can't do WiFi RID itself.
-                    Toggle("External gyb Detector", isOn: $gybDetectorEnabled)
+                    Toggle(loc.t("settings.gybDetector"), isOn: $gybDetectorEnabled)
 
-                    Text("Catches WiFi-beacon Remote ID via a gyb sensor and streams it over Bluetooth — the drones your phone can't see on its own.")
+                    Text(loc.t("settings.gybDetector.desc"))
                         .font(.caption2)
                         .foregroundColor(.secondary)
 
@@ -211,10 +208,10 @@ struct SettingsView: View {
                             showGybSheet = true
                         } label: {
                             HStack {
-                                Label("Connect gyb Detector", systemImage: "dot.radiowaves.left.and.right")
+                                Label(loc.t("settings.gybConnect"), systemImage: "dot.radiowaves.left.and.right")
                                 Spacer()
                                 if GybManager.shared.client.isConnected {
-                                    Text("Connected").font(.caption).foregroundColor(.green)
+                                    Text(loc.t("settings.connected")).font(.caption).foregroundColor(.green)
                                 }
                             }
                         }
@@ -294,13 +291,13 @@ struct SettingsView: View {
                 // Mission — entry point for issue #14 MVP. Sits above Data
                 // Management because creating a mission is the prerequisite
                 // for the data-package flows that live there.
-                Section("MISSION") {
+                Section(loc.t("settings.section.mission")) {
                     Button(action: { showMissionCreationSheet = true }) {
                         HStack {
                             Image(systemName: "flag.checkered")
                                 .foregroundColor(Color(hex: "#00BCD4"))
                                 .frame(width: 24)
-                            Text("Create new mission")
+                            Text(loc.t("settings.createMission"))
                                 .foregroundColor(.primary)
                             Spacer()
                             Image(systemName: "chevron.right")
@@ -318,7 +315,6 @@ struct SettingsView: View {
 
                     Button(loc.t("settings.resetToDefaults")) {
                         userCallsign = "ALPHA-1"
-                        userName = "Operator"
                         unitSystemString = "Metric"
                         // Map overlay defaults
                         mgrsGridEnabled = false
