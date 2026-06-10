@@ -159,73 +159,19 @@ struct CoordinateDisplayView: View {
     // MARK: - MGRS Formatting
 
     private func formatMGRS(_ coordinate: CLLocationCoordinate2D) -> String {
-        // Simplified MGRS conversion (production should use proper library)
-        let zone = Int((coordinate.longitude + 180) / 6) + 1
-        let latBand = getLatitudeBand(coordinate.latitude)
-
-        // Grid square (simplified - real MGRS uses 100km grid squares)
-        let gridSquares = [
-            "AA", "AB", "AC", "AD", "AE", "AF", "AG", "AH", "AJ", "AK",
-            "BA", "BB", "BC", "BD", "BE", "BF", "BG", "BH", "BJ", "BK",
-            "CA", "CB", "CC", "CD", "CE", "CF", "CG", "CH", "CJ", "CK",
-            "DA", "DB", "DC", "DD", "DE", "DF", "DG", "DH", "DJ", "DK",
-            "EA", "EB", "EC", "ED", "EE", "EF", "EG", "EH", "EJ", "EK",
-            "FA", "FB", "FC", "FD", "FE", "FF", "FG", "FH", "FJ", "FK"
-        ]
-        let gridIndex = abs(Int(coordinate.latitude * 10 + coordinate.longitude * 10)) % gridSquares.count
-        let gridSquare = gridSquares[gridIndex]
-
-        // Easting and Northing (simplified calculation)
-        let easting = Int((coordinate.longitude - Double((zone - 1) * 6 - 180)) * 111320 / 100000 * 10000) % 100000
-        let northing = Int((coordinate.latitude + 90) * 111320 / 100000 * 10000) % 100000
-
-        return String(format: "%02d%@ %@ %05d %05d", zone, latBand, gridSquare, easting, northing)
-    }
-
-    private func getLatitudeBand(_ latitude: Double) -> String {
-        let bands = ["C", "D", "E", "F", "G", "H", "J", "K", "L", "M", "N", "P", "Q", "R", "S", "T", "U", "V", "W", "X"]
-        let index = Int((latitude + 80) / 8)
-        if index < 0 || index >= bands.count {
-            return "X"
+        // Use the MGRSConverter for accurate conversion
+        if MGRSConverter.isWithinMGRSBounds(coordinate) {
+            return MGRSConverter.formatMGRS(coordinate, precision: .tenMeter, withSpaces: true)
+        } else {
+            return "Out of MGRS bounds"
         }
-        return bands[index]
     }
 
     // MARK: - UTM Formatting
 
     private func formatUTM(_ coordinate: CLLocationCoordinate2D) -> String {
-        // UTM conversion (simplified)
-        let zone = Int((coordinate.longitude + 180) / 6) + 1
-        let latBand = getLatitudeBand(coordinate.latitude)
-
-        // Calculate UTM easting and northing (simplified)
-        let k0 = 0.9996 // UTM scale factor
-        let e = 0.0818191908426 // WGS84 eccentricity
-        let a = 6378137.0 // WGS84 equatorial radius
-
-        let lon = coordinate.longitude * .pi / 180
-        let lat = coordinate.latitude * .pi / 180
-        let lonOriginDegrees = Double((zone - 1) * 6 - 180 + 3)
-        let lonOrigin = lonOriginDegrees * .pi / 180
-
-        let N = a / sqrt(1 - pow(e * sin(lat), 2))
-        let T = pow(tan(lat), 2)
-        let C = pow(e, 2) * pow(cos(lat), 2) / (1 - pow(e, 2))
-        let A = (lon - lonOrigin) * cos(lat)
-
-        // Easting
-        let easting = Int(k0 * N * (A + (1 - T + C) * pow(A, 3) / 6) + 500000)
-
-        // Northing
-        let M = a * ((1 - pow(e, 2) / 4 - 3 * pow(e, 4) / 64) * lat)
-        var northing = Int(k0 * M)
-
-        // Add 10,000,000 meters for southern hemisphere
-        if coordinate.latitude < 0 {
-            northing += 10000000
-        }
-
-        return String(format: "%02d%@ %06dE %07dN", zone, latBand, easting, northing)
+        // Use the MGRSConverter for accurate conversion
+        return MGRSConverter.formatUTM(coordinate)
     }
 
     // MARK: - BNG Formatting

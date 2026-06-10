@@ -1852,17 +1852,13 @@ struct ATAKMapView: View {
     // MARK: - Formatting Helpers
 
     private func formatCoordinates(_ coordinate: CLLocationCoordinate2D) -> String {
-        // Convert to MGRS-style format (simplified)
-        let lat = abs(coordinate.latitude)
-        let lon = abs(coordinate.longitude)
-        let latDeg = Int(lat)
-        let lonDeg = Int(lon)
-        let latMin = Int((lat - Double(latDeg)) * 60)
-        let lonMin = Int((lon - Double(lonDeg)) * 60)
-        let latSec = Int(((lat - Double(latDeg)) * 60 - Double(latMin)) * 60)
-        let lonSec = Int(((lon - Double(lonDeg)) * 60 - Double(lonMin)) * 60)
-
-        return "11T MN \(latDeg)\(latMin)\(latSec) \(lonDeg)\(lonMin)\(lonSec)"
+        // Honor the user's coordinate-format preference (Settings → Coordinate
+        // Format) and delegate to the canonical converters. Read the stored
+        // value at format time so a settings change takes effect on the next
+        // location update without requiring a reload.
+        let stored = UserDefaults.standard.string(forKey: "coordinateDisplayFormat")
+        let format = stored.flatMap(CoordinateDisplayFormat.init(rawValue:)) ?? .mgrs
+        return format.format(coordinate)
     }
 
     private func formatAltitude(_ altitude: CLLocationDistance) -> String {
