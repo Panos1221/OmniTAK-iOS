@@ -65,6 +65,47 @@ class CertificateImportPipeline {
         self.formatConverter = CertificateFormatConverter()
     }
 
+    // MARK: - PKCS12 Parsing (single SecPKCS12Import owner)
+
+    /// The ONE SecPKCS12Import invocation in the codebase. Returns the
+    /// decoded item dictionaries; maps status codes to typed errors.
+    static func parsePKCS12(_ data: Data, password: String) throws -> [[String: Any]] {
+        let options: [String: Any] = [
+            kSecImportExportPassphrase as String: password
+        ]
+
+        var rawItems: CFArray?
+        let status = SecPKCS12Import(data as CFData, options as CFDictionary, &rawItems)
+
+        guard status == errSecSuccess else {
+            print("[CertImport] SecPKCS12Import failed with status: \(status)")
+            if status == errSecAuthFailed {
+                print("[CertImport] Status indicates: Authentication failed (wrong password)")
+                throw CertificateImportError.invalidPassword
+            } else if status == errSecDecode {
+                print("[CertImport] Status indicates: Decode error (corrupted or wrong format)")
+            }
+            throw CertificateImportError.keychainError(status)
+        }
+
+        guard let items = rawItems as? [[String: Any]], !items.isEmpty else {
+            throw CertificateImportError.noIdentityFound
+        }
+        return items
+    }
+
+    /// Parse-only helper: extract the SecIdentity from p12 data without
+    /// any keychain writes. Used by the mTLS load paths
+    /// (CertificateManager.extractIdentity, TAKService.loadP12Identity).
+    static func parseIdentity(_ data: Data, password: String) -> SecIdentity? {
+        guard let items = try? parsePKCS12(data, password: password),
+              let firstItem = items.first,
+              let identityRef = firstItem[kSecImportItemIdentity as String] else {
+            return nil
+        }
+        return (identityRef as! SecIdentity)
+    }
+
     // MARK: - Main Import Method
 
     /// Universal certificate import with automatic format detection and conversion
@@ -80,7 +121,6 @@ class CertificateImportPipeline {
     ) async throws -> CertificateImportResult {
 
         print("[CertImport] Starting certificate import (size: \(data.count) bytes)")
-        print("[CertImport] Using password: '\(password)' (length: \(password.count))")
 
         // Step 1: Try direct import (fast path - works for 90% of modern certificates)
         if let result = try? directImport(data, password: password, label: label) {
@@ -126,25 +166,8 @@ class CertificateImportPipeline {
         label: String
     ) throws -> CertificateImportResult {
 
-        let options: [String: Any] = [
-            kSecImportExportPassphrase as String: password
-        ]
-
-        var rawItems: CFArray?
-        let status = SecPKCS12Import(data as CFData, options as CFDictionary, &rawItems)
-
-        guard status == errSecSuccess else {
-            print("[CertImport] SecPKCS12Import failed with status: \(status)")
-            if status == errSecAuthFailed {
-                print("[CertImport] Status indicates: Authentication failed (wrong password)")
-            } else if status == errSecDecode {
-                print("[CertImport] Status indicates: Decode error (corrupted or wrong format)")
-            }
-            throw CertificateImportError.keychainError(status)
-        }
-
-        guard let items = rawItems as? [[String: Any]],
-              let firstItem = items.first else {
+        let items = try CertificateImportPipeline.parsePKCS12(data, password: password)
+        guard let firstItem = items.first else {
             throw CertificateImportError.noIdentityFound
         }
 
@@ -161,17 +184,7 @@ class CertificateImportPipeline {
                 throw CertificateImportError.noIdentityFound
             }
 
-            // Store identity in keychain
-            let addQuery: [String: Any] = [
-                kSecClass as String: kSecClassIdentity,
-                kSecValueRef as String: identity,
-                kSecAttrLabel as String: label
-            ]
-
-            let addStatus = SecItemAdd(addQuery as CFDictionary, nil)
-            if addStatus != errSecSuccess && addStatus != errSecDuplicateItem {
-                print("[CertImport] Warning: Failed to add identity to keychain (status: \(addStatus))")
-            }
+            try storeIdentity(identity, label: label)
 
             return CertificateImportResult(
                 identity: identity,
@@ -181,29 +194,12 @@ class CertificateImportPipeline {
                 originalFormat: "Identity (direct import)",
                 finalFormat: "Native iOS format"
             )
-        } else if let certChain = firstItem[kSecImportItemCertChain as String] as? [SecCertificate] {
+        } else if let certChain = firstItem[kSecImportItemCertChain as String] as? [SecCertificate],
+                  let firstCert = certChain.first {
             // Certificate-only (truststore) - no private key
             print("[CertImport] Importing certificate-only P12 (truststore)")
 
-            guard let firstCert = certChain.first else {
-                throw CertificateImportError.noIdentityFound
-            }
-
-            // Store certificates in keychain
-            for (index, certificate) in certChain.enumerated() {
-                let certQuery: [String: Any] = [
-                    kSecClass as String: kSecClassCertificate,
-                    kSecValueRef as String: certificate,
-                    kSecAttrLabel as String: "\(label)-cert-\(index)",
-                    kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlock
-                ]
-
-                SecItemDelete(certQuery as CFDictionary)
-                let addStatus = SecItemAdd(certQuery as CFDictionary, nil)
-                if addStatus != errSecSuccess && addStatus != errSecDuplicateItem {
-                    print("[CertImport] Warning: Failed to add certificate \(index) to keychain (status: \(addStatus))")
-                }
-            }
+            storeCertificateChain(certChain, label: label)
 
             // Return a placeholder identity (will be nil) but mark as successful
             // The certificate chain is what matters for truststores
@@ -215,8 +211,68 @@ class CertificateImportPipeline {
                 originalFormat: "Certificate-only (truststore)",
                 finalFormat: "Native iOS format"
             )
+        } else if let trust = firstItem[kSecImportItemTrust as String],
+                  let certChain = SecTrustCopyCertificateChain(trust as! SecTrust) as? [SecCertificate],
+                  let firstCert = certChain.first {
+            // Fallback for cert-only P12 files (e.g. truststores) where
+            // kSecImportItemCertChain may not be populated — extract the
+            // certificates from the SecTrust object instead.
+            print("[CertImport] Importing certificate-only P12 via trust object")
+
+            storeCertificateChain(certChain, label: label)
+
+            return CertificateImportResult(
+                identity: nil as SecIdentity?,
+                certificate: firstCert,
+                certificateAlias: label,
+                conversionApplied: false,
+                originalFormat: "Certificate-only (truststore via trust object)",
+                finalFormat: "Native iOS format"
+            )
         } else {
             throw CertificateImportError.noIdentityFound
+        }
+    }
+
+    // MARK: - Keychain Storage (single write conventions)
+
+    /// Store an identity under `label`. Delete-before-add avoids
+    /// duplicates; kSecAttrAccessibleAfterFirstUnlock lets background
+    /// reconnects read it.
+    private func storeIdentity(_ identity: SecIdentity, label: String) throws {
+        let addQuery: [String: Any] = [
+            kSecClass as String: kSecClassIdentity,
+            kSecValueRef as String: identity,
+            kSecAttrLabel as String: label,
+            kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlock
+        ]
+
+        SecItemDelete(addQuery as CFDictionary)
+        let addStatus = SecItemAdd(addQuery as CFDictionary, nil)
+        if addStatus != errSecSuccess && addStatus != errSecDuplicateItem {
+            print("[CertImport] Failed to add identity to keychain (status: \(addStatus))")
+            throw CertificateImportError.keychainError(addStatus)
+        }
+    }
+
+    /// Store a certificate chain. The FIRST certificate goes under the
+    /// bare `label` (exact-label lookups — e.g. the CA truststore loader
+    /// — depend on this), subsequent certs under `label-N`.
+    private func storeCertificateChain(_ certChain: [SecCertificate], label: String) {
+        for (index, certificate) in certChain.enumerated() {
+            let certLabel = index == 0 ? label : "\(label)-\(index)"
+            let certQuery: [String: Any] = [
+                kSecClass as String: kSecClassCertificate,
+                kSecValueRef as String: certificate,
+                kSecAttrLabel as String: certLabel,
+                kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlock
+            ]
+
+            SecItemDelete(certQuery as CFDictionary)
+            let addStatus = SecItemAdd(certQuery as CFDictionary, nil)
+            if addStatus != errSecSuccess && addStatus != errSecDuplicateItem {
+                print("[CertImport] Warning: Failed to add certificate \(index) to keychain (status: \(addStatus))")
+            }
         }
     }
 
@@ -257,17 +313,9 @@ class CertificateImportPipeline {
 
         // On iOS, we cannot export/re-encrypt certificates like on macOS
         // SecItemExport is macOS-only
-        // Instead, we try to import with different options to see if it works
-        let options: [String: Any] = [
-            kSecImportExportPassphrase as String: password
-        ]
-
-        var rawItems: CFArray?
-        let status = SecPKCS12Import(data as CFData, options as CFDictionary, &rawItems)
-
-        // If import succeeds, the certificate is actually compatible
+        // Instead, we try to parse again to see if it works at all
         // (This shouldn't happen if direct import already failed, but let's try)
-        guard status == errSecSuccess else {
+        guard (try? CertificateImportPipeline.parsePKCS12(data, password: password)) != nil else {
             throw CertificateImportError.conversionFailed("Security framework could not parse certificate")
         }
 

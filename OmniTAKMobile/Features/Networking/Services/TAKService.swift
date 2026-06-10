@@ -782,37 +782,19 @@ class DirectTCPSender {
 
     private func loadP12Identity(from url: URL, password: String) -> sec_identity_t? {
         // Load certificate data
-        guard let certData = try? Data(contentsOf: url) as CFData else {
+        guard let certData = try? Data(contentsOf: url) else {
             print("❌ Failed to read certificate data from: \(url.path)")
             return nil
         }
 
-        // Import options with password
-        let options: [String: Any] = [
-            kSecImportExportPassphrase as String: password
-        ]
-
-        // Import identity
-        var items: CFArray?
-        let status = SecPKCS12Import(certData, options as CFDictionary, &items)
-
-        guard status == errSecSuccess else {
-            print("❌ Failed to import certificate: \(status)")
-            if status == errSecAuthFailed {
-                print("   Incorrect password for certificate")
-            }
-            return nil
-        }
-
-        guard let itemsArray = items as? [[String: Any]],
-              let firstItem = itemsArray.first,
-              let identity = firstItem[kSecImportItemIdentity as String] else {
-            print("❌ No identity found in certificate")
+        // Single SecPKCS12Import owner: CertificateImportPipeline
+        guard let identity = CertificateImportPipeline.parseIdentity(certData, password: password) else {
+            print("❌ No identity found in certificate (or wrong password)")
             return nil
         }
 
         // Convert SecIdentity to sec_identity_t
-        return sec_identity_create(identity as! SecIdentity)
+        return sec_identity_create(identity)
     }
 
     /// Load CA certificates from keychain by label.

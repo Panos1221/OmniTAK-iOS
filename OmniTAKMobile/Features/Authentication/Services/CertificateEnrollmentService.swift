@@ -240,7 +240,7 @@ class CertificateEnrollmentService: ObservableObject {
 
         // Import certificates into keychain
         await MainActor.run { progress = .importingCertificates }
-        let certificateAlias = try importCertificates(
+        let certificateAlias = try await importCertificates(
             trustStoreData: trustStoreData,
             userCertData: userCertData,
             password: password,
@@ -299,7 +299,7 @@ class CertificateEnrollmentService: ObservableObject {
 
     // MARK: - Certificate Import
 
-    private func importCertificates(trustStoreData: Data, userCertData: Data, password: String, serverHost: String) throws -> String {
+    private func importCertificates(trustStoreData: Data, userCertData: Data, password: String, serverHost: String) async throws -> String {
         let certificateAlias = "tak-\(serverHost)-\(UUID().uuidString.prefix(8))"
 
         // Use CertificateManager to save the user certificate
@@ -311,8 +311,8 @@ class CertificateEnrollmentService: ObservableObject {
             password: password
         )
 
-        // Also save trust store using old method (for CA certificate chain)
-        try importP12Certificate(data: trustStoreData, password: password, alias: "\(certificateAlias)-ca")
+        // Also save trust store via the shared import pipeline (CA certificate chain)
+        try await importP12Certificate(data: trustStoreData, password: password, alias: "\(certificateAlias)-ca")
 
         // Save certificate files to app documents for backward compatibility with TAKService
         try saveCertificateToDocuments(data: userCertData, filename: "\(certificateAlias).p12")
@@ -321,56 +321,13 @@ class CertificateEnrollmentService: ObservableObject {
         return certificateAlias
     }
 
-    private func importP12Certificate(data: Data, password: String, alias: String) throws {
-        let options: [String: Any] = [
-            kSecImportExportPassphrase as String: password
-        ]
-
-        var items: CFArray?
-        let status = SecPKCS12Import(data as CFData, options as CFDictionary, &items)
-
-        guard status == errSecSuccess else {
-            let errorMessage = SecCopyErrorMessageString(status, nil) as String? ?? "Unknown error"
-            throw EnrollmentError.keychainImportFailed(errorMessage)
-        }
-
-        guard let itemArray = items as? [[String: Any]],
-              let firstItem = itemArray.first else {
-            throw EnrollmentError.invalidCertificateFormat
-        }
-
-        // Extract identity (private key + certificate)
-        if let identity = firstItem[kSecImportItemIdentity as String] {
-            let addQuery: [String: Any] = [
-                kSecClass as String: kSecClassIdentity,
-                kSecValueRef as String: identity,
-                kSecAttrLabel as String: alias,
-                kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlock
-            ]
-
-            // Delete existing if present
-            SecItemDelete(addQuery as CFDictionary)
-
-            let addStatus = SecItemAdd(addQuery as CFDictionary, nil)
-            if addStatus != errSecSuccess && addStatus != errSecDuplicateItem {
-                let errorMessage = SecCopyErrorMessageString(addStatus, nil) as String? ?? "Unknown error"
-                throw EnrollmentError.keychainImportFailed(errorMessage)
-            }
-        }
-
-        // Extract and store trust chain
-        if let trustChain = firstItem[kSecImportItemCertChain as String] as? [SecCertificate] {
-            for (index, certificate) in trustChain.enumerated() {
-                let certQuery: [String: Any] = [
-                    kSecClass as String: kSecClassCertificate,
-                    kSecValueRef as String: certificate,
-                    kSecAttrLabel as String: "\(alias)-chain-\(index)",
-                    kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlock
-                ]
-
-                SecItemDelete(certQuery as CFDictionary)
-                SecItemAdd(certQuery as CFDictionary, nil)
-            }
+    private func importP12Certificate(data: Data, password: String, alias: String) async throws {
+        // Route through the single import pipeline (one SecPKCS12Import
+        // owner, one set of keychain-write conventions).
+        do {
+            _ = try await CertificateImportPipeline().importCertificate(data, password: password, label: alias)
+        } catch {
+            throw EnrollmentError.keychainImportFailed(error.localizedDescription)
         }
 
         print("Imported certificate with alias: \(alias)")
