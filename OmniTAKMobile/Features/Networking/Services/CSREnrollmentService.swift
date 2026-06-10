@@ -157,7 +157,10 @@ class CSREnrollmentService {
 
     init() {}
 
-    /// Create URLSession with appropriate certificate trust settings
+    /// Create URLSession with appropriate certificate trust settings.
+    /// Enrollment bootstraps the truststore, so accepting the untrusted
+    /// server cert is an explicit, flagged choice here; otherwise system
+    /// CA validation applies (Let's Encrypt etc.).
     private func createURLSession(trustSelfSigned: Bool) -> URLSession {
         let configuration = URLSessionConfiguration.default
         configuration.timeoutIntervalForRequest = 30
@@ -165,7 +168,7 @@ class CSREnrollmentService {
 
         return URLSession(
             configuration: configuration,
-            delegate: CSRSelfSignedCertificateDelegate(trustSelfSigned: trustSelfSigned),
+            delegate: TAKTLSSessionDelegate(trustMode: trustSelfSigned ? .acceptUntrusted : .system),
             delegateQueue: nil
         )
     }
@@ -794,42 +797,6 @@ class CSREnrollmentService {
         }
 
         return derData
-    }
-}
-
-// MARK: - Self-Signed Certificate Delegate
-
-/// URLSession delegate for CSR enrollment that can accept self-signed certificates
-/// or use system CA validation for Let's Encrypt and other trusted CAs
-private class CSRSelfSignedCertificateDelegate: NSObject, URLSessionDelegate {
-    let trustSelfSigned: Bool
-
-    init(trustSelfSigned: Bool = true) {
-        self.trustSelfSigned = trustSelfSigned
-        super.init()
-    }
-
-    func urlSession(
-        _ session: URLSession,
-        didReceive challenge: URLAuthenticationChallenge,
-        completionHandler: @escaping (URLSession.AuthChallengeDisposition, URLCredential?) -> Void
-    ) {
-        if challenge.protectionSpace.authenticationMethod == NSURLAuthenticationMethodServerTrust {
-            if trustSelfSigned {
-                // Accept self-signed certificates (common in TAK deployments)
-                if let serverTrust = challenge.protectionSpace.serverTrust {
-                    let credential = URLCredential(trust: serverTrust)
-                    completionHandler(.useCredential, credential)
-                    return
-                }
-            } else {
-                // Use system CA validation (for Let's Encrypt, etc.)
-                completionHandler(.performDefaultHandling, nil)
-                return
-            }
-        }
-
-        completionHandler(.performDefaultHandling, nil)
     }
 }
 

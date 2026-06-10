@@ -71,6 +71,24 @@ class PositionBroadcastService: ObservableObject {
         }
     }
 
+    // MARK: - Mesh Off-Grid PPLI
+    //
+    // When a Meshtastic radio is connected, OmniTAK also broadcasts self-position
+    // over the mesh (portnum 72 / ATAK_PLUGIN) so peers with NO server can see
+    // each other on the map.  This is throttled independently of the auto-PPLI
+    // keepalive (which is server-only) to avoid flooding low-bandwidth LoRa links.
+
+    @Published var meshBroadcastEnabled: Bool = true {
+        didSet { saveBroadcastSettings() }
+    }
+
+    @Published var meshPPLIInterval: TimeInterval = 30.0 {
+        didSet { saveBroadcastSettings() }
+    }
+
+    // Not @Published — mutated on ppliQueue; expose internal for @testable access.
+    internal var lastMeshPPLISend: Date?
+
     @Published var lastBroadcastTime: Date?
     @Published var broadcastCount: Int = 0
     @Published var lastError: String?
@@ -227,6 +245,33 @@ class PositionBroadcastService: ObservableObject {
 
         let cotXML = generateSelfSACoT(location: location)
         let _ = takService.sendCoT(xml: cotXML)
+
+        // --- Mesh off-grid PPLI ---
+        // Reuse the already-computed CoT XML and send to mesh if connected.
+        // Throttled to meshPPLIInterval to avoid saturating low-bandwidth LoRa.
+        // MeshtasticManager is @MainActor, so we must hop to the main actor
+        // before touching it (prevents the off-main @Published-publish crash class).
+        if meshBroadcastEnabled {
+            let interval = meshPPLIInterval
+            let lastSend = lastMeshPPLISend
+            let now = Date()
+            guard lastSend == nil || now.timeIntervalSince(lastSend!) >= interval else {
+                return
+            }
+            lastMeshPPLISend = now
+            let xmlToSend = cotXML
+            Task { @MainActor in
+                guard MeshtasticManager.shared.isConnected else { return }
+                guard let event = CoTMessageParser.parsePositionUpdate(xml: xmlToSend) else {
+                    print("⚠️ Mesh PPLI: failed to parse self-SA CoT XML for mesh send")
+                    return
+                }
+                MeshtasticManager.shared.sendCoTOverMesh(event)
+                #if DEBUG
+                print("📡 Mesh PPLI: sent self-position over mesh")
+                #endif
+            }
+        }
     }
 
     // MARK: - Position Broadcast
@@ -267,53 +312,39 @@ class PositionBroadcastService: ObservableObject {
     // MARK: - CoT Message Generation
 
     private func generateSelfSACoT(location: CLLocation) -> String {
-        let dateFormatter = ISO8601DateFormatter()
-        dateFormatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-
-        let now = Date()
-        let stale = now.addingTimeInterval(staleTime)
-
-        let timeStr = dateFormatter.string(from: now)
-        let startStr = dateFormatter.string(from: now)
-        let staleStr = dateFormatter.string(from: stale)
-
-        let lat = location.coordinate.latitude
-        let lon = location.coordinate.longitude
-        let hae = location.altitude
-        let ce = location.horizontalAccuracy
-        let le = location.verticalAccuracy
-
         // Speed in m/s, course in degrees
         let speed = location.speed >= 0 ? location.speed : 0
         let course = location.course >= 0 ? location.course : 0
-
-        // CoT type: a-f-G-U-C (friendly ground unit combat)
-        let cotType = "a-f-G-U-C"
 
         // Team color in ARGB format (signed 32-bit integer)
         // Cyan: 0xFF00FFFF = -16711681
         let colorARGB = getARGBForTeamColor(teamColor)
 
-        // Generate XML
-        let xml = """
-        <?xml version="1.0" encoding="UTF-8"?>
-        <event version="2.0" uid="\(userUID)" type="\(cotType)" time="\(timeStr)" start="\(startStr)" stale="\(staleStr)" how="m-g">
-            <point lat="\(lat)" lon="\(lon)" hae="\(hae)" ce="\(ce)" le="\(le)"/>
-            <detail>
-                <contact callsign="\(escapeXML(userCallsign))" endpoint="*:-1:stcp"/>
-                <__group name="\(teamColor)" role="\(teamRole)"/>
+        let detail = """
+                <contact callsign="\(userCallsign.xmlEscaped)" endpoint="*:-1:stcp"/>
+                <__group name="\(teamColor.xmlEscaped)" role="\(teamRole.xmlEscaped)"/>
                 <status battery="\(Int(batteryLevel * 100))"/>
-                <takv device="\(deviceModel)" platform="OmniTAK-iOS" os="iOS \(iosVersion)" version="\(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "2.0.0")"/>
+                <takv device="\(deviceModel.xmlEscaped)" platform="OmniTAK-iOS" os="iOS \(iosVersion)" version="\(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "2.0.0")"/>
                 <track speed="\(String(format: "%.2f", speed))" course="\(String(format: "%.2f", course))"/>
                 <precisionlocation altsrc="GPS" geopointsrc="GPS"/>
-                <uid Droid="\(escapeXML(userCallsign))"/>
+                <uid Droid="\(userCallsign.xmlEscaped)"/>
                 <usericon iconsetpath="COT_MAPPING_2525B/a-f/a-f-G-U-C"/>
                 <color argb="\(colorARGB)"/>
-            </detail>
-        </event>
         """
 
-        return xml
+        // CoT type: a-f-G-U-C (friendly ground unit combat)
+        return CoTXMLBuilder.buildEvent(
+            uid: userUID,
+            type: "a-f-G-U-C",
+            how: "m-g",
+            staleAfter: staleTime,
+            lat: location.coordinate.latitude,
+            lon: location.coordinate.longitude,
+            hae: location.altitude,
+            ce: location.horizontalAccuracy,
+            le: location.verticalAccuracy,
+            detail: detail
+        )
     }
 
     // MARK: - Battery Monitoring
@@ -374,6 +405,8 @@ class PositionBroadcastService: ObservableObject {
         UserDefaults.standard.set(teamRole, forKey: "teamRole")
         UserDefaults.standard.set(autoPPLIEnabled, forKey: "autoPPLIEnabled")
         UserDefaults.standard.set(autoPPLIInterval, forKey: "autoPPLIInterval")
+        UserDefaults.standard.set(meshBroadcastEnabled, forKey: "meshBroadcastEnabled")
+        UserDefaults.standard.set(meshPPLIInterval, forKey: "meshPPLIInterval")
     }
 
     private func loadBroadcastSettings() {
@@ -414,6 +447,15 @@ class PositionBroadcastService: ObservableObject {
         if savedPPLIInterval > 0 {
             autoPPLIInterval = savedPPLIInterval
         }
+
+        if UserDefaults.standard.object(forKey: "meshBroadcastEnabled") != nil {
+            meshBroadcastEnabled = UserDefaults.standard.bool(forKey: "meshBroadcastEnabled")
+        }
+
+        let savedMeshInterval = UserDefaults.standard.double(forKey: "meshPPLIInterval")
+        if savedMeshInterval > 0 {
+            meshPPLIInterval = savedMeshInterval
+        }
     }
 
     // MARK: - Helpers
@@ -449,16 +491,6 @@ class PositionBroadcastService: ObservableObject {
         default:
             return -16711681  // Default to Cyan
         }
-    }
-
-    private func escapeXML(_ string: String) -> String {
-        var escaped = string
-        escaped = escaped.replacingOccurrences(of: "&", with: "&amp;")
-        escaped = escaped.replacingOccurrences(of: "<", with: "&lt;")
-        escaped = escaped.replacingOccurrences(of: ">", with: "&gt;")
-        escaped = escaped.replacingOccurrences(of: "\"", with: "&quot;")
-        escaped = escaped.replacingOccurrences(of: "'", with: "&apos;")
-        return escaped
     }
 
     // MARK: - Manual Broadcast

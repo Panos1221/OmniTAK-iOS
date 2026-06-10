@@ -69,15 +69,9 @@ public class MeshtasticManager: ObservableObject {
     // MARK: - Initialization
 
     public init() {
-        // TCP and BLE clients are lazily initialized when needed
-        // Configure COT bridge to convert mesh nodes to map markers
-        configureCOTBridge()
-    }
-
-    /// Configure the COT bridge for converting Meshtastic data to TAK format
-    private func configureCOTBridge() {
-        MeshtasticCOTBridge.shared.configure(meshtasticManager: self)
-        print("MeshtasticManager: COT bridge configured")
+        // TCP and BLE clients are lazily initialized when needed.
+        // Node→map publishing is the single MeshtasticCoTConverter
+        // pipeline (enableAutoMapUpdates → publishMeshNodesToMap).
     }
 
     // MARK: - TCP Client Setup
@@ -429,13 +423,20 @@ public class MeshtasticManager: ObservableObject {
 
     /// Send a CoT event over the active Meshtastic transport (BLE or TCP) as
     /// a portnum-72 (ATAK_PLUGIN) packet.
+    ///
+    /// Phase 2 behaviour (TAKPacket interop):
+    ///   - `a-*` events → compact TAKPacket PLI (is_compressed=false, raw callsigns).
+    ///     Interoperates with stock Meshtastic ATAK Plugin, phone-app TAK role,
+    ///     and TAK_Meshtastic_Gateway.
+    ///   - `b-t-f` events → compact TAKPacket GeoChat (is_compressed=true,
+    ///     unishox2-compressed callsign/message).
+    ///   - Other event types → Phase-1 TAKMessage{CoTEvent} path (ATAKPluginSerializer).
+    ///     ATAKPluginSerializer remains in the tree as the OmniTAK↔OmniTAK path.
+    ///
     /// - Parameters:
     ///   - event: The CoT event to broadcast.
     ///   - channelIndex: Meshtastic channel index (defaults to 0 / primary).
     /// - Returns: true if dispatched to the radio, false if no transport is active.
-    /// - Note: declared `internal` (not `public`) because `CoTEvent` is internal.
-    ///   TODO: widen `CoTEvent` to `public` so this entry point can be used
-    ///   from external Swift packages / framework consumers.
     @discardableResult
     func sendCoTOverMesh(_ event: CoTEvent, channelIndex: UInt32 = 0) -> Bool {
         guard #available(iOS 13.0, *), isConnected, let device = connectedDevice else {
@@ -443,7 +444,20 @@ public class MeshtasticManager: ObservableObject {
             return false
         }
 
-        let payload = ATAKPluginSerializer.serialize(event)
+        // Phase 2: use compact TAKPacket for a-* (PLI) and b-t-f (GeoChat).
+        // Fall back to Phase-1 TAKMessage{CoTEvent} for other types.
+        let payload: Data
+        if event.type.hasPrefix("a-") || event.type == "b-t-f" {
+            if let takPacketPayload = TAKPacketCodec.encode(event) {
+                payload = takPacketPayload
+            } else {
+                // encode returned nil (shouldn't happen for a-* / b-t-f) — fallback
+                payload = ATAKPluginSerializer.serialize(event)
+            }
+        } else {
+            payload = ATAKPluginSerializer.serialize(event)
+        }
+
         switch device.connectionType {
         case .bluetooth:
             return bleClient.sendATAKPlugin(payload: payload, channel: channelIndex)
@@ -477,11 +491,13 @@ public class MeshtasticManager: ObservableObject {
 
     private var mapUpdateCancellable: AnyCancellable?
 
-    /// Publish all mesh nodes with positions to the TAK map
+    /// Publish all mesh nodes with positions to the TAK map.
+    /// Routed through CoTEventHandler.handle so the events land in the
+    /// rendered store (TAKService.cotEvents) — same path as inbound CoT.
     public func publishMeshNodesToMap() {
         let cotEvents = MeshtasticCoTConverter.toCoTEvents(nodes: meshNodes, ownNodeId: myNodeNum)
         for event in cotEvents {
-            TAKService.shared.updateEnhancedMarker(from: event)
+            CoTEventHandler.shared.handle(event: .positionUpdate(event))
         }
         print("📍 Published \(cotEvents.count) mesh nodes to TAK map")
     }
@@ -490,7 +506,7 @@ public class MeshtasticManager: ObservableObject {
     public func publishNodeToMap(_ node: MeshNode) {
         let isOwn = node.id == myNodeNum
         if let event = MeshtasticCoTConverter.toCoTEvent(node: node, isOwnNode: isOwn) {
-            TAKService.shared.updateEnhancedMarker(from: event)
+            CoTEventHandler.shared.handle(event: .positionUpdate(event))
             print("📍 Published node \(node.shortName) to TAK map")
         }
     }
@@ -542,9 +558,9 @@ public class MeshtasticManager: ObservableObject {
 
     /// Remove all Meshtastic markers from TAK map
     public func clearMeshMarkersFromMap() {
-        // TAKService uses enhancedMarkers dictionary with UID as key
-        // We'd need TAKService to expose a remove method, but for now just let them expire
-        // meshNodes count: \(meshNodes.count) markers will expire
-        print("🗺️ Mesh markers will expire from map")
+        for node in meshNodes {
+            CoTEventHandler.shared.removeEvent(uid: node.takUID)
+        }
+        print("🗺️ Removed \(meshNodes.count) mesh markers from map")
     }
 }

@@ -11,7 +11,6 @@ struct SettingsView: View {
     @Environment(\.dismiss) var dismiss
     @EnvironmentObject private var loc: LocalizationManager
     @AppStorage("userCallsign") private var userCallsign = "ALPHA-1"
-    @AppStorage("userName") private var userName = "Operator"
     @AppStorage("unitSystem") private var unitSystemString = "Metric"
     @State private var cacheSizeText: String = "—"
     @State private var showCacheCleared = false
@@ -25,15 +24,20 @@ struct SettingsView: View {
     @AppStorage("trailMaxLength") private var trailMaxLength = 100
     @AppStorage("trailColorName") private var trailColorName = "cyan"
     // Self-position marker style — "milstd" = friendly-combat MIL-STD-2525
-    // frame (default), "bullseye" = legacy tactical bullseye. Read by
-    // MapViewController.Coordinator's MKUserLocation handler.
+    // frame (default), "bullseye" = legacy tactical bullseye. Read by the
+    // Mapbox puck (TacticalMapView.selfPuckType) and the Cesium self-pip
+    // billboard (CesiumMainMap.selfMarkerStyle).
     @AppStorage("selfMarkerStyle") private var selfMarkerStyle = "milstd"
     // Phase 2 of the gy6 plan — toggles the CoreBluetooth FAA Remote ID
     // scanner. Default off because BLE scanning has a battery cost.
     @AppStorage("remoteIdScanEnabled") private var remoteIdScanEnabled = false
+    // Phase 3 — the external gyb_detect sensor over BLE GATT. Catches the
+    // WiFi-beacon Remote ID the phone can't see and streams it over Bluetooth.
+    @AppStorage("gybDetectorEnabled") private var gybDetectorEnabled = false
 
     @State private var showServersSheet = false
     @State private var showMissionCreationSheet = false
+    @State private var showGybSheet = false
 
     var body: some View {
         NavigationView {
@@ -52,14 +56,6 @@ struct SettingsView: View {
                                 ChatManager.shared.currentUserCallsign = newValue
                             }
                     }
-
-                    HStack {
-                        Text(loc.t("settings.name"))
-                        Spacer()
-                        TextField(loc.t("settings.name"), text: $userName)
-                            .multilineTextAlignment(.trailing)
-                            .foregroundColor(.blue)
-                    }
                 }
 
                 // Servers (Streamlined)
@@ -77,7 +73,7 @@ struct SettingsView: View {
                             Spacer()
 
                             // Server count/status
-                            Text(TAKService.shared.isConnected ? "Connected" : "\(ServerManager.shared.servers.count) servers")
+                            Text(TAKService.shared.isConnected ? loc.t("settings.connected") : loc.t("settings.servers.count", ServerManager.shared.servers.count))
                                 .font(.system(size: 14))
                                 .foregroundColor(.gray)
 
@@ -105,7 +101,7 @@ struct SettingsView: View {
                 }
 
                 // Customizable bottom toolbar
-                Section("Toolbar") {
+                Section(loc.t("settings.section.toolbar")) {
                     Button {
                         dismiss()
                         NotificationCenter.default.post(name: .enterToolbarEditMode, object: nil)
@@ -114,10 +110,10 @@ struct SettingsView: View {
                             Image(systemName: "slider.horizontal.3")
                                 .foregroundColor(Color(hex: "#FFCC00"))
                                 .frame(width: 24)
-                            Text("Customize Toolbar")
+                            Text(loc.t("settings.customizeToolbar"))
                                 .foregroundColor(.primary)
                             Spacer()
-                            Text("Build your own")
+                            Text(loc.t("settings.customizeToolbar.hint"))
                                 .font(.system(size: 12))
                                 .foregroundColor(.gray)
                             Image(systemName: "chevron.right")
@@ -130,8 +126,14 @@ struct SettingsView: View {
 
                 // Map Overlay Settings
                 Section(loc.t("settings.section.mapOverlays")) {
-                    // MGRS Grid Settings
+                    // MGRS Grid Settings. The grid renders on the 2D engine
+                    // only — flag that here, and the map auto-switches to 2D
+                    // when the grid is enabled while the 3D globe is active.
                     Toggle(loc.t("settings.mgrsGridOverlay"), isOn: $mgrsGridEnabled)
+
+                    Text(loc.t("settings.mgrsGrid.2dOnly"))
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
 
                     if mgrsGridEnabled {
                         Picker(loc.t("settings.gridDensity"), selection: $mgrsGridDensityString) {
@@ -153,11 +155,17 @@ struct SettingsView: View {
                         Text("MGRS").tag("MGRS")
                         Text("UTM").tag("UTM")
                         Text(loc.t("settings.coord.bng")).tag("BNG")
+                        Text(loc.t("settings.coord.twd97")).tag("TWD97")
                     }
 
                     // Help text for coordinate formats
                     if coordinateFormatString == "BNG" {
                         Text(loc.t("settings.coord.bngHelp"))
+                            .font(.caption2)
+                            .foregroundColor(.secondary)
+                            .padding(.top, 4)
+                    } else if coordinateFormatString == "TWD97" {
+                        Text(loc.t("settings.coord.twd97Help"))
                             .font(.caption2)
                             .foregroundColor(.secondary)
                             .padding(.top, 4)
@@ -186,6 +194,28 @@ struct SettingsView: View {
                         Text(loc.t("settings.droneDetection.permHint"))
                             .font(.caption2)
                             .foregroundColor(.secondary)
+                    }
+
+                    // External gyb_detect sensor (WiFi-beacon Remote ID over
+                    // BLE GATT) — the phone can't do WiFi RID itself.
+                    Toggle(loc.t("settings.gybDetector"), isOn: $gybDetectorEnabled)
+
+                    Text(loc.t("settings.gybDetector.desc"))
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
+
+                    if gybDetectorEnabled {
+                        Button {
+                            showGybSheet = true
+                        } label: {
+                            HStack {
+                                Label(loc.t("settings.gybConnect"), systemImage: "dot.radiowaves.left.and.right")
+                                Spacer()
+                                if GybManager.shared.client.isConnected {
+                                    Text(loc.t("settings.connected")).font(.caption).foregroundColor(.green)
+                                }
+                            }
+                        }
                     }
                 }
 
@@ -262,13 +292,13 @@ struct SettingsView: View {
                 // Mission — entry point for issue #14 MVP. Sits above Data
                 // Management because creating a mission is the prerequisite
                 // for the data-package flows that live there.
-                Section("MISSION") {
+                Section(loc.t("settings.section.mission")) {
                     Button(action: { showMissionCreationSheet = true }) {
                         HStack {
                             Image(systemName: "flag.checkered")
                                 .foregroundColor(Color(hex: "#00BCD4"))
                                 .frame(width: 24)
-                            Text("Create new mission")
+                            Text(loc.t("settings.createMission"))
                                 .foregroundColor(.primary)
                             Spacer()
                             Image(systemName: "chevron.right")
@@ -286,7 +316,6 @@ struct SettingsView: View {
 
                     Button(loc.t("settings.resetToDefaults")) {
                         userCallsign = "ALPHA-1"
-                        userName = "Operator"
                         unitSystemString = "Metric"
                         // Map overlay defaults
                         mgrsGridEnabled = false
@@ -323,6 +352,12 @@ struct SettingsView: View {
             .sheet(isPresented: $showMissionCreationSheet) {
                 MissionCreationSheet()
             }
+            .sheet(isPresented: $showGybSheet) {
+                GybDetectorView()
+            }
+            .onChange(of: gybDetectorEnabled) { newValue in
+                GybManager.shared.setEnabled(newValue)
+            }
             .alert(loc.t("settings.cacheCleared.title"), isPresented: $showCacheCleared) {
                 Button(loc.t("settings.ok"), role: .cancel) {}
             }
@@ -331,13 +366,20 @@ struct SettingsView: View {
     }
 
     private func refreshCacheSize() {
-        let urlBytes = URLCache.shared.currentDiskUsage + URLCache.shared.currentMemoryUsage
-        let tileBytes = tileCacheSizeBytes()
-        let total = Int64(urlBytes) + tileBytes
-        let formatter = ByteCountFormatter()
-        formatter.allowedUnits = [.useMB, .useGB, .useKB]
-        formatter.countStyle = .file
-        cacheSizeText = formatter.string(fromByteCount: total)
+        // Sizing the tile cache walks every file on disk — for a user with a
+        // large offline map cache that's thousands of files and can block for
+        // hundreds of ms to seconds. Doing it in onAppear on the main thread
+        // is what made Settings open laggy/janky (scales with cache size, so
+        // it's intermittent across users). Compute off-main, publish back.
+        DispatchQueue.global(qos: .utility).async {
+            let urlBytes = URLCache.shared.currentDiskUsage + URLCache.shared.currentMemoryUsage
+            let total = Int64(urlBytes) + tileCacheSizeBytes()
+            let formatter = ByteCountFormatter()
+            formatter.allowedUnits = [.useMB, .useGB, .useKB]
+            formatter.countStyle = .file
+            let text = formatter.string(fromByteCount: total)
+            DispatchQueue.main.async { cacheSizeText = text }
+        }
     }
 
     private func tileCacheSizeBytes() -> Int64 {

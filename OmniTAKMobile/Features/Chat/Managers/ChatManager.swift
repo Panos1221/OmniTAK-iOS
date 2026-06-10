@@ -158,6 +158,45 @@ class ChatManager: ObservableObject {
         } else {
             print("❌ [CHAT DEBUG] TAKService not configured - cannot send message")
         }
+
+        // --- Mesh off-grid GeoChat ---
+        // Mirror the text message over the active Meshtastic radio so peers
+        // with no server can see the chat.  MeshtasticManager is @MainActor.
+        let meshText = text
+        let meshCallsign = currentUserCallsign
+        let meshLocation = locationManager?.location
+        Task { @MainActor in
+            guard MeshtasticManager.shared.isConnected else { return }
+            let point = CoTPoint(
+                lat: meshLocation?.coordinate.latitude ?? 0.0,
+                lon: meshLocation?.coordinate.longitude ?? 0.0,
+                hae: meshLocation?.altitude ?? 0.0,
+                ce: 9999,
+                le: 9999
+            )
+            let detail = CoTDetail(
+                callsign: meshCallsign,
+                team: nil,
+                teamRole: nil,
+                speed: nil,
+                course: nil,
+                remarks: meshText,
+                battery: nil,
+                device: nil,
+                platform: nil
+            )
+            let event = CoTEvent(
+                uid: message.id,
+                type: "b-t-f",
+                time: Date(),
+                point: point,
+                detail: detail
+            )
+            MeshtasticManager.shared.sendCoTOverMesh(event)
+            #if DEBUG
+            print("📡 Mesh GeoChat: sent '\(meshText)' from \(meshCallsign) over mesh")
+            #endif
+        }
     }
 
     // MARK: - Send Message with Image
@@ -224,6 +263,45 @@ class ChatManager: ObservableObject {
             }
         } else {
             print("TAKService not configured")
+        }
+
+        // --- Mesh off-grid GeoChat (text portion only — images are not sent over mesh) ---
+        if !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            let meshText = text
+            let meshCallsign = currentUserCallsign
+            let meshLocation = locationManager?.location
+            Task { @MainActor in
+                guard MeshtasticManager.shared.isConnected else { return }
+                let point = CoTPoint(
+                    lat: meshLocation?.coordinate.latitude ?? 0.0,
+                    lon: meshLocation?.coordinate.longitude ?? 0.0,
+                    hae: meshLocation?.altitude ?? 0.0,
+                    ce: 9999,
+                    le: 9999
+                )
+                let detail = CoTDetail(
+                    callsign: meshCallsign,
+                    team: nil,
+                    teamRole: nil,
+                    speed: nil,
+                    course: nil,
+                    remarks: meshText,
+                    battery: nil,
+                    device: nil,
+                    platform: nil
+                )
+                let event = CoTEvent(
+                    uid: message.id,
+                    type: "b-t-f",
+                    time: Date(),
+                    point: point,
+                    detail: detail
+                )
+                MeshtasticManager.shared.sendCoTOverMesh(event)
+                #if DEBUG
+                print("📡 Mesh GeoChat (image msg text): sent '\(meshText)' over mesh")
+                #endif
+            }
         }
     }
 

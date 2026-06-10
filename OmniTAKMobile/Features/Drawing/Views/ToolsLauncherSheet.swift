@@ -12,6 +12,7 @@
 import SwiftUI
 
 struct ToolsLauncherSheet: View {
+    @EnvironmentObject private var loc: LocalizationManager
     let onLasso: () -> Void
     let onFullTools: () -> Void
     let onCustomize: () -> Void
@@ -20,12 +21,27 @@ struct ToolsLauncherSheet: View {
     @AppStorage("mapEngine") private var mapEngineRaw: String = MapEngine.cesium3D.rawValue
     private var mapEngine: MapEngine { MapEngine(rawValue: mapEngineRaw) ?? .cesium3D }
 
+    // Plugin gating — the Settings → Plugins toggles previously filtered
+    // only the legacy 5x4 grid, so a "disabled" tool stayed one tap away
+    // here in the primary tools surface.
+    @ObservedObject private var pluginManager = PluginSettingsManager.shared
+
+    /// `toolSections` with disabled-plugin tools removed; sections that end
+    /// up empty are dropped entirely.
+    private var visibleSections: [LauncherSection] {
+        Self.toolSections.compactMap { section in
+            let tools = section.tools.filter { pluginManager.isToolEnabled($0.id) }
+            guard !tools.isEmpty else { return nil }
+            return LauncherSection(title: section.title, titleKey: section.titleKey, tools: tools)
+        }
+    }
+
     var body: some View {
         ScrollView {
             VStack(spacing: 0) {
                 // Marquee row — Lasso Select.
-                row(icon: "lasso", iconColor: .orange, title: "Lasso Select",
-                    subtitle: "Long-press + drag on the map to multi-select",
+                row(icon: "lasso", iconColor: .orange, title: loc.t("toolsheet.lasso.title"),
+                    subtitle: loc.t("toolsheet.lasso.subtitle"),
                     bold: true, action: onLasso)
 
                 Divider().padding(.leading, 70)
@@ -34,10 +50,10 @@ struct ToolsLauncherSheet: View {
                 row(
                     icon: mapEngine == .cesium3D ? "map.fill" : "globe.americas.fill",
                     iconColor: mapEngine == .cesium3D ? Color(white: 0.55) : Color(red: 0.31, green: 0.66, blue: 1.0),
-                    title: mapEngine == .cesium3D ? "Switch to 2D Map" : "Switch to 3D Globe",
+                    title: mapEngine == .cesium3D ? loc.t("toolsheet.engine.to2d") : loc.t("toolsheet.engine.to3d"),
                     subtitle: mapEngine == .cesium3D
-                        ? "Currently 3D Cesium — drop to Mapbox 2D for offline / low-bandwidth"
-                        : "Currently 2D Mapbox — back to the photoreal Cesium globe",
+                        ? loc.t("toolsheet.engine.sub2d")
+                        : loc.t("toolsheet.engine.sub3d"),
                     bold: false,
                     action: {
                         let next: MapEngine = mapEngine == .cesium3D ? .mapbox2D : .cesium3D
@@ -49,33 +65,43 @@ struct ToolsLauncherSheet: View {
                 // Full sectioned tool catalog — everything the old full-screen
                 // grid offered, as smooth rows that keep the map live behind.
                 // Each routes through ToolSheetHost by id (.openToolSheet).
-                ForEach(Self.toolSections) { section in
-                    sectionHeader(section.title)
+                // Filtered by the Settings → Plugins enable toggles.
+                ForEach(visibleSections) { section in
+                    sectionHeader(loc.t(section.titleKey))
                     ForEach(Array(section.tools.enumerated()), id: \.element.id) { idx, tool in
                         if idx > 0 { Divider().padding(.leading, 70) }
                         quickTool(icon: tool.icon, color: tool.color,
-                                  title: tool.title, subtitle: tool.subtitle, toolID: tool.id)
+                                  title: loc.t("tools.\(tool.id).title"),
+                                  subtitle: loc.t("tools.\(tool.id).subtitle"), toolID: tool.id)
                     }
                 }
 
-                sectionHeader("More")
+                sectionHeader(loc.t("tools.section.more"))
 
                 // Build-your-own-bar entry.
-                row(icon: "slider.horizontal.3", iconColor: BarTint.tools, title: "Customize Toolbar",
-                    subtitle: "Pick and arrange your own bottom-bar shortcuts",
+                row(icon: "slider.horizontal.3", iconColor: BarTint.tools, title: loc.t("toolsheet.customize.title"),
+                    subtitle: loc.t("toolsheet.customize.subtitle"),
                     bold: false, action: onCustomize)
 
                 Divider().padding(.leading, 70)
 
                 // Fallback passthrough to the legacy 5x4 grid.
-                row(icon: "square.grid.3x3.fill", iconColor: .secondary, title: "Full Tools Grid…",
-                    subtitle: "The classic grid — kept as a fallback",
+                row(icon: "square.grid.3x3.fill", iconColor: .secondary, title: loc.t("toolsheet.fullgrid.title"),
+                    subtitle: loc.t("toolsheet.fullgrid.subtitle"),
                     bold: false, action: onFullTools)
             }
             .padding(.top, 8)
             .padding(.bottom, 12)
         }
         .frame(maxHeight: 560)
+        .onAppear {
+            #if DEBUG
+            ToolRegistry.validate(
+                ids: Self.toolSections.flatMap { $0.tools.map(\.id) },
+                from: "ToolsLauncherSheet"
+            )
+            #endif
+        }
     }
 
     // MARK: - Tool catalog
@@ -92,13 +118,14 @@ struct ToolsLauncherSheet: View {
     private struct LauncherSection: Identifiable {
         let id = UUID()
         let title: String
+        let titleKey: String
         let tools: [LauncherTool]
     }
 
     /// The full catalog, grouped — mirrors every screen the legacy grid
     /// reached, so the popup can be the primary tools surface.
     private static let toolSections: [LauncherSection] = [
-        LauncherSection(title: "Markers & Terrain", tools: [
+        LauncherSection(title: "Markers & Terrain", titleKey: "tools.section.markers", tools: [
             LauncherTool(id: "pointer", icon: "mappin.circle.fill", color: BarTint.red,
                          title: "Point Drop", subtitle: "Place and label a tactical marker"),
             LauncherTool(id: "kml", icon: "square.3.layers.3d", color: BarTint.purple,
@@ -108,7 +135,7 @@ struct ToolsLauncherSheet: View {
             LauncherTool(id: "los", icon: "eye.fill", color: BarTint.teal,
                          title: "Line of Sight", subtitle: "Visibility between two points"),
         ]),
-        LauncherSection(title: "Reports", tools: [
+        LauncherSection(title: "Reports", titleKey: "tools.section.reports", tools: [
             LauncherTool(id: "casevac", icon: "cross.case.fill", color: BarTint.red,
                          title: "CASEVAC", subtitle: "Casualty evacuation request"),
             LauncherTool(id: "nineline", icon: "scope", color: BarTint.red,
@@ -118,7 +145,7 @@ struct ToolsLauncherSheet: View {
             LauncherTool(id: "alert", icon: "exclamationmark.triangle.fill", color: BarTint.red,
                          title: "Emergency Beacon", subtitle: "Broadcast an emergency alert"),
         ]),
-        LauncherSection(title: "Teams & Comms", tools: [
+        LauncherSection(title: "Teams & Comms", titleKey: "tools.section.teams", tools: [
             LauncherTool(id: "teams", icon: "person.3.fill", color: BarTint.chat,
                          title: "Teams", subtitle: "Manage team members"),
             LauncherTool(id: "contacts", icon: "person.crop.circle.fill", color: BarTint.chat,
@@ -126,7 +153,9 @@ struct ToolsLauncherSheet: View {
             LauncherTool(id: "selfsa", icon: "dot.radiowaves.left.and.right", color: BarTint.map,
                          title: "Self / Position", subtitle: "Broadcast your position (PLI)"),
         ]),
-        LauncherSection(title: "Navigation", tools: [
+        LauncherSection(title: "Navigation", titleKey: "tools.section.navigation", tools: [
+            LauncherTool(id: "gotocoord", icon: "mappin.and.ellipse", color: BarTint.map,
+                         title: "Go to Coordinate", subtitle: "Jump to a typed grid/lat-lon (TWD97, MGRS)"),
             LauncherTool(id: "routes", icon: "point.topleft.down.to.point.bottomright.curvepath.fill", color: BarTint.map,
                          title: "Routes", subtitle: "Plan and navigate routes"),
             LauncherTool(id: "turnbyturn", icon: "arrow.triangle.turn.up.right.diamond.fill", color: BarTint.map,
@@ -136,7 +165,7 @@ struct ToolsLauncherSheet: View {
             LauncherTool(id: "geofence", icon: "circle.dashed", color: BarTint.purple,
                          title: "Geofences", subtitle: "Create alert zones"),
         ]),
-        LauncherSection(title: "Air & Data", tools: [
+        LauncherSection(title: "Air & Data", titleKey: "tools.section.airdata", tools: [
             LauncherTool(id: "adsb", icon: "airplane.circle.fill", color: BarTint.mesh,
                          title: "ADS-B", subtitle: "Live aircraft tracking"),
             LauncherTool(id: "missionsync", icon: "arrow.triangle.2.circlepath", color: BarTint.servers,

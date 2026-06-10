@@ -65,7 +65,6 @@
 "settings.done" = "Fertig";
 "settings.section.userProfile" = "BENUTZERPROFIL";
 "settings.callsign" = "Rufzeichen";
-"settings.name" = "Name";
 "settings.section.servers" = "SERVER";
 "settings.manageServers" = "Server verwalten";
 "settings.section.navigation" = "NAVIGATION";
@@ -120,3 +119,109 @@
 "quickstart.time.discover" = "< 1 Min.";
 "quickstart.time.quick" = "< 2 Min.";
 "quickstart.time.manual" = "~3 Min.";
+
+/* --- Bottom bar + tools shortcuts (labels). Keyed by BarItem.id ("bar.<id>").
+       Military/technical acronyms (CASEVAC, 9-Line, SPOTREP, ADS-B, Self SA,
+       Mesh) stay English per the translation conventions. --- */
+"bar.tab.map" = "Karte";
+"bar.tab.chat" = "Chat";
+"bar.tab.servers" = "Server";
+"bar.tab.mesh" = "Mesh";
+"bar.tab.settings" = "Einstellungen";
+"bar.cmd.tools" = "Werkzeuge";
+"bar.cmd.fulltools" = "Alle Werkzeuge";
+"bar.cmd.droppin" = "Pin setzen";
+"bar.cmd.measure" = "Messen";
+"bar.cmd.drawing" = "Zeichnen";
+"bar.cmd.layers" = "Ebenen";
+"bar.cmd.drawingslist" = "Zeichnungen";
+"bar.cmd.lasso" = "Auswahl";
+"bar.cmd.engine" = "2D / 3D";
+"bar.tool.pointer" = "Punkt setzen";
+"bar.tool.routes" = "Routen";
+"bar.tool.navigation" = "Navigation";
+"bar.tool.teams" = "Teams";
+"bar.tool.contacts" = "Kontakte";
+"bar.tool.casevac" = "CASEVAC";
+"bar.tool.nineline" = "9-Line";
+"bar.tool.spotrep" = "SPOTREP";
+"bar.tool.alert" = "Notfall";
+"bar.tool.tracks" = "Spuren";
+"bar.tool.geofence" = "Geofence";
+"bar.tool.adsb" = "ADS-B";
+"bar.tool.selfsa" = "Self SA";
+"bar.tool.elevation" = "Höhe";
+"bar.tool.los" = "Sichtlinie";
+"bar.tool.missionsync" = "Missions-Sync";
+"bar.tool.plugins" = "Plugins";
+"bar.tool.uas" = "Fahrzeuge";
+
+/* --- Bottom bar edit/coachmark chrome --- */
+"bar.coachmark" = "Gedrückt halten, um deine eigene Symbolleiste zu erstellen";
+"bar.editHint" = "Ziehen zum Sortieren · − tippen zum Entfernen · ＋ zum Hinzufügen";
+"bar.done" = "Fertig";
+"bar.add" = "Hinzufügen";
+
+/* --- Server edit: Advanced (TLS trust) --- */
+"serverEdit.advanced.title" = "ERWEITERT";
+"serverEdit.trustUntrusted.title" = "Nicht vertrauenswürdigen Zertifikaten vertrauen";
+"serverEdit.trustUntrusted.subtitle" = "Beliebiges Serverzertifikat akzeptieren (keine CA-Prüfung)";
+"serverEdit.trustUntrusted.warning" = "Warnung: Die TLS-Serververifizierung ist für diesen Server deaktiviert, der Datenverkehr kann abgefangen werden. Nur für einen selbstsignierten TAK-Server aktivieren, den Sie kontrollieren, wenn kein Truststore importiert werden kann.";
+
+/* Settings — hardcoded-English cleanup (2026-06) */
+"settings.section.toolbar" = "Werkzeugleiste";
+"settings.customizeToolbar" = "Werkzeugleiste anpassen";
+"settings.customizeToolbar.hint" = "Selbst zusammenstellen";
+"settings.connected" = "Verbunden";
+"settings.servers.count" = "%d Server";
+"settings.gybDetector" = "Externer gyb-Detektor";
+"settings.gybDetector.desc" = "Erfasst WLAN-Beacon-Remote-ID über einen gyb-Sensor und streamt sie per Bluetooth — Drohnen, die dein Telefon allein nicht sehen kann.";
+"settings.gybConnect" = "gyb-Detektor verbinden";
+"settings.section.mission" = "MISSION";
+"settings.createMission" = "Neue Mission erstellen";
+"settings.mgrsGrid.2dOnly" = "Nur 2D-Karte";
+
+/* Marker radial Info / Share / Copy feedback (2026-06) */
+"radial.copied" = "Kopiert";
+"markerInfo.title" = "Marker-Info";
+"markerInfo.name" = "Name";
+"markerInfo.affiliation" = "Zugehörigkeit";
+"markerInfo.coordinates" = "Koordinaten";
+"markerInfo.altitude" = "Höhe";
+"markerInfo.created" = "Erstellt";
+"markerInfo.remarks" = "Anmerkungen";
+
+/* Legacy 5x4 Tools grid i18n (2026-06) */
+"tools.grid.title" = "Werkzeuge";
+"tools.grid.showDisabled" = "Deaktivierte anzeigen";
+"tools.grid.beta" = "BETA";
+"tools.chat.title" = "Chat";
+"tools.chat.subtitle" = "Team-Chat-Nachrichten";
+"tools.data.title" = "Datenpakete";
+"tools.data.subtitle" = "Datenpakete verwalten";
+"tools.video.title" = "Video";
+"tools.video.subtitle" = "Video-Streaming (Beta – TAK-Server erforderlich)";
+"tools.offline.title" = "Offline-Karten";
+"tools.offline.subtitle" = "Karten für die Offline-Nutzung laden";
+"tools.drawing.title" = "Zeichnen";
+"tools.drawing.subtitle" = "Auf der Karte zeichnen";
+"tools.measure.title" = "Messen";
+"tools.measure.subtitle" = "Entfernungs- und Flächenmessung";
+"tools.lasso.title" = "Auswählen";
+"tools.lasso.subtitle" = "Mehrfachauswahl per Freihandbereich (lang drücken + ziehen)";
+"tools.bloodhound.title" = "Bloodhound";
+"tools.bloodhound.subtitle" = "Blue-Force-Tracking";
+"tools.meshtastic.title" = "Meshtastic";
+"tools.meshtastic.subtitle" = "Meshtastic-Mesh-Netzwerk";
+"tools.echelon.title" = "Hierarchie";
+"tools.echelon.subtitle" = "Einheitenhierarchie / Echelon";
+"tools.uas.title" = "UAS Connect";
+"tools.uas.subtitle" = "Mit UAS / Drohnen verbinden";
+"tools.settings.title" = "Einstellungen";
+"tools.settings.subtitle" = "App-Einstellungen";
+
+/* Track persistence error surfacing (2026-06) */
+"tracks.error.title" = "Track-Fehler";
+"tracks.error.save" = "Track konnte nicht gespeichert werden: %@";
+"tracks.error.delete" = "Track konnte nicht gelöscht werden: %@";
+"tracks.error.export" = "Track konnte nicht exportiert werden: %@";

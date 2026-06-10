@@ -281,16 +281,12 @@ class CoTMessageParser {
             return nil
         }
 
-        // Try ISO8601 format first (2025-01-15T12:30:00Z)
-        let iso8601Formatter = ISO8601DateFormatter()
-        iso8601Formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        if let date = iso8601Formatter.date(from: timeStr) {
+        // Try ISO8601 format first (2025-01-15T12:30:00Z), with and
+        // without fractional seconds (shared formatters — thread-safe)
+        if let date = CoTXMLBuilder.timestampFormatter.date(from: timeStr) {
             return date
         }
-
-        // Try without fractional seconds
-        iso8601Formatter.formatOptions = [.withInternetDateTime]
-        if let date = iso8601Formatter.date(from: timeStr) {
+        if let date = CoTXMLBuilder.timestampFormatterNoFraction.date(from: timeStr) {
             return date
         }
 
@@ -310,6 +306,7 @@ class CoTMessageParser {
     private static func extractDetail(from xml: String) -> CoTDetail {
         var callsign = ""
         var team: String? = nil
+        var teamRole: String? = nil
         var speed: Double? = nil
         var course: Double? = nil
         var remarks: String? = nil
@@ -323,10 +320,11 @@ class CoTMessageParser {
             callsign = extractAttribute("callsign", from: contactTag) ?? ""
         }
 
-        // Extract team from __group element
+        // Extract team name and role from __group element
         if let groupRange = xml.range(of: "<__group[^>]*>", options: .regularExpression) {
             let groupTag = String(xml[groupRange])
             team = extractAttribute("name", from: groupTag)
+            teamRole = extractAttribute("role", from: groupTag)
         }
 
         // Extract speed and course from track element
@@ -370,6 +368,7 @@ class CoTMessageParser {
         return CoTDetail(
             callsign: callsign,
             team: team,
+            teamRole: teamRole,
             speed: speed,
             course: course,
             remarks: remarks,

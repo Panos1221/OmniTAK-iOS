@@ -66,7 +66,6 @@
 "settings.done" = "完成";
 "settings.section.userProfile" = "使用者資料";
 "settings.callsign" = "呼號";
-"settings.name" = "姓名";
 "settings.section.servers" = "伺服器";
 "settings.manageServers" = "管理伺服器";
 "settings.section.navigation" = "導航";
@@ -121,3 +120,188 @@
 "quickstart.time.discover" = "< 1 分鐘";
 "quickstart.time.quick" = "< 2 分鐘";
 "quickstart.time.manual" = "約 3 分鐘";
+
+/* --- 底部工具列與工具捷徑（標籤）。以 BarItem.id（"bar.<id>"）為鍵。
+       軍事／技術縮寫（CASEVAC、9-Line、SPOTREP、ADS-B、Self SA、Mesh）
+       依慣例保留英文。 --- */
+"bar.tab.map" = "地圖";
+"bar.tab.chat" = "聊天";
+"bar.tab.servers" = "伺服器";
+"bar.tab.mesh" = "Mesh";
+"bar.tab.settings" = "設定";
+"bar.cmd.tools" = "工具";
+"bar.cmd.fulltools" = "所有工具";
+"bar.cmd.droppin" = "放置圖釘";
+"bar.cmd.measure" = "測量";
+"bar.cmd.drawing" = "繪圖";
+"bar.cmd.layers" = "圖層";
+"bar.cmd.drawingslist" = "繪圖清單";
+"bar.cmd.lasso" = "選取";
+"bar.cmd.engine" = "2D / 3D";
+"bar.tool.pointer" = "放置標點";
+"bar.tool.routes" = "路線";
+"bar.tool.navigation" = "導航";
+"bar.tool.teams" = "隊伍";
+"bar.tool.contacts" = "聯絡人";
+"bar.tool.casevac" = "CASEVAC";
+"bar.tool.nineline" = "9-Line";
+"bar.tool.spotrep" = "SPOTREP";
+"bar.tool.alert" = "緊急";
+"bar.tool.tracks" = "軌跡";
+"bar.tool.geofence" = "地理圍欄";
+"bar.tool.adsb" = "ADS-B";
+"bar.tool.selfsa" = "Self SA";
+"bar.tool.elevation" = "海拔";
+"bar.tool.los" = "視線";
+"bar.tool.missionsync" = "任務同步";
+"bar.tool.plugins" = "外掛";
+"bar.tool.uas" = "載具";
+
+/* --- 底部工具列編輯／提示介面 --- */
+"bar.coachmark" = "長按以打造自己的工具列";
+"bar.editHint" = "拖曳以重新排序 · 點 − 移除 · ＋ 新增";
+"bar.done" = "完成";
+"bar.add" = "新增";
+
+/* --- 工具彈出視窗（ToolsLauncherSheet）：內嵌列 --- */
+"toolsheet.lasso.title" = "套索選取";
+"toolsheet.lasso.subtitle" = "在地圖上長按並拖曳以多重選取";
+"toolsheet.engine.to2d" = "切換為 2D 地圖";
+"toolsheet.engine.to3d" = "切換為 3D 地球";
+"toolsheet.engine.sub2d" = "目前為 3D Cesium，切換為 Mapbox 2D 以供離線／低頻寬使用";
+"toolsheet.engine.sub3d" = "目前為 2D Mapbox，切回擬真的 Cesium 地球";
+"toolsheet.customize.title" = "自訂工具列";
+"toolsheet.customize.subtitle" = "挑選並排列你自己的底部捷徑";
+"toolsheet.fullgrid.title" = "完整工具格…";
+"toolsheet.fullgrid.subtitle" = "經典格狀介面，保留作為備援";
+
+/* --- 工具彈出視窗：區段標題 --- */
+"tools.section.markers" = "標記與地形";
+"tools.section.reports" = "回報";
+"tools.section.teams" = "隊伍與通訊";
+"tools.section.navigation" = "導航";
+"tools.section.airdata" = "空情與資料";
+"tools.section.more" = "更多";
+
+/* --- 工具彈出視窗：工具目錄（以工具 id 為鍵） --- */
+"tools.pointer.title" = "放置標點";
+"tools.pointer.subtitle" = "放置並標註戰術標記";
+"tools.kml.title" = "地圖疊層";
+"tools.kml.subtitle" = "匯入並切換 KML/KMZ 疊層";
+"tools.elevation.title" = "高程剖面";
+"tools.elevation.subtitle" = "沿路徑的地形剖面";
+"tools.los.title" = "視線";
+"tools.los.subtitle" = "兩點之間的通視";
+"tools.casevac.title" = "CASEVAC";
+"tools.casevac.subtitle" = "傷患後送請求";
+"tools.nineline.title" = "9-Line / CAS";
+"tools.nineline.subtitle" = "近距空中支援請求";
+"tools.spotrep.title" = "SPOTREP";
+"tools.spotrep.subtitle" = "現地回報";
+"tools.alert.title" = "緊急信標";
+"tools.alert.subtitle" = "廣播緊急警示";
+"tools.teams.title" = "隊伍";
+"tools.teams.subtitle" = "管理隊伍成員";
+"tools.contacts.title" = "聯絡人";
+"tools.contacts.subtitle" = "聯絡人清單與聊天";
+"tools.selfsa.title" = "自身／位置";
+"tools.selfsa.subtitle" = "廣播你的位置 (PLI)";
+"tools.routes.title" = "路線";
+"tools.routes.subtitle" = "規劃並導航路線";
+"tools.turnbyturn.title" = "逐步導航";
+"tools.turnbyturn.subtitle" = "引導式導航";
+"tools.tracks.title" = "軌跡記錄";
+"tools.tracks.subtitle" = "記錄並檢視你的軌跡";
+"tools.geofence.title" = "地理圍欄";
+"tools.geofence.subtitle" = "建立警示區域";
+"tools.adsb.title" = "ADS-B";
+"tools.adsb.subtitle" = "即時航機追蹤";
+"tools.missionsync.title" = "任務同步";
+"tools.missionsync.subtitle" = "同步任務封包";
+"tools.plugins.title" = "外掛";
+"tools.plugins.subtitle" = "管理已安裝的外掛";
+
+/* TWD97（台灣）座標格式 + 前往座標輸入 */
+"settings.coord.twd97" = "TWD97 / TM2（台灣）";
+"settings.coord.twd97Help" = "台灣 TWD97 / TM2 二度分帶（121 分帶，≈WGS84）。座標顯示使用完整 7+7 位數；「前往座標」工具另提供 5+5 區域網格輸入。";
+"tools.gotocoord.title" = "前往座標";
+"tools.gotocoord.subtitle" = "輸入網格／經緯度快速跳轉（TWD97、MGRS）";
+"common.cancel" = "取消";
+"coordentry.title" = "前往座標";
+"coordentry.format" = "格式";
+"coordentry.digitmode" = "位數模式";
+"coordentry.input" = "輸入";
+"coordentry.preview" = "預覽";
+"coordentry.dropmarker" = "在此放置標記";
+"coordentry.go" = "前往";
+"coordentry.easting" = "橫座標 (E)";
+"coordentry.northing" = "縱座標 (N)";
+"coordentry.lat" = "緯度";
+"coordentry.lon" = "經度";
+"coordentry.grid5.note" = "5+5 以目前地圖中心（100 公里網格）為基準。";
+"coordentry.invalid" = "座標超出範圍或無法解析。";
+"coordentry.enterprompt" = "輸入座標以預覽位置。";
+
+/* --- Server edit: Advanced (TLS trust) --- */
+"serverEdit.advanced.title" = "進階";
+"serverEdit.trustUntrusted.title" = "信任未驗證的憑證";
+"serverEdit.trustUntrusted.subtitle" = "接受任何伺服器憑證（不檢查 CA）";
+"serverEdit.trustUntrusted.warning" = "警告：此伺服器的 TLS 伺服器驗證已停用，流量可能遭到攔截。僅在無法匯入信任庫、且該自簽憑證 TAK 伺服器由您掌控時才啟用。";
+
+/* Settings — hardcoded-English cleanup (2026-06) */
+"settings.section.toolbar" = "工具列";
+"settings.customizeToolbar" = "自訂工具列";
+"settings.customizeToolbar.hint" = "打造你自己的";
+"settings.connected" = "已連線";
+"settings.servers.count" = "%d 個伺服器";
+"settings.gybDetector" = "外接 gyb 偵測器";
+"settings.gybDetector.desc" = "透過 gyb 感測器接收 WiFi 信標 Remote ID 並以藍牙串流——偵測手機自身看不到的無人機。";
+"settings.gybConnect" = "連接 gyb 偵測器";
+"settings.section.mission" = "任務";
+"settings.createMission" = "建立新任務";
+"settings.mgrsGrid.2dOnly" = "僅限 2D 地圖";
+
+/* Marker radial Info / Share / Copy feedback (2026-06) */
+"radial.copied" = "已複製";
+"markerInfo.title" = "標記資訊";
+"markerInfo.name" = "名稱";
+"markerInfo.affiliation" = "屬性";
+"markerInfo.coordinates" = "座標";
+"markerInfo.altitude" = "高度";
+"markerInfo.created" = "建立時間";
+"markerInfo.remarks" = "備註";
+
+/* Legacy 5x4 Tools grid i18n (2026-06) */
+"tools.grid.title" = "工具";
+"tools.grid.showDisabled" = "顯示已停用";
+"tools.grid.beta" = "BETA";
+"tools.chat.title" = "聊天";
+"tools.chat.subtitle" = "團隊聊天訊息";
+"tools.data.title" = "資料套件";
+"tools.data.subtitle" = "管理資料套件";
+"tools.video.title" = "影片";
+"tools.video.subtitle" = "影片串流（Beta，需要 TAK 伺服器）";
+"tools.offline.title" = "離線地圖";
+"tools.offline.subtitle" = "下載地圖供離線使用";
+"tools.drawing.title" = "繪圖";
+"tools.drawing.subtitle" = "在地圖上繪圖";
+"tools.measure.title" = "測量";
+"tools.measure.subtitle" = "距離與面積測量";
+"tools.lasso.title" = "選取";
+"tools.lasso.subtitle" = "以手繪範圍多選（長按並拖曳）";
+"tools.bloodhound.title" = "Bloodhound";
+"tools.bloodhound.subtitle" = "友軍追蹤";
+"tools.meshtastic.title" = "Meshtastic";
+"tools.meshtastic.subtitle" = "Meshtastic 網狀網路";
+"tools.echelon.title" = "層級";
+"tools.echelon.subtitle" = "單位層級／梯隊";
+"tools.uas.title" = "UAS 連線";
+"tools.uas.subtitle" = "連接 UAS／無人機";
+"tools.settings.title" = "設定";
+"tools.settings.subtitle" = "App 設定";
+
+/* Track persistence error surfacing (2026-06) */
+"tracks.error.title" = "軌跡錯誤";
+"tracks.error.save" = "無法儲存軌跡：%@";
+"tracks.error.delete" = "無法刪除軌跡：%@";
+"tracks.error.export" = "無法匯出軌跡：%@";

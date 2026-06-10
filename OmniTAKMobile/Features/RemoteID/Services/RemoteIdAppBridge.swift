@@ -62,6 +62,25 @@ final class RemoteIdAppBridge: ObservableObject {
         }
     }
 
+    // MARK: - External detector ingest (gyb)
+
+    /// Inject a track from an external detector (the gyb WiFi-RID sensor over
+    /// BLE GATT) into the same marker pipeline as the on-device BLE scanner.
+    /// Because the UID is `RID-{uasId}`, a drone the gyb sees over WiFi and
+    /// the phone sees over BLE collapses to one marker — automatic dedup.
+    /// `sourceNote` is appended to the remarks (e.g. " / via gyb (WiFi
+    /// beacon)") so the operator can tell how the drone was caught.
+    func ingestExternalTrack(_ track: RemoteIdTrack, sourceNote: String?) {
+        dispatchPrecondition(condition: .onQueue(.main))
+        upsertMarker(for: track, sourceNote: sourceNote)
+    }
+
+    /// Drop an external detector's marker (stale purge / detector toggled off).
+    func removeExternalTrack(uasId: String) {
+        dispatchPrecondition(condition: .onQueue(.main))
+        removeMarker(uasId: uasId)
+    }
+
     // MARK: - Marker synchronization
 
     private func applyUpdate(_ update: RemoteIdTrackUpdate) {
@@ -80,33 +99,132 @@ final class RemoteIdAppBridge: ObservableObject {
         }
     }
 
-    private func upsertMarker(for track: RemoteIdTrack) {
-        guard let marker = RemoteIdToPointMarkerConverter.toPointMarker(track) else { return }
-
-        if let existingIndex = markerStore.markers.firstIndex(where: { $0.uid == marker.uid }) {
-            // Preserve the original id (UUID) so SwiftUI lists and
-            // any subscribers tracking by id don't see a churn.
-            var updated = marker
-            updated = PointMarker(
-                id: markerStore.markers[existingIndex].id,
-                name: marker.name,
-                affiliation: marker.affiliation,
-                coordinate: marker.coordinate,
-                altitude: marker.altitude,
-                remarks: marker.remarks,
-                createdBy: marker.createdBy,
-                isBroadcast: marker.isBroadcast
-            )
-            updated.uid = marker.uid
-            updated.cotType = marker.cotType
-            markerStore.markers[existingIndex] = updated
-        } else {
-            markerStore.markers.append(marker)
+    // Detected drones are LIVE CONTACTS, not dropped pins — publish them
+    // through the CoT pipeline (TAKService.cotEvents) so they render with the
+    // proper MIL-STD-2525 air symbol (rotary/fixed-wing) and federate to
+    // connected TAK servers, exactly like the Android ContactStore path. The
+    // earlier PointDropperService route drew an affiliation-only "yellow
+    // circle" that ignored the air dimension entirely.
+    private func upsertMarker(for track: RemoteIdTrack, sourceNote: String? = nil) {
+        // Emit the drone marker (when it has a valid GPS fix) AND/OR the
+        // operator (pilot) marker (whenever the operator location is valid).
+        // When the drone has no GPS yet, the pilot still plots — that's the
+        // fix for the invisible-detection bug.
+        if let loc = track.lastLocation, loc.hasValidPosition {
+            let event = Self.makeDroneCoTEvent(track: track, loc: loc, sourceNote: sourceNote)
+            CoTEventHandler.shared.handle(event: .positionUpdate(event))
+        }
+        if let op = track.lastOperatorLocation, op.hasValidPosition {
+            let event = Self.makeOperatorCoTEvent(track: track, op: op, sourceNote: sourceNote)
+            CoTEventHandler.shared.handle(event: .positionUpdate(event))
         }
     }
 
     private func removeMarker(uasId: String) {
-        let uid = "RID-" + uasId
-        markerStore.markers.removeAll { $0.uid == uid }
+        // Promptly drop both the drone and operator contacts (RID stale purge
+        // is ~30 s) instead of waiting for the 1-hour CoT staleness backstop.
+        CoTEventHandler.shared.removeEvent(uid: "RID-" + uasId)
+        CoTEventHandler.shared.removeEvent(uid: "RID-OP-" + uasId)
+    }
+
+    /// UA Type → CoT type. Multirotor → `a-u-A-M-H-Q` (rotary), fixed-wing
+    /// classes → `a-u-A-M-F-Q`, else plain `a-u-A`. Matches the Android
+    /// RemoteIdToCoTConverter so both clients render the same symbol and
+    /// server-side dedup works.
+    private static func cotType(for uaType: OpenDroneIdMessage.UaType) -> String {
+        switch uaType {
+        case .helicopterOrMultirotor:
+            return "a-u-A-M-H-Q"
+        case .aeroplane, .hybridLift, .glider, .gyroplane:
+            return "a-u-A-M-F-Q"
+        default:
+            return "a-u-A"
+        }
+    }
+
+    private static func makeDroneCoTEvent(
+        track: RemoteIdTrack,
+        loc: OpenDroneIdMessage.Location,
+        sourceNote: String?
+    ) -> CoTEvent {
+        var remarks = "FAA Remote ID detection."
+        remarks += " UA: \(track.uaType) / ID: \(track.idType)"
+        if let alt = loc.geodeticAltitudeM { remarks += String(format: " / Alt: %.0f m MSL", alt) }
+        if let agl = loc.heightAboveTakeoffM { remarks += String(format: " / AGL: %.0f m", agl) }
+        if loc.groundSpeedMs > 0 { remarks += String(format: " / Speed: %.1f m/s", loc.groundSpeedMs) }
+        remarks += " / Heading: \(loc.trackDirectionDeg)°"
+        if let op = track.lastOperatorLocation, op.hasValidPosition {
+            remarks += " / Pilot: PILOT-\(track.uasId)"
+        }
+        if let note = sourceNote { remarks += note }
+
+        let point = CoTPoint(
+            lat: loc.latitude,
+            lon: loc.longitude,
+            hae: loc.geodeticAltitudeM ?? 0,
+            ce: loc.horizontalAccuracyM ?? 9_999_999,
+            le: loc.verticalAccuracyM ?? 9_999_999
+        )
+        let detail = CoTDetail(
+            callsign: "DRONE-\(track.uasId)",
+            team: nil,
+            teamRole: nil,
+            speed: loc.groundSpeedMs,
+            course: Double(loc.trackDirectionDeg),
+            remarks: remarks,
+            battery: nil,
+            device: "Remote ID",
+            platform: "OmniTAK"
+        )
+        return CoTEvent(
+            uid: "RID-\(track.uasId)",
+            type: cotType(for: track.uaType),
+            time: Date(),
+            point: point,
+            detail: detail
+        )
+    }
+
+    /// Operator (pilot) marker. Unknown-ground (`a-u-G`) so the operator can
+    /// promote affiliation; plots wherever the RID System message reports the
+    /// pilot, even before the drone itself has GPS. Matches Android's
+    /// `RemoteIdToCoTConverter.operatorCoT` UID/type/callsign exactly.
+    private static func makeOperatorCoTEvent(
+        track: RemoteIdTrack,
+        op: OpenDroneIdMessage.OperatorLocation,
+        sourceNote: String?
+    ) -> CoTEvent {
+        var remarks = "FAA Remote ID operator (pilot) location."
+        remarks += " Drone: DRONE-\(track.uasId)"
+        if track.lastLocation?.hasValidPosition != true {
+            remarks += " / drone GPS not yet acquired"
+        }
+        if let note = sourceNote { remarks += note }
+
+        let point = CoTPoint(
+            lat: op.latitude,
+            lon: op.longitude,
+            hae: op.altitudeM ?? 0,
+            ce: 9_999_999,
+            le: 9_999_999
+        )
+        let detail = CoTDetail(
+            callsign: "PILOT-\(track.uasId)",
+            team: nil,
+            teamRole: nil,
+            speed: 0,
+            course: 0,
+            remarks: remarks,
+            battery: nil,
+            device: "Remote ID",
+            platform: "OmniTAK"
+        )
+        return CoTEvent(
+            uid: "RID-OP-\(track.uasId)",
+            type: "a-u-G",
+            time: Date(),
+            point: point,
+            detail: detail
+        )
     }
 }

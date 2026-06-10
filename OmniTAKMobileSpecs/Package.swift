@@ -3,9 +3,10 @@
 // OmniTAKMobileSpecs — standalone Swift Package that hosts pure-logic
 // XCTest suites for OmniTAK Mobile (iOS).
 //
-// The main OmniTAKMobile.xcodeproj has no PBXNativeTarget for tests
-// (per release notes 2.18.0), so we run TDD-style tests for pure logic
-// (e.g. lasso point-in-polygon) here. Run with:
+// The main OmniTAKMobile.xcodeproj now has a real OmniTAKMobileTests
+// unit-test target (hosted in the app, run via `xcodebuild test`); this
+// package remains for pure-logic suites that benefit from fast, host-free
+// `swift test` iteration (e.g. lasso point-in-polygon). Run with:
 //
 //   cd OmniTAKMobileSpecs && swift test
 //

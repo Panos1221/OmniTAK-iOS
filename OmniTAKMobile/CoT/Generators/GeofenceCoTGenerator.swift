@@ -11,16 +11,6 @@ import CoreLocation
 class GeofenceCoTGenerator {
 
     static func generateEventCoT(for event: GeofenceEvent, callsign: String) -> String {
-        let dateFormatter = ISO8601DateFormatter()
-        dateFormatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-
-        let now = Date()
-        let stale = now.addingTimeInterval(3600) // 1 hour stale
-
-        let timeStr = dateFormatter.string(from: now)
-        let startStr = dateFormatter.string(from: event.timestamp)
-        let staleStr = dateFormatter.string(from: stale)
-
         // Determine event type code
         let typeCode: String
         switch event.eventType {
@@ -53,32 +43,25 @@ class GeofenceCoTGenerator {
             eventDescription = "Dwell threshold exceeded in '\(event.geofenceName)' (\(dwellInfo))"
         }
 
-        let xml = """
-        <?xml version="1.0" encoding="UTF-8"?>
-        <event version="2.0" uid="\(uid)" type="\(typeCode)" time="\(timeStr)" start="\(startStr)" stale="\(staleStr)" how="h-g-i-g-o">
-            <point lat="\(event.coordinate.latitude)" lon="\(event.coordinate.longitude)" hae="0.0" ce="9999999" le="9999999"/>
-            <detail>
-                <contact callsign="\(callsign)"/>
-                <remarks>\(escapeXML(eventDescription))</remarks>
-                <__geofence id="\(event.geofenceId.uuidString)" name="\(escapeXML(event.geofenceName))" event="\(event.eventType.rawValue)" userId="\(event.userId)"/>
+        let detail = """
+                <contact callsign="\(callsign.xmlEscaped)"/>
+                <remarks>\(eventDescription.xmlEscaped)</remarks>
+                <__geofence id="\(event.geofenceId.uuidString)" name="\(event.geofenceName.xmlEscaped)" event="\(event.eventType.rawValue)" userId="\(event.userId)"/>
                 <link uid="\(event.userId)" type="a-f-G" relation="p-p"/>
-            </detail>
-        </event>
         """
 
-        return xml
+        return CoTXMLBuilder.buildEvent(
+            uid: uid,
+            type: typeCode,
+            how: "h-g-i-g-o",
+            start: event.timestamp,
+            staleAfter: 3600, // 1 hour stale
+            coordinate: event.coordinate,
+            detail: detail
+        )
     }
 
     static func generateGeofenceDefinitionCoT(for geofence: Geofence, callsign: String) -> String {
-        let dateFormatter = ISO8601DateFormatter()
-        dateFormatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-
-        let now = Date()
-        let stale = now.addingTimeInterval(86400) // 24 hour stale
-
-        let timeStr = dateFormatter.string(from: now)
-        let staleStr = dateFormatter.string(from: stale)
-
         let uid = "GEOFENCE-DEF-\(geofence.id.uuidString)"
 
         // Center point for the geofence
@@ -101,45 +84,37 @@ class GeofenceCoTGenerator {
             }
         }
 
-        var xml = """
-        <?xml version="1.0" encoding="UTF-8"?>
-        <event version="2.0" uid="\(uid)" type="u-d-c-c" time="\(timeStr)" start="\(timeStr)" stale="\(staleStr)" how="h-e">
-            <point lat="\(centerLat)" lon="\(centerLon)" hae="0.0" ce="9999999" le="9999999"/>
-            <detail>
-                <contact callsign="\(callsign)"/>
-                <remarks>Geofence: \(escapeXML(geofence.name))</remarks>
+        var detail = """
+                <contact callsign="\(callsign.xmlEscaped)"/>
+                <remarks>Geofence: \(geofence.name.xmlEscaped)</remarks>
                 <shape>
         """
 
         if geofence.type == .circle, let _ = geofence.center, let radius = geofence.radius {
-            xml += """
+            detail += """
                         <ellipse major="\(radius)" minor="\(radius)" angle="0"/>
             """
         } else if geofence.type == .polygon, let coords = geofence.polygonCoordinates {
             for coord in coords {
-                xml += """
+                detail += """
                             <polyline><vertex lat="\(coord.latitude)" lon="\(coord.longitude)"/></polyline>
                 """
             }
         }
 
-        xml += """
+        detail += """
                 </shape>
-                <__geofencedef id="\(geofence.id.uuidString)" name="\(escapeXML(geofence.name))" type="\(geofence.type.rawValue)" color="\(geofence.color.hexColor)" active="\(geofence.isActive)" alertEntry="\(geofence.alertOnEntry)" alertExit="\(geofence.alertOnExit)" dwellThreshold="\(geofence.dwellTimeThreshold)"/>
-            </detail>
-        </event>
+                <__geofencedef id="\(geofence.id.uuidString)" name="\(geofence.name.xmlEscaped)" type="\(geofence.type.rawValue)" color="\(geofence.color.hexColor)" active="\(geofence.isActive)" alertEntry="\(geofence.alertOnEntry)" alertExit="\(geofence.alertOnExit)" dwellThreshold="\(geofence.dwellTimeThreshold)"/>
         """
 
-        return xml
-    }
-
-    private static func escapeXML(_ string: String) -> String {
-        var escaped = string
-        escaped = escaped.replacingOccurrences(of: "&", with: "&amp;")
-        escaped = escaped.replacingOccurrences(of: "<", with: "&lt;")
-        escaped = escaped.replacingOccurrences(of: ">", with: "&gt;")
-        escaped = escaped.replacingOccurrences(of: "\"", with: "&quot;")
-        escaped = escaped.replacingOccurrences(of: "'", with: "&apos;")
-        return escaped
+        return CoTXMLBuilder.buildEvent(
+            uid: uid,
+            type: "u-d-c-c",
+            how: "h-e",
+            staleAfter: 86400, // 24 hour stale
+            lat: centerLat,
+            lon: centerLon,
+            detail: detail
+        )
     }
 }

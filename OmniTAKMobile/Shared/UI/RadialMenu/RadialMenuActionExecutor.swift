@@ -413,10 +413,13 @@ class RadialMenuActionExecutor {
     }
 
     private static func executeCreateRoute(context: RadialMenuContext, services: RadialMenuServices) -> Bool {
+        // Open the real route planning screen (the same RouteListView the Tools
+        // catalog opens). Previously this posted `radialMenuCreateRoute`, which
+        // had no observer anywhere — a dead tap.
         NotificationCenter.default.post(
-            name: .radialMenuCreateRoute,
+            name: .openToolSheet,
             object: nil,
-            userInfo: ["startCoordinate": context.mapCoordinate]
+            userInfo: ["id": "routes"]
         )
         return true
     }
@@ -565,28 +568,37 @@ class RadialMenuActionExecutor {
     }
 
     private static func executeQuickChat(context: RadialMenuContext) -> Bool {
+        // Open the contacts list to start a chat — the real screen the Tools
+        // catalog opens. Previously posted `radialMenuQuickChat` (no observer).
         NotificationCenter.default.post(
-            name: .radialMenuQuickChat,
+            name: .openToolSheet,
             object: nil,
-            userInfo: ["context": context]
+            userInfo: ["id": "contacts"]
         )
         return true
     }
 
     private static func executeEmergency(context: RadialMenuContext) -> Bool {
+        // Open the emergency beacon screen (confirm-first; does NOT auto-
+        // broadcast). Previously posted `radialMenuEmergency` (no observer).
         NotificationCenter.default.post(
-            name: .radialMenuEmergency,
+            name: .openToolSheet,
             object: nil,
-            userInfo: ["coordinate": context.mapCoordinate]
+            userInfo: ["id": "alert"]
         )
         return true
     }
 
     private static func executeGetInfo(context: RadialMenuContext) -> Bool {
+        // "Get info" on a long-pressed point: copy the formatted coordinate to
+        // the clipboard — a real, useful effect with no new UI. Previously
+        // posted `radialMenuGetInfo`, which had no observer (a dead tap).
+        let coordString = formatCoordinate(context.mapCoordinate)
+        UIPasteboard.general.string = coordString
         NotificationCenter.default.post(
-            name: .radialMenuGetInfo,
+            name: .radialMenuCoordinatesCopied,
             object: nil,
-            userInfo: ["context": context]
+            userInfo: ["coordinate": context.mapCoordinate, "formattedString": coordString]
         )
         return true
     }
@@ -628,7 +640,41 @@ class RadialMenuActionExecutor {
             )
             return true
 
+        case "save_location":
+            // Civilian-mode "Save" — drop a neutral favorite marker at the
+            // pressed point through the same PointDropperService path as
+            // executeAddWaypoint. Previously this fell through to the
+            // generic .radialMenuCustomAction post, whose only observer
+            // handles draw_shape/meshtastic — a dead tap.
+            guard let pointDropperService = services.pointDropperService else { return false }
+            let marker = pointDropperService.quickDrop(
+                at: context.mapCoordinate,
+                broadcast: false
+            )
+            var updatedMarker = marker
+            updatedMarker.affiliation = .neutral
+            updatedMarker.cotType = MarkerAffiliation.neutral.cotType
+            updatedMarker.iconName = "heart.fill"
+            updatedMarker.name = generateSavedLocationName()
+            pointDropperService.updateMarker(updatedMarker)
+            NotificationCenter.default.post(
+                name: .radialMenuWaypointAdded,
+                object: nil,
+                userInfo: ["marker": updatedMarker]
+            )
+            return true
+
         default:
+            // Plugin SDK — registered radial action. `RadialMenuAction.custom`
+            // wraps the identifier as "custom_<id>"; look it up in the host and
+            // fire its onSelect with the pressed coordinate.
+            if AppPluginHost.shared.fireRadialAction(
+                identifier: "custom_\(identifier)",
+                at: context.mapCoordinate
+            ) {
+                return true
+            }
+
             NotificationCenter.default.post(
                 name: .radialMenuCustomAction,
                 object: nil,
@@ -666,6 +712,12 @@ class RadialMenuActionExecutor {
         let dateFormatter = DateFormatter()
         dateFormatter.dateFormat = "HHmm"
         return "WP-\(dateFormatter.string(from: Date()))"
+    }
+
+    private static func generateSavedLocationName() -> String {
+        let dateFormatter = DateFormatter()
+        dateFormatter.dateFormat = "HHmm"
+        return "SAVED-\(dateFormatter.string(from: Date()))"
     }
 
     private static func formatCoordinate(_ coord: CLLocationCoordinate2D) -> String {

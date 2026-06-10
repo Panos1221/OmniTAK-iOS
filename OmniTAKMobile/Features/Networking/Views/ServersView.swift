@@ -375,6 +375,9 @@ struct ServerRowSimple: View {
 struct ServerEditView: View {
     @Environment(\.dismiss) private var dismiss
     @StateObject private var serverManager = ServerManager.shared
+    // .shared directly (not @EnvironmentObject) so the sheet works no matter
+    // where it's presented from; still re-renders on a live language switch.
+    @ObservedObject private var loc = LocalizationManager.shared
 
     let server: TAKServer
 
@@ -384,6 +387,7 @@ struct ServerEditView: View {
     @State private var enrollmentPort: String = ""
     @State private var useTLS: Bool = true
     @State private var allowLegacyTLS: Bool = false
+    @State private var allowUntrustedTLS: Bool = false
 
     init(server: TAKServer) {
         self.server = server
@@ -393,6 +397,7 @@ struct ServerEditView: View {
         _enrollmentPort = State(initialValue: String(server.enrollmentPort ?? 8446))
         _useTLS = State(initialValue: server.useTLS)
         _allowLegacyTLS = State(initialValue: server.allowLegacyTLS)
+        _allowUntrustedTLS = State(initialValue: server.allowUntrustedTLS)
     }
 
     var body: some View {
@@ -492,6 +497,9 @@ struct ServerEditView: View {
                         .background(Color(white: 0.08))
                         .cornerRadius(10)
 
+                        // Advanced
+                        advancedSection
+
                         // Save Button
                         Button(action: saveChanges) {
                             Text("Save Changes")
@@ -518,6 +526,59 @@ struct ServerEditView: View {
         }
     }
 
+    // MARK: - Advanced (dangerous, opt-in settings)
+
+    private var advancedSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(loc.t("serverEdit.advanced.title"))
+                .font(.system(size: 11, weight: .bold))
+                .foregroundColor(Color(hex: "#666666"))
+                .padding(.leading, 4)
+
+            VStack(alignment: .leading, spacing: 12) {
+                // Trust untrusted certificates — disables TLS server identity
+                // verification for this server only. Default OFF: streams are
+                // validated against the imported truststore or system roots.
+                Toggle(isOn: $allowUntrustedTLS) {
+                    HStack {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .foregroundColor(allowUntrustedTLS ? Color(hex: "#FF6B6B") : Color(hex: "#666666"))
+
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(loc.t("serverEdit.trustUntrusted.title"))
+                                .font(.system(size: 14))
+                                .foregroundColor(.white)
+
+                            Text(loc.t("serverEdit.trustUntrusted.subtitle"))
+                                .font(.system(size: 11))
+                                .foregroundColor(Color(hex: "#999999"))
+                        }
+                    }
+                }
+                .tint(Color(hex: "#FF6B6B"))
+
+                if allowUntrustedTLS {
+                    HStack(alignment: .top, spacing: 8) {
+                        Image(systemName: "exclamationmark.shield.fill")
+                            .foregroundColor(Color(hex: "#FF6B6B"))
+                            .font(.system(size: 12))
+
+                        Text(loc.t("serverEdit.trustUntrusted.warning"))
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundColor(Color(hex: "#FF6B6B"))
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    .padding(8)
+                    .background(Color(hex: "#FF6B6B").opacity(0.1))
+                    .cornerRadius(6)
+                }
+            }
+            .padding(16)
+            .background(Color(white: 0.08))
+            .cornerRadius(10)
+        }
+    }
+
     private var isFormValid: Bool {
         !name.isEmpty && !host.isEmpty && !port.isEmpty && (UInt16(port) != nil)
     }
@@ -533,6 +594,7 @@ struct ServerEditView: View {
         updatedServer.enrollmentPort = enrollPortNum
         updatedServer.useTLS = useTLS
         updatedServer.allowLegacyTLS = allowLegacyTLS
+        updatedServer.allowUntrustedTLS = allowUntrustedTLS
         updatedServer.protocolType = useTLS ? "tls" : "tcp"
 
         serverManager.updateServer(updatedServer)

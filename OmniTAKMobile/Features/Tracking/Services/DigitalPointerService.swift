@@ -141,7 +141,9 @@ class DigitalPointerService: ObservableObject {
     private var takService: TAKService?
     private var cancellables = Set<AnyCancellable>()
 
-    private var userCallsign: String = "OmniTAK-iOS"
+    // Single operator source (PositionBroadcastService), read at
+    // CoT-build time. No cached copy, no divergent default.
+    private var userCallsign: String { PositionBroadcastService.shared.userCallsign }
     private var userUID: String = ""
 
     // Notification names
@@ -161,20 +163,11 @@ class DigitalPointerService: ObservableObject {
     // MARK: - Configuration
 
     /// Configure the service with required dependencies
-    /// - Parameters:
-    ///   - takService: The TAK service for sending CoT messages
-    ///   - callsign: The user's callsign
-    func configure(takService: TAKService, callsign: String) {
+    /// - Parameter takService: The TAK service for sending CoT messages
+    func configure(takService: TAKService) {
         self.takService = takService
-        self.userCallsign = callsign
 
-        print("DigitalPointerService configured with callsign: \(callsign)")
-    }
-
-    /// Update the user's callsign
-    /// - Parameter callsign: New callsign
-    func updateCallsign(_ callsign: String) {
-        self.userCallsign = callsign
+        print("DigitalPointerService configured")
     }
 
     private func generateUserUID() {
@@ -335,38 +328,36 @@ class DigitalPointerService: ObservableObject {
             return ""
         }
 
-        let formatter = ISO8601DateFormatter()
-        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-
         let now = Date()
-        let timeStr = formatter.string(from: now)
-        let startStr = formatter.string(from: now)
-        let staleStr = formatter.string(from: now.addingTimeInterval(cotStaleTime))
-
         let uid = "\(userUID)-\(Int(now.timeIntervalSince1970))"
 
-        // Generate digital pointer CoT XML
-        // Type: b-m-p-c (broadcast-marker-pointer-cursor)
-        let xml = """
-        <?xml version="1.0" encoding="UTF-8"?>
-        <event version="2.0" uid="\(uid)" type="b-m-p-c" how="h-g-i-g-o" time="\(timeStr)" start="\(startStr)" stale="\(staleStr)">
-            <point lat="\(location.latitude)" lon="\(location.longitude)" hae="0" ce="9999" le="9999"/>
-            <detail>
-                <contact callsign="\(escapeXML(userCallsign))"/>
+        let detail = """
+                <contact callsign="\(userCallsign.xmlEscaped)"/>
                 <__digitalpointer
-                    color="\(escapeXML(pointerColor))"
-                    message="\(escapeXML(pointerMessage))"
-                    senderUID="\(escapeXML(userUID))"
+                    color="\(pointerColor.xmlEscaped)"
+                    message="\(pointerMessage.xmlEscaped)"
+                    senderUID="\(userUID.xmlEscaped)"
                     expiresIn="\(Int(pointerTimeout))"
                 />
-                <remarks>\(escapeXML(pointerMessage.isEmpty ? "Digital pointer from \(userCallsign)" : pointerMessage))</remarks>
+                <remarks>\((pointerMessage.isEmpty ? "Digital pointer from \(userCallsign)" : pointerMessage).xmlEscaped)</remarks>
                 <takv device="\(UIDevice.current.model)" platform="OmniTAK-iOS" os="\(UIDevice.current.systemVersion)" version="\(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "2.0.0")"/>
                 <__group name="Digital Pointer" role="Team Member"/>
-            </detail>
-        </event>
         """
 
-        return xml
+        // Type: b-m-p-c (broadcast-marker-pointer-cursor)
+        return CoTXMLBuilder.buildEvent(
+            uid: uid,
+            type: "b-m-p-c",
+            how: "h-g-i-g-o",
+            time: now,
+            staleAfter: cotStaleTime,
+            lat: location.latitude,
+            lon: location.longitude,
+            hae: 0,
+            ce: 9999,
+            le: 9999,
+            detail: detail
+        )
     }
 
     // MARK: - Incoming Pointer Parsing
@@ -523,16 +514,6 @@ class DigitalPointerService: ObservableObject {
 
     // MARK: - Helpers
 
-    private func escapeXML(_ string: String) -> String {
-        var escaped = string
-        escaped = escaped.replacingOccurrences(of: "&", with: "&amp;")
-        escaped = escaped.replacingOccurrences(of: "<", with: "&lt;")
-        escaped = escaped.replacingOccurrences(of: ">", with: "&gt;")
-        escaped = escaped.replacingOccurrences(of: "\"", with: "&quot;")
-        escaped = escaped.replacingOccurrences(of: "'", with: "&apos;")
-        return escaped
-    }
-
     private func formattedTime(_ date: Date) -> String {
         let formatter = DateFormatter()
         formatter.timeStyle = .medium
@@ -664,15 +645,9 @@ private class DigitalPointerXMLParser: NSObject, XMLParserDelegate {
     }
 
     private func parseISO8601Date(_ string: String) -> Date? {
-        let formatter = ISO8601DateFormatter()
-        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        if let date = formatter.date(from: string) {
-            return date
-        }
-
-        // Try without fractional seconds
-        formatter.formatOptions = [.withInternetDateTime]
-        return formatter.date(from: string)
+        // Try fractional seconds first, then whole seconds
+        return CoTXMLBuilder.timestampFormatter.date(from: string)
+            ?? CoTXMLBuilder.timestampFormatterNoFraction.date(from: string)
     }
 }
 

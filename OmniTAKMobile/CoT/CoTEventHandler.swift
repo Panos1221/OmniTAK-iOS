@@ -86,6 +86,14 @@ class CoTEventHandler: ObservableObject {
         }
     }
 
+    /// Remove a single tracked contact by UID (e.g. a stale Remote ID / gyb
+    /// drone) so the map drops its marker immediately rather than waiting for
+    /// the staleEventThreshold backstop.
+    func removeEvent(uid: String) {
+        guard let service = takService else { return }
+        service.cotEvents.removeAll { $0.uid == uid }
+    }
+
     // MARK: - Setup
 
     func configure(takService: TAKService, chatManager: ChatManager) {
@@ -141,10 +149,8 @@ class CoTEventHandler: ObservableObject {
         }
         #endif
 
-        // Update TAKService markers
-        takService?.updateEnhancedMarker(from: event)
-
-        // Update or add to cotEvents array (deduplicate by UID)
+        // Update or add to cotEvents array (deduplicate by UID).
+        // cotEvents is the single marker store — the map renders it directly.
         if let service = takService {
             if let existingIndex = service.cotEvents.firstIndex(where: { $0.uid == event.uid }) {
                 // Update existing event with new position/data
@@ -162,7 +168,6 @@ class CoTEventHandler: ObservableObject {
 
             #if DEBUG
             print("   📊 cotEvents now contains \(service.cotEvents.count) unique events")
-            print("   📊 enhancedMarkers now contains \(service.enhancedMarkers.count) markers")
             #endif
         }
 
@@ -182,18 +187,27 @@ class CoTEventHandler: ObservableObject {
                 object: self,
                 userInfo: ["event": event]
             )
+            // Plugin SDK — fire registered CoT handlers AFTER the core store
+            // ingested the event (runs on main, same as the rest of handle()).
+            _ = AppPluginHost.shared.dispatchCoT(event)
             takService?.onCoTReceived?(event)
             return
         }
 
         // Update participant info for chat, tagged with the source server so
         // the contact list + DM routing are server-aware (multi-server).
-        if var participant = ChatXMLParser.parseParticipantFromPresence(xml: createPresenceXML(from: event)) {
-            participant.serverId = serverId
-            chatManager?.updateParticipant(participant)
-            chatManager?.updateParticipantLastSeen(id: participant.id)
-        } else {
-            // Create basic participant from CoT event (callsign + UID are always present)
+        //
+        // Skip detected drones (RID-{uasId}): they render on the map and
+        // federate to servers like any CoT contact, but they are not EUDs and
+        // can't receive DMs, so they must not pollute the "KNOWN CONTACTS"
+        // list / New-Chat sheet. The `RID-` prefix is assigned only by
+        // RemoteIdAppBridge for on-device + gyb-sensor drone detections.
+        if !event.uid.hasPrefix("RID-") {
+            // Map the parsed event straight onto a ChatParticipant — the
+            // previous implementation serialized the event back to XML just
+            // to re-parse it with ChatXMLParser (the two parsers shared no
+            // model). The presence XML never carried an endpoint, so a
+            // direct mapping is equivalent.
             let participant = ChatParticipant(
                 id: event.uid,
                 callsign: event.detail.callsign,
@@ -202,6 +216,7 @@ class CoTEventHandler: ObservableObject {
                 serverId: serverId
             )
             chatManager?.updateParticipant(participant)
+            chatManager?.updateParticipantLastSeen(id: participant.id)
         }
 
         // Publish to Combine subscribers
@@ -213,6 +228,11 @@ class CoTEventHandler: ObservableObject {
             object: self,
             userInfo: ["event": event]
         )
+
+        // Plugin SDK — fire registered CoT handlers AFTER the core store
+        // ingested the event (and after the core publishers). Handlers run on
+        // main; a handler returning true marks the event consumed.
+        _ = AppPluginHost.shared.dispatchCoT(event)
 
         // Trigger callback
         takService?.onCoTReceived?(event)
@@ -299,9 +319,6 @@ class CoTEventHandler: ObservableObject {
             remarks: event.detail.remarks
         )
 
-        // Update marker
-        takService?.updateEnhancedMarker(from: event)
-
         // Publish to Combine subscribers
         waypointPublisher.send(event)
 
@@ -318,20 +335,6 @@ class CoTEventHandler: ObservableObject {
     private func handleUnknownEvent(_ typeStr: String) {
         print("CoTEventHandler: Unknown event type: \(typeStr)")
         unknownEventPublisher.send(typeStr)
-    }
-
-    // MARK: - Helper Methods
-
-    private func createPresenceXML(from event: CoTEvent) -> String {
-        // Create minimal presence XML for participant parsing
-        return """
-        <event uid="\(event.uid)" type="\(event.type)" time="\(ISO8601DateFormatter().string(from: event.time))">
-            <point lat="\(event.point.lat)" lon="\(event.point.lon)" hae="\(event.point.hae)"/>
-            <detail>
-                <contact callsign="\(event.detail.callsign)"/>
-            </detail>
-        </event>
-        """
     }
 
     // MARK: - Notifications

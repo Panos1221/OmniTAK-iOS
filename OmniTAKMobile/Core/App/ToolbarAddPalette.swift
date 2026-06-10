@@ -70,7 +70,11 @@ struct ToolbarAddPalette: View {
                                 .font(.system(size: 18))
                                 .foregroundColor(item.tint)
                                 .frame(width: 30)
-                            Text(item.label)
+                            // Reuse the bar's per-id label keys so the
+                            // palette matches the localized bottom bar. L()
+                            // is fine here — the sheet is rebuilt on each open
+                            // so it resolves to the current language.
+                            Text(L("bar." + item.id))
                                 .foregroundColor(.primary)
                             Spacer()
                             Image(systemName: store.isFull ? "circle.slash" : "plus.circle.fill")

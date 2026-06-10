@@ -68,26 +68,30 @@ class ServerValidatorTests: XCTestCase {
         XCTAssertEqual(result.primaryIssue?.code, .invalidHost)
     }
 
-    func testInvalidHostWithProtocol() {
+    // Behavior change: hosts entered with a scheme or path used to be
+    // rejected outright, which made reverse-proxied TAK servers
+    // ("https://tak.example.com", "tak.example.com/tak") impossible to
+    // enter. The validator now strips the scheme/path and validates the
+    // host core — these tests document the accepted forms.
+
+    func testHostWithProtocolPrefixAccepted() {
         let result = validator.validateServerConfig(
             host: "https://tak-server.example.com",
             port: 8089,
             useTLS: true,
             isEnrollment: false
         )
-        XCTAssertFalse(result.isValid, "Host with protocol prefix should fail")
-        XCTAssertEqual(result.primaryIssue?.code, .invalidHost)
+        XCTAssertTrue(result.isValid, "Scheme prefix is stripped, host core validated")
     }
 
-    func testInvalidHostWithPath() {
+    func testHostWithPathAccepted() {
         let result = validator.validateServerConfig(
             host: "tak-server.example.com/api",
             port: 8089,
             useTLS: true,
             isEnrollment: false
         )
-        XCTAssertFalse(result.isValid, "Host with path should fail")
-        XCTAssertEqual(result.primaryIssue?.code, .invalidHost)
+        XCTAssertTrue(result.isValid, "Path suffix is stripped, host core validated")
     }
 
     // MARK: - Port Validation Tests
@@ -332,7 +336,10 @@ class ServerValidatorTests: XCTestCase {
         let issue = validator.analyzeErrorResponse(statusCode: 404, data: data, context: .enrollment)
 
         XCTAssertEqual(issue.code, .portMismatch)
-        XCTAssertTrue(issue.troubleshooting.contains { $0.contains("endpoint") })
+        // The "endpoint" wording lives in the message; troubleshooting
+        // steers the user to the enrollment API / correct port.
+        XCTAssertTrue(issue.message.lowercased().contains("endpoint"))
+        XCTAssertTrue(issue.troubleshooting.contains { $0.contains("enrollment API") || $0.contains("port") })
     }
 
     func testAnalyzeErrorResponse_500ServerError() {
@@ -395,6 +402,17 @@ class ServerValidatorTests: XCTestCase {
             isEnrollment: false
         )
         XCTAssertTrue(result.isValid, "Should accept IPv6 addresses")
+    }
+
+    func testValidationWithBracketedIPv6AddressAndPort() {
+        // RFC 3986 form — what users paste from a URL.
+        let result = validator.validateServerConfig(
+            host: "[::1]:8089",
+            port: 8089,
+            useTLS: false,
+            isEnrollment: false
+        )
+        XCTAssertTrue(result.isValid, "Should accept bracketed IPv6 host with port suffix")
     }
 }
 

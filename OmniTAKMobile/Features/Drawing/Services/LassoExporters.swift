@@ -24,19 +24,19 @@ enum LassoCotBuilders {
     /// target marker. Deleter UID goes in the event's `uid` field;
     /// the target UID lives on a `<link>` with `relation="p-p"`.
     static func buildDeleteEvent(targetUid: String, senderUid: String) -> String {
-        let now = isoNow()
-        let stale = isoOffset(60)
-        return """
-        <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-        <event version="2.0" uid="\(xmlEscape(senderUid))" type="t-x-d-d" how="h-g-i-g-o"
-               time="\(now)" start="\(now)" stale="\(stale)">
-          <point lat="0.0" lon="0.0" hae="0.0" ce="9999999.0" le="9999999.0"/>
-          <detail>
-            <link uid="\(xmlEscape(targetUid))" relation="p-p"/>
+        let detail = """
+            <link uid="\(targetUid.xmlEscaped)" relation="p-p"/>
             <__forcedelete/>
-          </detail>
-        </event>
         """
+        return CoTXMLBuilder.buildEvent(
+            uid: senderUid,
+            type: "t-x-d-d",
+            how: "h-g-i-g-o",
+            staleAfter: 60,
+            lat: 0.0,
+            lon: 0.0,
+            detail: detail
+        )
     }
 
     /// Re-emit a marker as a CoT event addressed to specific recipients
@@ -50,41 +50,22 @@ enum LassoCotBuilders {
         remarks: String = "",
         destUids: [String]
     ) -> String {
-        let now = isoNow()
-        let stale = isoOffset(120)
-        let dests = destUids.map { "<dest uid=\"\(xmlEscape($0))\"/>" }.joined()
-        let callsignAttr = callsign.map { " callsign=\"\(xmlEscape($0))\"" } ?? ""
-        let remarksTag = remarks.isEmpty ? "" : "<remarks>\(xmlEscape(remarks))</remarks>"
-        return """
-        <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-        <event version="2.0" uid="\(xmlEscape(uid))" type="\(xmlEscape(type))" how="h-g-i-g-o"
-               time="\(now)" start="\(now)" stale="\(stale)">
-          <point lat="\(coordinate.latitude)" lon="\(coordinate.longitude)" hae="0.0" ce="9999999.0" le="9999999.0"/>
-          <detail>
+        let dests = destUids.map { "<dest uid=\"\($0.xmlEscaped)\"/>" }.joined()
+        let callsignAttr = callsign.map { " callsign=\"\($0.xmlEscaped)\"" } ?? ""
+        let remarksTag = remarks.isEmpty ? "" : "<remarks>\(remarks.xmlEscaped)</remarks>"
+        let detail = """
             <contact\(callsignAttr)/>
             \(remarksTag)
             \(dests)
-          </detail>
-        </event>
         """
-    }
-
-    static func xmlEscape(_ s: String) -> String {
-        s.replacingOccurrences(of: "&", with: "&amp;")
-            .replacingOccurrences(of: "<", with: "&lt;")
-            .replacingOccurrences(of: ">", with: "&gt;")
-            .replacingOccurrences(of: "\"", with: "&quot;")
-            .replacingOccurrences(of: "'", with: "&apos;")
-    }
-
-    private static func isoNow() -> String { isoFmt().string(from: Date()) }
-    private static func isoOffset(_ seconds: TimeInterval) -> String {
-        isoFmt().string(from: Date().addingTimeInterval(seconds))
-    }
-    private static func isoFmt() -> ISO8601DateFormatter {
-        let f = ISO8601DateFormatter()
-        f.formatOptions = [.withInternetDateTime]
-        return f
+        return CoTXMLBuilder.buildEvent(
+            uid: uid,
+            type: type,
+            how: "h-g-i-g-o",
+            staleAfter: 120,
+            coordinate: coordinate,
+            detail: detail
+        )
     }
 }
 
@@ -127,7 +108,7 @@ enum LassoKMLBuilder {
         var sb = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
         sb += "<kml xmlns=\"http://www.opengis.net/kml/2.2\">\n"
         sb += "  <Document>\n"
-        sb += "    <name>\(LassoCotBuilders.xmlEscape(name))</name>\n"
+        sb += "    <name>\(name.xmlEscaped)</name>\n"
         sb += "    <description>Lasso selection exported from OmniTAK — \(markers.count) feature(s).</description>\n"
         sb += "    <Style id=\"friend\">  <IconStyle><color>ff00ff00</color><scale>1.1</scale></IconStyle></Style>\n"
         sb += "    <Style id=\"hostile\"> <IconStyle><color>ff0000ff</color><scale>1.1</scale></IconStyle></Style>\n"
@@ -137,14 +118,14 @@ enum LassoKMLBuilder {
             let styleId = affiliationCode(for: m.type)
             let nm = m.callsign?.trimmingCharacters(in: .whitespaces).isEmpty == false ? m.callsign! : m.uid
             sb += "    <Placemark>\n"
-            sb += "      <name>\(LassoCotBuilders.xmlEscape(nm))</name>\n"
+            sb += "      <name>\(nm.xmlEscaped)</name>\n"
             sb += "      <styleUrl>#\(styleId)</styleUrl>\n"
             if !m.remarks.isEmpty {
-                sb += "      <description>\(LassoCotBuilders.xmlEscape(m.remarks))</description>\n"
+                sb += "      <description>\(m.remarks.xmlEscaped)</description>\n"
             }
             sb += "      <ExtendedData>\n"
-            sb += "        <Data name=\"uid\"><value>\(LassoCotBuilders.xmlEscape(m.uid))</value></Data>\n"
-            sb += "        <Data name=\"type\"><value>\(LassoCotBuilders.xmlEscape(m.type))</value></Data>\n"
+            sb += "        <Data name=\"uid\"><value>\(m.uid.xmlEscaped)</value></Data>\n"
+            sb += "        <Data name=\"type\"><value>\(m.type.xmlEscaped)</value></Data>\n"
             sb += "      </ExtendedData>\n"
             sb += "      <Point><coordinates>\(m.coordinate.longitude),\(m.coordinate.latitude),0</coordinates></Point>\n"
             sb += "    </Placemark>\n"
@@ -208,8 +189,8 @@ enum LassoMissionPackageBuilder {
         var sb = "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\n"
         sb += "<MissionPackageManifest version=\"2\">\n"
         sb += "  <Configuration>\n"
-        sb += "    <Parameter name=\"uid\" value=\"\(LassoCotBuilders.xmlEscape(pkgUid))\"/>\n"
-        sb += "    <Parameter name=\"name\" value=\"\(LassoCotBuilders.xmlEscape(name))\"/>\n"
+        sb += "    <Parameter name=\"uid\" value=\"\(pkgUid.xmlEscaped)\"/>\n"
+        sb += "    <Parameter name=\"name\" value=\"\(name.xmlEscaped)\"/>\n"
         sb += "    <Parameter name=\"onReceiveImport\" value=\"true\"/>\n"
         sb += "    <Parameter name=\"onReceiveDelete\" value=\"false\"/>\n"
         sb += "  </Configuration>\n"
@@ -217,8 +198,8 @@ enum LassoMissionPackageBuilder {
         for m in markers {
             let safe = m.uid.replacingOccurrences(of: "[^A-Za-z0-9._-]", with: "_", options: .regularExpression)
             sb += "    <Content ignore=\"false\" zipEntry=\"cot/\(safe).cot\">\n"
-            sb += "      <Parameter name=\"uid\" value=\"\(LassoCotBuilders.xmlEscape(m.uid))\"/>\n"
-            sb += "      <Parameter name=\"name\" value=\"\(LassoCotBuilders.xmlEscape(m.callsign ?? m.uid))\"/>\n"
+            sb += "      <Parameter name=\"uid\" value=\"\(m.uid.xmlEscaped)\"/>\n"
+            sb += "      <Parameter name=\"name\" value=\"\((m.callsign ?? m.uid).xmlEscaped)\"/>\n"
             sb += "    </Content>\n"
         }
         sb += "  </Contents>\n</MissionPackageManifest>\n"

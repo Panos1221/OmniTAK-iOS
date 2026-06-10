@@ -90,18 +90,8 @@ struct BloodhoundTrack: Identifiable, Codable {
     }
 
     private func calculateBearing(from: CLLocationCoordinate2D, to: CLLocationCoordinate2D) -> Double {
-        let lat1 = from.latitude * .pi / 180
-        let lon1 = from.longitude * .pi / 180
-        let lat2 = to.latitude * .pi / 180
-        let lon2 = to.longitude * .pi / 180
-
-        let dLon = lon2 - lon1
-        let y = sin(dLon) * cos(lat2)
-        let x = cos(lat1) * sin(lat2) - sin(lat1) * cos(lat2) * cos(dLon)
-        let radiansBearing = atan2(y, x)
-        let degreesBearing = radiansBearing * 180 / .pi
-
-        return (degreesBearing + 360).truncatingRemainder(dividingBy: 360)
+        // Canonical formula in MeasurementCalculator
+        return MeasurementCalculator.bearing(from: from, to: to)
     }
 
     // Predict future position
@@ -237,19 +227,14 @@ class BloodhoundService: ObservableObject {
 
     // MARK: - TAKService Integration
 
-    /// Observe TAKService cotEvents and update tracks
+    /// Observe TAKService cotEvents and update tracks.
+    /// cotEvents is the single marker store — Bloodhound builds its own
+    /// position history from the event stream.
     func observeTAKService(_ takService: TAKService) {
         // Subscribe to cotEvents changes
         takService.$cotEvents
             .sink { [weak self] events in
                 self?.processCotEvents(events)
-            }
-            .store(in: &cancellables)
-
-        // Also observe enhanced markers
-        takService.$enhancedMarkers
-            .sink { [weak self] markers in
-                self?.processEnhancedMarkers(markers)
             }
             .store(in: &cancellables)
     }
@@ -259,18 +244,6 @@ class BloodhoundService: ObservableObject {
             // Only track friendly forces (a-f-*)
             guard event.type.hasPrefix("a-f-") else { continue }
             updateTrack(from: event)
-        }
-        updateStatistics()
-        persistTracks()
-    }
-
-    private func processEnhancedMarkers(_ markers: [String: EnhancedCoTMarker]) {
-        for (_, marker) in markers {
-            // Only track friendly forces
-            guard marker.affiliation == .friendly || marker.affiliation == .assumedFriend else {
-                continue
-            }
-            updateTrack(from: marker)
         }
         updateStatistics()
         persistTracks()
@@ -317,76 +290,6 @@ class BloodhoundService: ObservableObject {
                     team: event.detail.team,
                     positions: [newPosition],
                     lastUpdate: event.time,
-                    alertFlags: []
-                )
-                self.tracks[uid] = newTrack
-            }
-
-            self.lastUpdateTime = Date()
-        }
-    }
-
-    func updateTrack(from marker: EnhancedCoTMarker) {
-        let uid = marker.uid
-
-        DispatchQueue.main.async { [weak self] in
-            guard let self = self else { return }
-
-            // Convert marker history to track positions
-            var positions: [TrackPosition] = []
-            for position in marker.positionHistory {
-                let trackPos = TrackPosition(
-                    coordinate: position.coordinate,
-                    altitude: position.altitude,
-                    timestamp: position.timestamp,
-                    speed: position.speed,
-                    course: position.course
-                )
-                positions.append(trackPos)
-            }
-
-            if var existingTrack = self.tracks[uid] {
-                // Merge positions (avoid duplicates)
-                for pos in positions {
-                    if !existingTrack.positions.contains(where: { $0.timestamp == pos.timestamp }) {
-                        existingTrack.positions.append(pos)
-                    }
-                }
-
-                // Sort by timestamp
-                existingTrack.positions.sort { $0.timestamp < $1.timestamp }
-
-                // Trim history
-                if existingTrack.positions.count > self.maxHistoryLength {
-                    existingTrack.positions = Array(existingTrack.positions.suffix(self.maxHistoryLength))
-                }
-
-                existingTrack.callsign = marker.callsign
-                existingTrack.team = marker.team
-                existingTrack.lastUpdate = marker.lastUpdate
-
-                // Check for stale status
-                if existingTrack.isStale && !existingTrack.alertFlags.contains(.staleTrack) {
-                    existingTrack.alertFlags.insert(.staleTrack)
-                    self.addAlert(TrackAlert(
-                        id: UUID(),
-                        uid: uid,
-                        callsign: marker.callsign,
-                        type: .staleTrack,
-                        timestamp: Date(),
-                        message: "Track \(marker.callsign) is now stale"
-                    ))
-                }
-
-                self.tracks[uid] = existingTrack
-            } else {
-                let newTrack = BloodhoundTrack(
-                    id: UUID(),
-                    uid: uid,
-                    callsign: marker.callsign,
-                    team: marker.team,
-                    positions: positions,
-                    lastUpdate: marker.lastUpdate,
                     alertFlags: []
                 )
                 self.tracks[uid] = newTrack

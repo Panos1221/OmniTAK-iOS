@@ -55,10 +55,17 @@ enum LassoZipWriter {
     private static func dosNow() -> DosDateTime {
         let cal = Calendar(identifier: .gregorian)
         let cmp = cal.dateComponents([.year, .month, .day, .hour, .minute, .second], from: Date())
-        let year = max(1980, cmp.year ?? 1980) - 1980
-        let date = UInt16(((year & 0x7F) << 9) | ((cmp.month ?? 1) << 5) | (cmp.day ?? 1))
+        // Typed sub-expressions: the folded one-liners exceed the type-checker
+        // budget on slower compilers (CI runners) even though local Xcode copes.
+        let year: Int = max(1980, cmp.year ?? 1980) - 1980
+        let month: Int = cmp.month ?? 1
+        let day: Int = cmp.day ?? 1
+        let date = UInt16(((year & 0x7F) << 9) | (month << 5) | day)
         // Seconds in DOS time are 2-sec units (5 bits, max 29 = 58s).
-        let time = UInt16(((cmp.hour ?? 0) << 11) | ((cmp.minute ?? 0) << 5) | ((cmp.second ?? 0) / 2))
+        let hour: Int = cmp.hour ?? 0
+        let minute: Int = cmp.minute ?? 0
+        let twoSec: Int = (cmp.second ?? 0) / 2
+        let time = UInt16((hour << 11) | (minute << 5) | twoSec)
         return DosDateTime(date: date, time: time)
     }
 

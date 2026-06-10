@@ -15,25 +15,11 @@ class MarkerCoTGenerator {
 
     /// Generate CoT XML for a point marker
     static func generateCoT(for marker: PointMarker, staleTime: TimeInterval = 3600) -> String {
-        let dateFormatter = ISO8601DateFormatter()
-        dateFormatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-
-        let now = Date()
-        let stale = now.addingTimeInterval(staleTime)
-
-        let lat = marker.coordinate.latitude
-        let lon = marker.coordinate.longitude
-        let hae = marker.altitude ?? 0.0
-
         // Convert hex color to ARGB signed integer
         let argbColor = hexToARGB(marker.affiliation.hexColor)
 
-        var xml = """
-        <?xml version="1.0" encoding="UTF-8"?>
-        <event version="2.0" uid="\(marker.uid)" type="\(marker.cotType)" time="\(dateFormatter.string(from: now))" start="\(dateFormatter.string(from: now))" stale="\(dateFormatter.string(from: stale))" how="h-g-i-g-o">
-            <point lat="\(lat)" lon="\(lon)" hae="\(hae)" ce="10.0" le="10.0"/>
-            <detail>
-                <contact callsign="\(escapeXML(marker.name))"/>
+        var detail = """
+                <contact callsign="\(marker.name.xmlEscaped)"/>
                 <usericon iconsetpath="COT_MAPPING_SPOTMAP/\(marker.affiliation.rawValue.lowercased())_point"/>
                 <color argb="\(argbColor)"/>
                 <affiliation value="\(marker.affiliation.rawValue)"/>
@@ -41,16 +27,16 @@ class MarkerCoTGenerator {
 
         // Add remarks
         if let remarks = marker.remarks, !remarks.isEmpty {
-            xml += "\n        <remarks>\(escapeXML(remarks))</remarks>"
+            detail += "\n        <remarks>\(remarks.xmlEscaped)</remarks>"
         }
 
         // Add SALUTE report if present
         if let salute = marker.saluteReport {
-            xml += generateSALUTEElement(salute)
+            detail += generateSALUTEElement(salute)
         }
 
         // Add marker metadata
-        xml += """
+        detail += """
 
                 <precisionlocation altsrc="GPS" geopointsrc="User"/>
                 <status readiness="true"/>
@@ -58,13 +44,17 @@ class MarkerCoTGenerator {
                 <takv device="iPhone" platform="OmniTAK" os="iOS" version="\(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "2.0.0")"/>
         """
 
-        xml += """
-
-            </detail>
-        </event>
-        """
-
-        return xml
+        return CoTXMLBuilder.buildEvent(
+            uid: marker.uid,
+            type: marker.cotType,
+            how: "h-g-i-g-o",
+            staleAfter: staleTime,
+            coordinate: marker.coordinate,
+            hae: marker.altitude ?? 0.0,
+            ce: 10.0,
+            le: 10.0,
+            detail: detail
+        )
     }
 
     /// Generate SALUTE report as CoT XML elements
@@ -77,14 +67,14 @@ class MarkerCoTGenerator {
         let saluteXML = """
 
                 <__salute__>
-                    <size>\(escapeXML(report.size))</size>
-                    <activity>\(escapeXML(report.activity))</activity>
-                    <location>\(escapeXML(report.location))</location>
-                    <unit>\(escapeXML(report.unit))</unit>
+                    <size>\(report.size.xmlEscaped)</size>
+                    <activity>\(report.activity.xmlEscaped)</activity>
+                    <location>\(report.location.xmlEscaped)</location>
+                    <unit>\(report.unit.xmlEscaped)</unit>
                     <time>\(timeStr)</time>
-                    <equipment>\(escapeXML(report.equipment))</equipment>
+                    <equipment>\(report.equipment.xmlEscaped)</equipment>
                 </__salute__>
-                <remarks>SALUTE: \(escapeXML(report.summary))</remarks>
+                <remarks>SALUTE: \(report.summary.xmlEscaped)</remarks>
         """
 
         return saluteXML
@@ -184,17 +174,6 @@ class MarkerCoTGenerator {
 
         // Convert to signed Int (this handles the negative values correctly)
         return Int(bitPattern: UInt(hexValue))
-    }
-
-    /// Escape XML special characters
-    private static func escapeXML(_ string: String) -> String {
-        var result = string
-        result = result.replacingOccurrences(of: "&", with: "&amp;")
-        result = result.replacingOccurrences(of: "<", with: "&lt;")
-        result = result.replacingOccurrences(of: ">", with: "&gt;")
-        result = result.replacingOccurrences(of: "\"", with: "&quot;")
-        result = result.replacingOccurrences(of: "'", with: "&apos;")
-        return result
     }
 
     /// Format coordinate as MGRS-like string

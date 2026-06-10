@@ -306,95 +306,23 @@ class DataPackageImportManager: ObservableObject {
     }
 
     private func importP12Certificate(data: Data, password: String, name: String) async throws {
-        let options: [String: Any] = [kSecImportExportPassphrase as String: password]
-
-        var items: CFArray?
-        let status = SecPKCS12Import(data as CFData, options as CFDictionary, &items)
-
-        guard status == errSecSuccess else {
-            throw ImportError.certificateImportFailed("P12 import failed with status: \(status)")
-        }
-
-        guard let itemsArray = items as? [[String: Any]],
-              let firstItem = itemsArray.first else {
-            throw ImportError.certificateImportFailed("No items found in P12")
-        }
-
         // Remove file extension from certificate name for consistent keychain labeling
         // e.g., "omnitak_test.p12" -> "omnitak_test"
         let certificateLabel = (name as NSString).deletingPathExtension
 
-        // Check if this is an identity (cert + key) or just certificates (truststore/CA)
-        if let identity = firstItem[kSecImportItemIdentity as String] {
-            // Full identity with private key - store as identity
-            let addQuery: [String: Any] = [
-                kSecClass as String: kSecClassIdentity,
-                kSecValueRef as String: identity,
-                kSecAttrLabel as String: certificateLabel
-            ]
-
-            // Delete existing first to avoid duplicates
-            SecItemDelete(addQuery as CFDictionary)
-            let addStatus = SecItemAdd(addQuery as CFDictionary, nil)
-
-            if addStatus != errSecSuccess && addStatus != errSecDuplicateItem {
-                throw ImportError.certificateImportFailed("Failed to add identity to keychain: \(addStatus)")
-            }
-
-            print("✅ Imported P12 identity (client cert): \(certificateLabel)")
-        } else if let certChain = firstItem[kSecImportItemCertChain as String] as? [SecCertificate] {
-            // Certificate-only P12 (truststore/CA) - store certificates
-            print("📜 Importing certificate-only P12 (truststore/CA): \(certificateLabel)")
-
-            for (index, certificate) in certChain.enumerated() {
-                let certLabel = index == 0 ? certificateLabel : "\(certificateLabel)-\(index)"
-                let certQuery: [String: Any] = [
-                    kSecClass as String: kSecClassCertificate,
-                    kSecValueRef as String: certificate,
-                    kSecAttrLabel as String: certLabel,
-                    kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlock
-                ]
-
-                // Delete existing first to avoid duplicates
-                SecItemDelete(certQuery as CFDictionary)
-                let addStatus = SecItemAdd(certQuery as CFDictionary, nil)
-
-                if addStatus != errSecSuccess && addStatus != errSecDuplicateItem {
-                    print("⚠️ Failed to add certificate \(index) to keychain: \(addStatus)")
-                } else {
-                    print("✅ Imported CA certificate: \(certLabel)")
-                }
-            }
-        } else if let trust = firstItem[kSecImportItemTrust as String] {
-            // Fallback for cert-only P12 files (e.g. truststores) where kSecImportItemCertChain
-            // may not be populated. Extract certificates from the SecTrust object instead.
-            let trustRef = trust as! SecTrust
-            print("📜 Extracting certificates from trust object for: \(certificateLabel)")
-
-            if let certChain = SecTrustCopyCertificateChain(trustRef) as? [SecCertificate] {
-                for (index, certificate) in certChain.enumerated() {
-                    let certLabel = index == 0 ? certificateLabel : "\(certificateLabel)-\(index)"
-                    let certQuery: [String: Any] = [
-                        kSecClass as String: kSecClassCertificate,
-                        kSecValueRef as String: certificate,
-                        kSecAttrLabel as String: certLabel,
-                        kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlock
-                    ]
-
-                    SecItemDelete(certQuery as CFDictionary)
-                    let addStatus = SecItemAdd(certQuery as CFDictionary, nil)
-
-                    if addStatus != errSecSuccess && addStatus != errSecDuplicateItem {
-                        print("⚠️ Failed to add certificate \(index) to keychain: \(addStatus)")
-                    } else {
-                        print("✅ Imported CA certificate (via trust): \(certLabel)")
-                    }
-                }
+        // Route through the single import pipeline (one SecPKCS12Import
+        // owner, one set of keychain-write conventions — including the
+        // first-cert-at-bare-label scheme and the SecTrust fallback for
+        // truststores where kSecImportItemCertChain isn't populated).
+        do {
+            let result = try await CertificateImportPipeline().importCertificate(data, password: password, label: certificateLabel)
+            if result.identity != nil {
+                print("✅ Imported P12 identity (client cert): \(certificateLabel)")
             } else {
-                throw ImportError.certificateImportFailed("No certificates found in trust object")
+                print("✅ Imported certificate-only P12 (truststore/CA): \(certificateLabel)")
             }
-        } else {
-            throw ImportError.certificateImportFailed("No identity or certificates found in P12")
+        } catch {
+            throw ImportError.certificateImportFailed("P12 import failed: \(error.localizedDescription)")
         }
 
         // Update certificate manager

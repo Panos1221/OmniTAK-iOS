@@ -365,62 +365,45 @@ struct CASRequestView: View {
         let request = createRequest()
         let cotXML = generateCASCoT(request: request)
 
-        let success = TAKService.shared.sendCoT(xml: cotXML)
-        Logger.military.info("CAS send success=\(success, privacy: .public)")
-
-        let generator = UINotificationFeedbackGenerator()
-        if success {
-            generator.notificationOccurred(.success)
+        if MilitaryReportCoT.sendReport(xml: cotXML, logTag: "CAS") {
             showSentAlert = true
         } else {
-            generator.notificationOccurred(.error)
             showSendErrorAlert = true
         }
     }
 
     private func generateCASCoT(request: CASRequest) -> String {
-        let dateFormatter = ISO8601DateFormatter()
-        dateFormatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-
-        let now = Date()
-        let stale = now.addingTimeInterval(3600)
-
-        let timeStr = dateFormatter.string(from: now)
-        let staleStr = dateFormatter.string(from: stale)
-
-        let uid = "CAS-\(request.id)"
-        let lat = request.targetLat ?? 0.0
-        let lon = request.targetLon ?? 0.0
-
-        return """
-        <?xml version="1.0" encoding="UTF-8"?>
-        <event version="2.0" uid="\(uid)" type="b-r-f-h-c" time="\(timeStr)" start="\(timeStr)" stale="\(staleStr)" how="h-g-i-g-o">
-            <point lat="\(lat)" lon="\(lon)" hae="0.0" ce="9999999" le="9999999"/>
-            <detail>
-                <contact callsign="\(request.senderCallsign)"/>
+        let reportDetail = """
                 <cas>
-                    <line1>\(request.initialPoint)</line1>
+                    <line1>\(request.initialPoint.xmlEscaped)</line1>
                     <line2>\(request.headingMagnetic)</line2>
                     <line3>\(request.distanceNM)</line3>
                     <line4>\(request.targetElevationFeet)</line4>
-                    <line5_type>\(request.targetType.rawValue)</line5_type>
-                    <line5_desc>\(request.targetDescription)</line5_desc>
-                    <line6>\(request.targetLocationGrid)</line6>
-                    <line7_type>\(request.markType.code)</line7_type>
-                    <line7_code>\(request.laserCode)</line7_code>
-                    <line7_details>\(request.markDetails)</line7_details>
-                    <line8_direction>\(request.friendlyDirection)</line8_direction>
+                    <line5_type>\(request.targetType.rawValue.xmlEscaped)</line5_type>
+                    <line5_desc>\(request.targetDescription.xmlEscaped)</line5_desc>
+                    <line6>\(request.targetLocationGrid.xmlEscaped)</line6>
+                    <line7_type>\(request.markType.code.xmlEscaped)</line7_type>
+                    <line7_code>\(request.laserCode.xmlEscaped)</line7_code>
+                    <line7_details>\(request.markDetails.xmlEscaped)</line7_details>
+                    <line8_direction>\(request.friendlyDirection.xmlEscaped)</line8_direction>
                     <line8_distance>\(request.friendlyDistance)</line8_distance>
-                    <line8_position>\(request.friendlyPosition)</line8_position>
-                    <line8_mark>\(request.friendlyMark.code)</line8_mark>
-                    <line9_egress>\(request.egressDirection)</line9_egress>
-                    <line9_control>\(request.controlPoint)</line9_control>
-                    <danger_close>\(request.dangerClose.rawValue)</danger_close>
+                    <line8_position>\(request.friendlyPosition.xmlEscaped)</line8_position>
+                    <line8_mark>\(request.friendlyMark.code.xmlEscaped)</line8_mark>
+                    <line9_egress>\(request.egressDirection.xmlEscaped)</line9_egress>
+                    <line9_control>\(request.controlPoint.xmlEscaped)</line9_control>
+                    <danger_close>\(request.dangerClose.rawValue.xmlEscaped)</danger_close>
                 </cas>
-                <remarks>\(request.remarks)</remarks>
-            </detail>
-        </event>
         """
+
+        return MilitaryReportCoT.buildReportEvent(
+            uid: "CAS-\(request.id)",
+            type: .nineLineCAS,
+            senderCallsign: request.senderCallsign,
+            lat: request.targetLat ?? 0.0,
+            lon: request.targetLon ?? 0.0,
+            reportDetail: reportDetail,
+            remarks: request.remarks
+        )
     }
 }
 

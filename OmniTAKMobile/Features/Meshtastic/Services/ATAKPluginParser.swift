@@ -92,12 +92,69 @@ enum ATAKPluginParser {
             return nil
         }
 
-        // Try protobuf TAKMessage path.
+        // Phase 2: try compact TAKPacket (atak.proto) FIRST.
+        // Accepts if decode yields PLI, chat, or at minimum a contact.
+        // Stock Meshtastic ATAK Plugin, phone-app TAK role, and the gateway
+        // all use this format.
+        if let pkt = TAKPacketCodec.decode(payload),
+           let event = TAKPacketCodec.toCoTEvent(pkt) {
+            let detailXML = buildDetailXMLFromTAKPacket(pkt)
+            let cotXML = renderCoTXML(
+                event: event,
+                how: pkt.hasPLI ? "m-g" : "h-g-i-g-o",
+                sendTime: event.time,
+                startTime: event.time,
+                staleTime: event.time.addingTimeInterval(pkt.hasPLI ? 300 : 60),
+                detailXML: detailXML
+            )
+            return ATAKPluginParsedMessage(event: event, detailXML: detailXML, cotXML: cotXML)
+        }
+
+        // Phase 1 fallback: protobuf TAKMessage{CoTEvent} path.
         if let parsed = parseTAKMessage(payload) {
             return parsed
         }
 
         return nil
+    }
+
+    /// Build a `<detail>` XML fragment from a decoded TAKPacket, equivalent to
+    /// what the TAK_Meshtastic_Gateway generates so downstream ATAK/WinTAK sees
+    /// familiar fields.
+    private static func buildDetailXMLFromTAKPacket(_ pkt: DecodedTAKPacket) -> String {
+        var inner = ""
+        let callsign = pkt.callsign.isEmpty ? pkt.deviceCallsign : pkt.callsign
+
+        if pkt.hasPLI {
+            inner += "<contact callsign=\"\(escape(callsign))\" endpoint=\"0.0.0.0:4242:tcp\"/>"
+            inner += "<uid Droid=\"\(escape(callsign))\"/>"
+            inner += "<precisionlocation altsrc=\"GPS\" geopointsrc=\"GPS\"/>"
+            if pkt.battery > 0 {
+                inner += "<status battery=\"\(pkt.battery)\"/>"
+            }
+            inner += "<takv device=\"Meshtastic\" platform=\"Meshtastic\" os=\"Meshtastic\" version=\"\"/>"
+            let speedStr = pkt.speed.map { String($0) } ?? "0"
+            let courseStr = pkt.course.map { String($0) } ?? "0"
+            inner += "<track course=\"\(courseStr)\" speed=\"\(speedStr)\"/>"
+            if pkt.team != .unspecifiedColor {
+                inner += "<__group name=\"\(escape(pkt.team.displayName))\" role=\"\(escape(pkt.role.displayName))\"/>"
+            }
+        } else if pkt.hasChat {
+            let to = pkt.chatTo ?? "All Chat Rooms"
+            let senderUID = pkt.deviceCallsign.isEmpty ? pkt.callsign : pkt.deviceCallsign
+            inner += "<__chat chatroom=\"\(escape(to))\" groupOwner=\"false\" id=\"\(escape(to))\""
+            inner += " messageId=\"\" parent=\"RootContactGroup\" senderCallsign=\"\(escape(callsign))\">"
+            inner += "<chatgrp id=\"\(escape(to))\" uid0=\"\(escape(senderUID))\" uid1=\"\(escape(to))\"/>"
+            inner += "</__chat>"
+            inner += "<link relation=\"p-p\" type=\"a-f-G-U-C\" uid=\"\(escape(senderUID))\"/>"
+            if let msg = pkt.chatMessage {
+                inner += "<remarks source=\"BAO.F.ATAK.\(escape(senderUID))\" to=\"\(escape(to))\">"
+                inner += escape(msg)
+                inner += "</remarks>"
+            }
+        }
+
+        return "<detail>\(inner)</detail>"
     }
 
     /// Classify a parsed CoTEvent into the correct CoTEventType variant for
@@ -111,11 +168,28 @@ enum ATAKPluginParser {
         if t == "b-m-p-w" || t.hasPrefix("b-m-p-s-p-i") {
             return .waypoint(event)
         }
-        // b-t-f / b-a-* would normally need their richer structures (ChatMessage,
-        // EmergencyAlert) which we don't reconstruct from the protobuf path.
-        // For now treat them as position-update events so they still flow into
-        // the marker pipeline; chat / emergency parsing is best-effort via the
-        // XML fallback path.
+        // b-t-f is a GeoChat message.  We have all we need (uid, callsign,
+        // remarks) from the parsed CoTEvent, so promote it to .chatMessage
+        // so it lands in ChatManager.receiveMessage via CoTEventHandler.
+        if t == "b-t-f" {
+            let msg = ChatMessage(
+                id: event.uid,
+                conversationId: ChatRoom.allUsersId,
+                senderId: event.uid,
+                senderCallsign: event.detail.callsign,
+                recipientId: nil,
+                recipientCallsign: nil,
+                messageText: event.detail.remarks ?? "",
+                timestamp: event.time,
+                status: .delivered,
+                type: .geochat,
+                isFromSelf: false
+            )
+            return .chatMessage(msg)
+        }
+        // b-a-* would need EmergencyAlert richer structure — best-effort via
+        // the XML fallback path; treat remaining b-* as position updates so
+        // they still flow into the marker pipeline.
         if t.hasPrefix("b-") {
             return .positionUpdate(event)
         }
@@ -220,6 +294,7 @@ enum ATAKPluginParser {
         let cotDetail = CoTDetail(
             callsign: parsedDetail.callsign ?? resolvedUid,
             team: parsedDetail.groupName,
+            teamRole: nil,
             speed: parsedDetail.speed,
             course: parsedDetail.course,
             remarks: parsedDetail.remarks,
@@ -453,8 +528,11 @@ enum ATAKPluginParser {
         staleTime: Date,
         detailXML: String
     ) -> String {
-        let fmt = ISO8601DateFormatter()
-        fmt.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        // detailXML arrives pre-wrapped in <detail>…</detail> (it doubles as
+        // ATAKPluginParsedMessage.detailXML), so the envelope is assembled
+        // here rather than via CoTXMLBuilder.buildEvent — but timestamps and
+        // escaping route through the shared infrastructure.
+        let fmt = CoTXMLBuilder.timestampFormatter
         return """
         <?xml version="1.0" encoding="UTF-8"?>
         <event version="2.0" uid="\(escape(event.uid))" type="\(escape(event.type))" time="\(fmt.string(from: sendTime))" start="\(fmt.string(from: startTime))" stale="\(fmt.string(from: staleTime))" how="\(escape(how))">
@@ -566,11 +644,7 @@ enum ATAKPluginParser {
     }
 
     private static func escape(_ s: String) -> String {
-        return s
-            .replacingOccurrences(of: "&", with: "&amp;")
-            .replacingOccurrences(of: "<", with: "&lt;")
-            .replacingOccurrences(of: ">", with: "&gt;")
-            .replacingOccurrences(of: "\"", with: "&quot;")
+        return s.xmlEscaped
     }
 
     private static func extractDetailXML(from xml: String) -> String? {

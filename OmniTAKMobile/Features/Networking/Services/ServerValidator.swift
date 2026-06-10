@@ -418,9 +418,18 @@ class ServerValidator {
         if let slash = core.firstIndex(of: "/") {
             core = String(core[..<slash])
         }
-        // Drop an optional :port suffix before host validation.
-        if let colon = core.lastIndex(of: ":"),
-           Int(core[core.index(after: colon)...]) != nil {
+        // Drop an optional :port suffix before host validation — but NOT
+        // for bare IPv6 addresses, whose groups are colon-separated
+        // ("::1", "fe80::1"). The old unconditional strip turned "::1"
+        // into ":" and rejected every bare IPv6 host (caught by
+        // ServerValidatorTests.testValidationWithIPv6Address). Only treat
+        // the last colon as a port delimiter when it's the ONLY colon
+        // (host:port), and unwrap the RFC 3986 bracketed form ("[::1]:8089").
+        if core.hasPrefix("["), let close = core.firstIndex(of: "]") {
+            core = String(core[core.index(after: core.startIndex)..<close])
+        } else if let colon = core.lastIndex(of: ":"),
+                  core.firstIndex(of: ":") == colon,
+                  Int(core[core.index(after: colon)...]) != nil {
             core = String(core[..<colon])
         }
         if core.isEmpty {

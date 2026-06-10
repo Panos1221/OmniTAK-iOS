@@ -24,11 +24,12 @@ struct TAKServer: Identifiable, Codable, Equatable {
     var caCertificateName: String?  // Name of CA/truststore certificate for server verification
     var caCertificatePassword: String?  // Password for CA .p12 certificate
     var allowLegacyTLS: Bool  // Allow TLS 1.0/1.1 for extremely old servers (security risk)
+    var allowUntrustedTLS: Bool  // Accept ANY server certificate when no CA truststore is configured (MITM risk — explicit opt-in only)
     var username: String?  // Username for enrollment
     var password: String?  // Password for enrollment
     var enrollmentPort: UInt16?  // Enrollment API port (default 8446)
 
-    init(id: UUID = UUID(), name: String, host: String, port: UInt16, protocolType: String = "tcp", useTLS: Bool = false, isDefault: Bool = false, enabled: Bool = true, certificateName: String? = nil, certificatePassword: String? = nil, caCertificateName: String? = nil, caCertificatePassword: String? = nil, allowLegacyTLS: Bool = false, username: String? = nil, password: String? = nil, enrollmentPort: UInt16? = nil) {
+    init(id: UUID = UUID(), name: String, host: String, port: UInt16, protocolType: String = "tcp", useTLS: Bool = false, isDefault: Bool = false, enabled: Bool = true, certificateName: String? = nil, certificatePassword: String? = nil, caCertificateName: String? = nil, caCertificatePassword: String? = nil, allowLegacyTLS: Bool = false, allowUntrustedTLS: Bool = false, username: String? = nil, password: String? = nil, enrollmentPort: UInt16? = nil) {
         self.id = id
         self.name = name
         self.host = host
@@ -42,9 +43,35 @@ struct TAKServer: Identifiable, Codable, Equatable {
         self.caCertificateName = caCertificateName
         self.caCertificatePassword = caCertificatePassword
         self.allowLegacyTLS = allowLegacyTLS
+        self.allowUntrustedTLS = allowUntrustedTLS
         self.username = username
         self.password = password
         self.enrollmentPort = enrollmentPort
+    }
+
+    /// Custom decoding so servers saved by builds that predate
+    /// `allowUntrustedTLS` still decode — the missing key falls back to
+    /// `false` (the secure default: system trust evaluation). Encoding
+    /// stays compiler-synthesized.
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(UUID.self, forKey: .id)
+        name = try c.decode(String.self, forKey: .name)
+        host = try c.decode(String.self, forKey: .host)
+        port = try c.decode(UInt16.self, forKey: .port)
+        protocolType = try c.decode(String.self, forKey: .protocolType)
+        useTLS = try c.decode(Bool.self, forKey: .useTLS)
+        isDefault = try c.decode(Bool.self, forKey: .isDefault)
+        enabled = try c.decode(Bool.self, forKey: .enabled)
+        certificateName = try c.decodeIfPresent(String.self, forKey: .certificateName)
+        certificatePassword = try c.decodeIfPresent(String.self, forKey: .certificatePassword)
+        caCertificateName = try c.decodeIfPresent(String.self, forKey: .caCertificateName)
+        caCertificatePassword = try c.decodeIfPresent(String.self, forKey: .caCertificatePassword)
+        allowLegacyTLS = try c.decodeIfPresent(Bool.self, forKey: .allowLegacyTLS) ?? false
+        allowUntrustedTLS = try c.decodeIfPresent(Bool.self, forKey: .allowUntrustedTLS) ?? false
+        username = try c.decodeIfPresent(String.self, forKey: .username)
+        password = try c.decodeIfPresent(String.self, forKey: .password)
+        enrollmentPort = try c.decodeIfPresent(UInt16.self, forKey: .enrollmentPort)
     }
 
     var displayName: String {

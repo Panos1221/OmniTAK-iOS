@@ -13,6 +13,7 @@
 //
 
 import SwiftUI
+import Combine
 
 // MARK: - Root destinations
 
@@ -128,9 +129,23 @@ extension BarItem {
         BarItem(id: "tool.los",        label: "Line of Sight", icon: "eye.fill",                         tint: BarTint.teal,   kind: .command(.openTool("los"))),
         BarItem(id: "tool.missionsync",label: "Mission Sync", icon: "arrow.triangle.2.circlepath",       tint: BarTint.chat,   kind: .command(.openTool("missionsync"))),
         BarItem(id: "tool.plugins",    label: "Plugins",    icon: "puzzlepiece.extension.fill",          tint: BarTint.settings, kind: .command(.openTool("plugins"))),
+        BarItem(id: "tool.uas",        label: "Vehicles",   icon: "airplane.departure",                  tint: BarTint.orange, kind: .command(.openTool("uas"))),
     ]
 
     static func item(for id: String) -> BarItem? { catalog.first { $0.id == id } }
+
+    #if DEBUG
+    /// Every openTool shortcut id must resolve in ToolRegistry (the single
+    /// catalog ToolSheetHost dispatches from). Called from the config store
+    /// at startup so drift fails fast in debug builds.
+    static func validateToolShortcuts() {
+        let ids: [String] = toolShortcuts.compactMap {
+            if case .command(.openTool(let id)) = $0.kind { return id }
+            return nil
+        }
+        ToolRegistry.validate(ids: ids, from: "ToolbarCustomization.toolShortcuts")
+    }
+    #endif
 }
 
 // MARK: - Config store
@@ -158,6 +173,10 @@ final class ToolbarConfigStore: ObservableObject {
     /// users see no change until they customize.
     static let defaultIDs = ["tab.map", "tab.chat", "tab.servers", "tab.mesh", "cmd.tools", "tab.settings"]
 
+    /// Re-publish when plugin enable states change so the bar and the add
+    /// palette drop/restore gated shortcuts live.
+    private var pluginCancellable: AnyCancellable?
+
     private init() {
         if let raw = UserDefaults.standard.string(forKey: key),
            let data = raw.data(using: .utf8),
@@ -170,15 +189,44 @@ final class ToolbarConfigStore: ObservableObject {
         } else {
             itemIDs = ToolbarConfigStore.defaultIDs
         }
+
+        pluginCancellable = PluginSettingsManager.shared.objectWillChange
+            .sink { [weak self] _ in self?.objectWillChange.send() }
+
+        #if DEBUG
+        BarItem.validateToolShortcuts()
+        #endif
+    }
+
+    /// Plugin gating — a shortcut whose backing feature is disabled in
+    /// Settings → Plugins neither renders in the bar nor appears in the
+    /// add palette (the toggles previously filtered only the legacy grid).
+    /// The persisted layout keeps the id, so re-enabling the plugin
+    /// restores the operator's button where it was.
+    private func isItemEnabled(_ item: BarItem) -> Bool {
+        switch item.kind {
+        case .command(.openTool(let toolID)):
+            return PluginSettingsManager.shared.isToolEnabled(toolID)
+        case .command(.measure):
+            return PluginSettingsManager.shared.isToolEnabled("measure")
+        case .command(.drawing):
+            return PluginSettingsManager.shared.isToolEnabled("drawing")
+        default:
+            return true
+        }
     }
 
     /// Resolved, render-ready items in the user's chosen order.
-    var items: [BarItem] { itemIDs.compactMap { BarItem.item(for: $0) } }
+    var items: [BarItem] {
+        itemIDs.compactMap { BarItem.item(for: $0) }.filter(isItemEnabled)
+    }
 
     /// Catalog entries not currently in the bar — the "add a shortcut"
     /// palette. Preserves catalog (grouped) ordering.
     var availableToAdd: [BarItem] {
-        BarItem.catalog.filter { !itemIDs.contains($0.id) }
+        BarItem.catalog
+            .filter { !itemIDs.contains($0.id) }
+            .filter(isItemEnabled)
     }
 
     var isFull: Bool { itemIDs.count >= ToolbarConfigStore.maxItems }

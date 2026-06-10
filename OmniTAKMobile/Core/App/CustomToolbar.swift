@@ -13,6 +13,10 @@ import UIKit
 
 struct CustomToolbar: View {
     @ObservedObject private var store = ToolbarConfigStore.shared
+    // Observe the language manager so the bar re-renders — and its labels
+    // re-resolve — the instant the operator switches language in Settings.
+    // Without this the cells keep the English `item.label` baked in at startup.
+    @EnvironmentObject private var loc: LocalizationManager
     @Binding var selectedTab: RootTab
     /// Fire a shortcut (tab switch / command). Owner does the routing.
     let onSelect: (BarItem) -> Void
@@ -54,7 +58,7 @@ struct CustomToolbar: View {
             Image(systemName: "hand.point.up.left.fill")
                 .font(.system(size: 13, weight: .semibold))
                 .foregroundColor(.black)
-            Text("Press & hold to build your own toolbar")
+            Text(loc.t("bar.coachmark"))
                 .font(.system(size: 12, weight: .semibold))
                 .foregroundColor(.black)
                 .lineLimit(1)
@@ -83,7 +87,7 @@ struct CustomToolbar: View {
             Image(systemName: "hand.draw")
                 .font(.system(size: 13, weight: .semibold))
                 .foregroundColor(.white.opacity(0.8))
-            Text("Drag to reorder · tap − to remove · ＋ to add")
+            Text(loc.t("bar.editHint"))
                 .font(.system(size: 11, weight: .medium))
                 .foregroundColor(.white.opacity(0.8))
                 .lineLimit(1)
@@ -95,7 +99,7 @@ struct CustomToolbar: View {
                     store.isEditing = false
                 }
             } label: {
-                Text("Done")
+                Text(loc.t("bar.done"))
                     .font(.system(size: 13, weight: .semibold))
                     .foregroundColor(.black)
                     .padding(.horizontal, 14)
@@ -199,7 +203,7 @@ struct CustomToolbar: View {
                             .font(.system(size: 20, weight: isActive ? .semibold : .regular))
                             .foregroundColor(isActive ? item.tint : Color.white.opacity(0.85))
                     }
-                    Text(item.label)
+                    Text(loc.t("bar." + item.id))
                         .font(.system(size: 10, weight: isActive ? .semibold : .medium))
                         .foregroundColor(isActive ? item.tint : Color.white.opacity(0.7))
                         .lineLimit(1)
@@ -260,7 +264,7 @@ struct CustomToolbar: View {
                         .font(.system(size: 16, weight: .semibold))
                         .foregroundColor(.white.opacity(0.85))
                 }
-                Text("Add")
+                Text(loc.t("bar.add"))
                     .font(.system(size: 10, weight: .medium))
                     .foregroundColor(.white.opacity(0.7))
             }

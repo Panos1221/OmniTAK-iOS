@@ -41,96 +41,48 @@ class CSRGeneratorTests: XCTestCase {
 }
 
 // MARK: - Certificate Format Converter Tests
+//
+// (The original tests here exercised static isPEMFormat/stripPEMHeaders/
+// isValidBase64 helpers that no longer exist — the converter's real API is
+// instance `detectFormat(_:password:)`. Rewritten against that.)
 
 class CertificateFormatConverterTests: XCTestCase {
 
-    // MARK: - PEM Detection Tests
+    let converter = CertificateFormatConverter()
 
-    func testIsPEMFormat_ValidCertificate() {
-        let pemCert = """
-        -----BEGIN CERTIFICATE-----
-        MIIBkTCB+wIJAKHBfJmFL+5sMA0GCSqGSIb3DQEBCwUAMBExDzANBgNVBAMMBnRl
-        c3RDQTAeFw0yNDAxMDEwMDAwMDBaFw0yNTAxMDEwMDAwMDBaMBExDzANBgNVBAMM
-        BnRlc3RDQTBcMA0GCSqGSIb3DQEBAQUAA0sAMEgCQQDFxFZ7VbZJGZKw5Qz5QWVN
-        -----END CERTIFICATE-----
-        """
-
-        XCTAssertTrue(CertificateFormatConverter.isPEMFormat(pemCert))
+    func testDetectFormat_GarbageDataIsNotPKCS12() {
+        // 'T' != 0x30, so this fails the ASN.1 SEQUENCE check.
+        let info = converter.detectFormat(Data("This is not a certificate".utf8))
+        XCTAssertEqual(info.issueDescription, "Not a valid PKCS#12 file")
+        XCTAssertFalse(info.needsConversion)
+        XCTAssertFalse(info.isLegacyFormat)
     }
 
-    func testIsPEMFormat_ValidPrivateKey() {
-        let pemKey = """
-        -----BEGIN PRIVATE KEY-----
-        MIIBkTCB+wIJAKHBfJmFL+5sMA0GCSqGSIb3DQEBCwUAMBExDzANBgNVBAMMBnRl
-        -----END PRIVATE KEY-----
-        """
-
-        XCTAssertTrue(CertificateFormatConverter.isPEMFormat(pemKey))
+    func testDetectFormat_EmptyData() {
+        let info = converter.detectFormat(Data())
+        XCTAssertEqual(info.issueDescription, "Not a valid PKCS#12 file")
+        XCTAssertFalse(info.needsConversion)
     }
 
-    func testIsPEMFormat_RSAPrivateKey() {
-        let rsaKey = """
-        -----BEGIN RSA PRIVATE KEY-----
-        MIIBkTCB+wIJAKHBfJmFL+5sMA0GCSqGSIb3DQEBCwUAMBExDzANBgNVBAMMBnRl
-        -----END RSA PRIVATE KEY-----
-        """
-
-        XCTAssertTrue(CertificateFormatConverter.isPEMFormat(rsaKey))
+    func testDetectFormat_RC2LegacyOIDDetected() {
+        // ASN.1 SEQUENCE header + the RC2-40-CBC OID (2a 86 48 86 f7 0d
+        // 01 05 06) the converter scans for — the classic legacy-OpenSSL
+        // p12 that SecPKCS12Import rejects on iOS.
+        var data = Data([0x30, 0x82, 0x01, 0x00])
+        data.append(Data([0x2a, 0x86, 0x48, 0x86, 0xf7, 0x0d, 0x01, 0x05, 0x06]))
+        data.append(Data(repeating: 0x00, count: 32))
+        let info = converter.detectFormat(data)
+        XCTAssertTrue(info.isLegacyFormat, "RC2-40-CBC must be flagged legacy")
+        XCTAssertEqual(info.encryptionAlgorithm, "RC2-40-CBC")
     }
 
-    func testIsPEMFormat_NotPEM() {
-        let notPem = "This is not a PEM format"
-        XCTAssertFalse(CertificateFormatConverter.isPEMFormat(notPem))
-    }
-
-    func testIsPEMFormat_Base64Only() {
-        let base64Only = "MIIBkTCB+wIJAKHBfJmFL+5sMA0GCSqGSIb3DQEB"
-        XCTAssertFalse(CertificateFormatConverter.isPEMFormat(base64Only))
-    }
-
-    // MARK: - PEM Stripping Tests
-
-    func testStripPEMHeaders_Certificate() {
-        let pem = """
-        -----BEGIN CERTIFICATE-----
-        MIIBkTCB+wIJAKHBfJmFL+5s
-        MA0GCSqGSIb3DQEBCwUA
-        -----END CERTIFICATE-----
-        """
-
-        let stripped = CertificateFormatConverter.stripPEMHeaders(pem)
-
-        XCTAssertFalse(stripped.contains("-----BEGIN"))
-        XCTAssertFalse(stripped.contains("-----END"))
-        XCTAssertFalse(stripped.contains("\n"))
-    }
-
-    func testStripPEMHeaders_AlreadyStripped() {
-        let base64 = "MIIBkTCB+wIJAKHBfJmFL+5sMA0GCSqGSIb3DQEBCwUA"
-        let result = CertificateFormatConverter.stripPEMHeaders(base64)
-
-        XCTAssertEqual(result, base64)
-    }
-
-    // MARK: - Base64 Validation Tests
-
-    func testIsValidBase64_Valid() {
-        let validBase64 = "SGVsbG8gV29ybGQ="
-        XCTAssertTrue(CertificateFormatConverter.isValidBase64(validBase64))
-    }
-
-    func testIsValidBase64_ValidWithPadding() {
-        let validBase64 = "SGVsbG8="
-        XCTAssertTrue(CertificateFormatConverter.isValidBase64(validBase64))
-    }
-
-    func testIsValidBase64_Invalid() {
-        let invalidBase64 = "Not valid base64!!!"
-        XCTAssertFalse(CertificateFormatConverter.isValidBase64(invalidBase64))
-    }
-
-    func testIsValidBase64_Empty() {
-        XCTAssertFalse(CertificateFormatConverter.isValidBase64(""))
+    func testDetectFormat_UnknownAlgorithmAssumesModern() {
+        // Valid SEQUENCE header but no known OID → modern assumption,
+        // conversion only attempted if direct import fails.
+        var data = Data([0x30, 0x82, 0x01, 0x00])
+        data.append(Data(repeating: 0x00, count: 64))
+        let info = converter.detectFormat(data)
+        XCTAssertFalse(info.isLegacyFormat)
     }
 }
 
@@ -157,53 +109,54 @@ class CertificateManagerTests: XCTestCase {
     }
 
     // MARK: - Certificate Model Tests
+    //
+    // (Originally written against a StoredCertificate model that doesn't
+    // exist — the real model is TAKCertificate.)
 
-    func testStoredCertificateCreation() {
-        let cert = StoredCertificate(
+    func testTAKCertificateCreation() {
+        let cert = TAKCertificate(
             id: UUID(),
             name: "Test Certificate",
-            commonName: "CN=TestUser",
+            serverURL: "tak.example.com",
+            username: "testuser",
+            createdDate: Date(),
+            expiryDate: Date().addingTimeInterval(365 * 24 * 60 * 60),
             issuer: "CN=TestCA",
-            expirationDate: Date().addingTimeInterval(365 * 24 * 60 * 60),
-            importDate: Date(),
-            hasPrivateKey: true,
-            source: .imported
+            isValid: true
         )
 
         XCTAssertEqual(cert.name, "Test Certificate")
-        XCTAssertEqual(cert.commonName, "CN=TestUser")
-        XCTAssertTrue(cert.hasPrivateKey)
-        XCTAssertEqual(cert.source, .imported)
+        XCTAssertEqual(cert.username, "testuser")
+        XCTAssertTrue(cert.isValid)
+        XCTAssertEqual(cert.displayName, "Test Certificate (testuser)")
     }
 
-    func testStoredCertificateSource_Enrolled() {
-        let cert = StoredCertificate(
+    func testTAKCertificateExpiry() {
+        let expired = TAKCertificate(
             id: UUID(),
-            name: "Enrolled Cert",
-            commonName: "CN=User",
-            issuer: "CN=TAK Server CA",
-            expirationDate: Date(),
-            importDate: Date(),
-            hasPrivateKey: true,
-            source: .enrolled
+            name: "Expired",
+            serverURL: "tak.example.com",
+            username: "user",
+            createdDate: Date().addingTimeInterval(-2 * 365 * 24 * 60 * 60),
+            expiryDate: Date().addingTimeInterval(-24 * 60 * 60),
+            issuer: nil,
+            isValid: true
         )
-
-        XCTAssertEqual(cert.source, .enrolled)
+        XCTAssertTrue(expired.isExpired)
     }
 
-    func testStoredCertificateSource_DataPackage() {
-        let cert = StoredCertificate(
+    func testTAKCertificateNoExpiryNeverExpires() {
+        let cert = TAKCertificate(
             id: UUID(),
-            name: "DP Cert",
-            commonName: "CN=User",
-            issuer: "CN=TAK CA",
-            expirationDate: Date(),
-            importDate: Date(),
-            hasPrivateKey: true,
-            source: .dataPackage
+            name: "No Expiry",
+            serverURL: "tak.example.com",
+            username: "user",
+            createdDate: Date(),
+            expiryDate: nil,
+            issuer: nil,
+            isValid: true
         )
-
-        XCTAssertEqual(cert.source, .dataPackage)
+        XCTAssertFalse(cert.isExpired)
     }
 }
 
@@ -212,8 +165,16 @@ class CertificateManagerTests: XCTestCase {
 class CertificateImportPipelineTests: XCTestCase {
 
     func testPipelineInitialization() {
-        let pipeline = CertificateImportPipeline.shared
+        // The pipeline is plain-init (no singleton).
+        let pipeline = CertificateImportPipeline()
         XCTAssertNotNil(pipeline)
+    }
+
+    func testDefaultP12PasswordResolvesWithoutCrashing() {
+        // Sourced from the host app's Info.plist (DEFAULT_P12_PASSWORD via
+        // xcconfig); empty string when unset. Don't assert the value — it's
+        // configuration, not code.
+        _ = CertificateImportPipeline.defaultP12Password
     }
 
     // Note: Actual import tests would require test certificate files
@@ -237,20 +198,8 @@ class TLSConfigurationTests: XCTestCase {
     }
 }
 
-// MARK: - Certificate Source Tests
-
-class CertificateSourceTests: XCTestCase {
-
-    func testAllSourcesExist() {
-        let imported = CertificateSource.imported
-        let enrolled = CertificateSource.enrolled
-        let dataPackage = CertificateSource.dataPackage
-
-        // Verify all sources are different
-        XCTAssertNotEqual(String(describing: imported), String(describing: enrolled))
-        XCTAssertNotEqual(String(describing: enrolled), String(describing: dataPackage))
-    }
-}
+// (CertificateSourceTests deleted — there is no CertificateSource enum in
+// the app; certificate provenance is not modeled on TAKCertificate.)
 
 // MARK: - Direct TCP Sender Tests
 

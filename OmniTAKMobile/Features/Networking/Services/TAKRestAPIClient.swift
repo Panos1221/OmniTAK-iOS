@@ -22,6 +22,10 @@ struct TAKAPIConfiguration {
     /// by name — same as the streaming path (DirectTCPSender). certificateId
     /// remains as a fallback for imported .p12 certs CertificateManager owns.
     let certificateName: String?
+    /// Server trust policy for the REST session. Mirrors the streaming
+    /// path: CA truststore when configured, explicit untrusted opt-in
+    /// (allowUntrustedTLS) otherwise, system roots by default.
+    var trustMode: TAKTLSTrustMode = .acceptUntrusted
     var timeout: TimeInterval = 30
 
     var baseURL: String {
@@ -44,6 +48,17 @@ struct TAKAPIConfiguration {
             self.certificateId = cert.id
         } else {
             self.certificateId = nil
+        }
+        // Derive the trust policy from the server settings (same
+        // precedence as the streaming connect path).
+        if let caName = server.caCertificateName,
+           let anchors = DirectTCPSender.loadCACertificates(name: caName),
+           !anchors.isEmpty {
+            self.trustMode = .anchored(anchors)
+        } else if server.allowUntrustedTLS {
+            self.trustMode = .acceptUntrusted
+        } else {
+            self.trustMode = .system
         }
     }
 }
@@ -80,7 +95,7 @@ struct TAKMissionInfo: Codable, Identifiable {
 
         // Handle date parsing
         if let timeString = try container.decodeIfPresent(String.self, forKey: .createTime) {
-            createTime = ISO8601DateFormatter().date(from: timeString)
+            createTime = CoTXMLBuilder.timestampFormatter.date(from: timeString) ?? CoTXMLBuilder.timestampFormatterNoFraction.date(from: timeString)
         } else if let timeDouble = try? container.decode(Double.self, forKey: .createTime) {
             createTime = Date(timeIntervalSince1970: timeDouble / 1000)
         } else {
@@ -108,7 +123,7 @@ struct TAKMissionUID: Codable, Identifiable {
         details = try container.decodeIfPresent(TAKMissionUIDDetails.self, forKey: .details)
 
         if let timeString = try container.decodeIfPresent(String.self, forKey: .timestamp) {
-            timestamp = ISO8601DateFormatter().date(from: timeString)
+            timestamp = CoTXMLBuilder.timestampFormatter.date(from: timeString) ?? CoTXMLBuilder.timestampFormatterNoFraction.date(from: timeString)
         } else if let timeDouble = try? container.decode(Double.self, forKey: .timestamp) {
             timestamp = Date(timeIntervalSince1970: timeDouble / 1000)
         } else {
@@ -156,7 +171,7 @@ struct TAKMissionContent: Codable, Identifiable {
         keywords = try container.decodeIfPresent([String].self, forKey: .keywords)
 
         if let timeString = try container.decodeIfPresent(String.self, forKey: .submissionTime) {
-            submissionTime = ISO8601DateFormatter().date(from: timeString)
+            submissionTime = CoTXMLBuilder.timestampFormatter.date(from: timeString) ?? CoTXMLBuilder.timestampFormatterNoFraction.date(from: timeString)
         } else if let timeDouble = try? container.decode(Double.self, forKey: .submissionTime) {
             submissionTime = Date(timeIntervalSince1970: timeDouble / 1000)
         } else {
@@ -195,7 +210,7 @@ struct TAKDataPackageInfo: Codable, Identifiable {
         keywords = try container.decodeIfPresent([String].self, forKey: .keywords)
 
         if let timeString = try container.decodeIfPresent(String.self, forKey: .submissionTime) {
-            submissionTime = ISO8601DateFormatter().date(from: timeString)
+            submissionTime = CoTXMLBuilder.timestampFormatter.date(from: timeString) ?? CoTXMLBuilder.timestampFormatterNoFraction.date(from: timeString)
         } else if let timeDouble = try? container.decode(Double.self, forKey: .submissionTime) {
             submissionTime = Date(timeIntervalSince1970: timeDouble / 1000)
         } else {
@@ -203,7 +218,7 @@ struct TAKDataPackageInfo: Codable, Identifiable {
         }
 
         if let timeString = try container.decodeIfPresent(String.self, forKey: .expiration) {
-            expiration = ISO8601DateFormatter().date(from: timeString)
+            expiration = CoTXMLBuilder.timestampFormatter.date(from: timeString) ?? CoTXMLBuilder.timestampFormatterNoFraction.date(from: timeString)
         } else if let timeDouble = try? container.decode(Double.self, forKey: .expiration) {
             expiration = Date(timeIntervalSince1970: timeDouble / 1000)
         } else {
@@ -279,7 +294,11 @@ class TAKRestAPIClient: ObservableObject {
         sessionConfig.timeoutIntervalForRequest = config.timeout
         sessionConfig.timeoutIntervalForResource = config.timeout * 4
 
-        let delegate = TAKAPIURLSessionDelegate(certificateId: config.certificateId, certificateName: config.certificateName)
+        let delegate = TAKTLSSessionDelegate(
+            trustMode: config.trustMode,
+            certificateId: config.certificateId,
+            certificateName: config.certificateName
+        )
         urlSession = URLSession(configuration: sessionConfig, delegate: delegate, delegateQueue: nil)
 
         isConnected = true
@@ -716,52 +735,6 @@ struct TAKAPIResponse<T: Codable>: Codable {
     let nodeId: String?
 }
 
-// MARK: - URL Session Delegate
-
-class TAKAPIURLSessionDelegate: NSObject, URLSessionDelegate {
-    let certificateId: UUID?
-    let certificateName: String?
-
-    init(certificateId: UUID?, certificateName: String? = nil) {
-        self.certificateId = certificateId
-        self.certificateName = certificateName
-    }
-
-    func urlSession(
-        _ session: URLSession,
-        didReceive challenge: URLAuthenticationChallenge,
-        completionHandler: @escaping (URLSession.AuthChallengeDisposition, URLCredential?) -> Void
-    ) {
-        if challenge.protectionSpace.authenticationMethod == NSURLAuthenticationMethodServerTrust,
-           let serverTrust = challenge.protectionSpace.serverTrust {
-            // Accept self-signed certificates (common in TAK deployments)
-            let credential = URLCredential(trust: serverTrust)
-            completionHandler(.useCredential, credential)
-        } else if challenge.protectionSpace.authenticationMethod == NSURLAuthenticationMethodClientCertificate {
-            if let identity = resolveClientIdentity() {
-                let credential = URLCredential(identity: identity, certificates: nil, persistence: .forSession)
-                completionHandler(.useCredential, credential)
-            } else {
-                Logger.takNetwork.error("REST mTLS: no client identity for name=\(self.certificateName ?? "nil", privacy: .public)")
-                completionHandler(.performDefaultHandling, nil)
-            }
-        } else {
-            completionHandler(.performDefaultHandling, nil)
-        }
-    }
-
-    /// Resolve the client SecIdentity the same way the streaming path
-    /// (DirectTCPSender.loadCSREnrolledIdentity) does, by delegating to the
-    /// single shared resolver `resolveCSREnrolledSecIdentity(label:)`.
-    /// Imported .p12 certs tracked by CertificateManager take priority via
-    /// `certificateId`; CSR-enrolled (easy-connect) identities live in the
-    /// keychain under a label = `certificateName` and are resolved by name.
-    private func resolveClientIdentity() -> SecIdentity? {
-        // Imported .p12 certs tracked by CertificateManager.
-        if let certId = certificateId, let identity = try? CertificateManager.shared.getIdentity(for: certId) {
-            return identity
-        }
-        guard let name = certificateName, !name.isEmpty else { return nil }
-        return resolveCSREnrolledSecIdentity(label: name)
-    }
-}
+// The URLSession TLS delegate lives in TAKTLSSessionDelegate.swift —
+// one shared implementation for REST, CSR enrollment, and deep-link
+// enrollment sessions.

@@ -1,0 +1,68 @@
+name: CI
+
+# Build + unit-test the app on every push to main / release/* and on PRs.
+# No secrets required: Config.base.xcconfig ships empty token defaults so a
+# fresh checkout compiles (the basemap just won't render tiles without a
+# Mapbox token — irrelevant for build/test).
+
+on:
+  push:
+    branches:
+      - main
+      - 'release/*'
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-test:
+    name: Build + test (iOS Simulator)
+    runs-on: macos-15
+    timeout-minutes: 90
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # SPM checkouts (Mapbox, Turf, VLCKit) dominate cold-start time.
+      # Keyed on the pbxproj since Package.resolved is not committed —
+      # the package pins live in the project's XCRemoteSwiftPackageReference
+      # entries.
+      - name: Cache SPM packages
+        uses: actions/cache@v4
+        with:
+          path: build/DerivedData/SourcePackages
+          key: spm-${{ runner.os }}-${{ hashFiles('OmniTAKMobile.xcodeproj/project.pbxproj') }}
+          restore-keys: |
+            spm-${{ runner.os }}-
+
+      - name: Pick an available iPhone simulator
+        id: sim
+        run: |
+          DEVICE=$(xcrun simctl list devices available | sed -nE 's/^ +(iPhone [^(]*[^ (]) +\(.*/\1/p' | head -1)
+          if [ -z "$DEVICE" ]; then
+            echo "No iPhone simulator available"; xcrun simctl list devices; exit 1
+          fi
+          echo "Using simulator: $DEVICE"
+          echo "device=$DEVICE" >> "$GITHUB_OUTPUT"
+
+      - name: Build (for testing)
+        run: |
+          set -o pipefail
+          xcodebuild build-for-testing \
+            -project OmniTAKMobile.xcodeproj \
+            -scheme OmniTAKMobile \
+            -destination "platform=iOS Simulator,name=${{ steps.sim.outputs.device }}" \
+            -derivedDataPath build/DerivedData \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY=
+
+      - name: Unit tests (OmniTAKMobileTests)
+        run: |
+          set -o pipefail
+          xcodebuild test-without-building \
+            -project OmniTAKMobile.xcodeproj \
+            -scheme OmniTAKMobile \
+            -destination "platform=iOS Simulator,name=${{ steps.sim.outputs.device }}" \
+            -derivedDataPath build/DerivedData \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY=
