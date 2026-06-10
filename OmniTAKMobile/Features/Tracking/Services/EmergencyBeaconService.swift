@@ -129,7 +129,9 @@ class EmergencyBeaconService: ObservableObject {
     private var broadcastTimer: Timer?
 
     // User info
-    private var userCallsign: String = "OmniTAK-iOS"
+    // Single operator source (PositionBroadcastService), read at
+    // CoT-build time. No cached copy, no divergent default.
+    private var userCallsign: String { PositionBroadcastService.shared.userCallsign }
     private var userUID: String = ""
 
     private init() {
@@ -139,19 +141,14 @@ class EmergencyBeaconService: ObservableObject {
 
     // MARK: - Configuration
 
-    func configure(takService: TAKService, locationManager: BeaconLocationManager, callsign: String) {
+    func configure(takService: TAKService, locationManager: BeaconLocationManager) {
         self.takService = takService
         self.locationManager = locationManager
-        self.userCallsign = callsign
 
         // Resume broadcasting if emergency was active
         if emergencyState.isActive {
             startBroadcasting()
         }
-    }
-
-    func updateCallsign(_ callsign: String) {
-        self.userCallsign = callsign
     }
 
     private func generateUserUID() {

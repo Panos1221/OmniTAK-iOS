@@ -21,7 +21,10 @@ class TeamService: ObservableObject {
     @Published var pendingInvites: [TeamInvite] = []
     @Published var teamBroadcasts: [TeamBroadcast] = []
     @Published var currentUserId: String = "SELF-\(UIDevice.current.identifierForVendor?.uuidString ?? UUID().uuidString)"
-    @Published var currentUserCallsign: String = "OmniTAK-iOS"
+    // Single operator source: seeded from PositionBroadcastService and kept
+    // in sync via Combine (see init) — routed through updateCallsign so the
+    // current team's member entry follows along.
+    @Published var currentUserCallsign: String = PositionBroadcastService.shared.userCallsign
 
     // MARK: - Computed Properties
 
@@ -42,6 +45,16 @@ class TeamService: ObservableObject {
     private init() {
         loadStoredData()
         startMemberUpdateTimer()
+
+        // Track the operator callsign from the single source; route through
+        // updateCallsign so team membership entries stay in sync.
+        PositionBroadcastService.shared.$userCallsign
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] callsign in
+                guard let self = self, self.currentUserCallsign != callsign else { return }
+                self.updateCallsign(callsign)
+            }
+            .store(in: &cancellables)
     }
 
     // MARK: - Configuration

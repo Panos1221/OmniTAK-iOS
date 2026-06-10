@@ -39,9 +39,10 @@ class GeofenceService: NSObject, ObservableObject {
     private let alertsKey = "com.omnitak.geofence.alerts"
     private let eventsKey = "com.omnitak.geofence.events"
 
-    // User info
-    private var userId: String = "OmniTAK-iOS"
-    private var userCallsign: String = "OmniTAK-iOS"
+    // User identity — single operator source (PositionBroadcastService),
+    // read at CoT-build time. No cached copy, no divergent default.
+    private var userId: String { PositionBroadcastService.shared.userUID }
+    private var userCallsign: String { PositionBroadcastService.shared.userCallsign }
 
     // Services
     private var takService: TAKService?
@@ -82,10 +83,8 @@ class GeofenceService: NSObject, ObservableObject {
 
     // MARK: - Configuration
 
-    func configure(takService: TAKService, userId: String, callsign: String) {
+    func configure(takService: TAKService) {
         self.takService = takService
-        self.userId = userId
-        self.userCallsign = callsign
     }
 
     func setGeofenceManager(_ manager: GeofenceManager) {

@@ -141,7 +141,9 @@ class DigitalPointerService: ObservableObject {
     private var takService: TAKService?
     private var cancellables = Set<AnyCancellable>()
 
-    private var userCallsign: String = "OmniTAK-iOS"
+    // Single operator source (PositionBroadcastService), read at
+    // CoT-build time. No cached copy, no divergent default.
+    private var userCallsign: String { PositionBroadcastService.shared.userCallsign }
     private var userUID: String = ""
 
     // Notification names
@@ -161,20 +163,11 @@ class DigitalPointerService: ObservableObject {
     // MARK: - Configuration
 
     /// Configure the service with required dependencies
-    /// - Parameters:
-    ///   - takService: The TAK service for sending CoT messages
-    ///   - callsign: The user's callsign
-    func configure(takService: TAKService, callsign: String) {
+    /// - Parameter takService: The TAK service for sending CoT messages
+    func configure(takService: TAKService) {
         self.takService = takService
-        self.userCallsign = callsign
 
-        print("DigitalPointerService configured with callsign: \(callsign)")
-    }
-
-    /// Update the user's callsign
-    /// - Parameter callsign: New callsign
-    func updateCallsign(_ callsign: String) {
-        self.userCallsign = callsign
+        print("DigitalPointerService configured")
     }
 
     private func generateUserUID() {
