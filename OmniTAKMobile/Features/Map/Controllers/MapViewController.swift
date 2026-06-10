@@ -1098,9 +1098,15 @@ struct ATAKMapView: View {
                 selfCallsign: userCallsign,
                 // Phase 3b — saved distance / area measurements mirrored
                 // through the Cesium bridge as dashed polylines + segment
-                // labels. The live in-progress measurement stays Mapbox-
-                // only; Cesium only sees committed sessions.
+                // labels.
                 measurements: measurementManager.savedMeasurements,
+                // Live in-progress measurement → yellow polyline on the
+                // globe (parity with the Mapbox temp line).
+                liveMeasurementPoints: measurementManager.isActive
+                    ? measurementManager.temporaryPoints
+                    : [],
+                // Active navigation route → polyline + waypoint billboards.
+                activeRoute: routeService.activeRoute,
                 // Phase 3b — operator's own recorded breadcrumb trail.
                 // The service models a single trail; if no recording is
                 // active or it's been cleared the coords list is empty
@@ -1160,10 +1166,49 @@ struct ATAKMapView: View {
             // (Export / Delete / Clear) after a lasso. Without it on the
             // Cesium body, a 3D lasso selected items but gave no feedback.
             lassoSelectionPill
+            // Measurement HUD + route navigation panel. These were Mapbox-
+            // only, so on the (default) 3D globe starting a measurement or
+            // navigation silently showed nothing — taps even accumulated
+            // into measurementManager with no way to finish/cancel. The
+            // in-progress polyline and the active route now bridge through
+            // CesiumMainMap like saved measurements already did.
+            measurementChrome
+            routeNavigationChrome
             // Engine toggle lives in the Tools sheet (id: "engine") rather
             // than a standalone FAB — operators expect mode toggles in the
             // Tools tray, and we keep the map chrome uncluttered.
         }
+    }
+
+    /// Compact measurement HUD (ATAK-style) — engine-agnostic SwiftUI
+    /// chrome, mounted on both `cesium3DBody` and `mapbox2DBody`.
+    @ViewBuilder
+    private var measurementChrome: some View {
+        if showMeasurement {
+            CompactMeasurementOverlay(manager: measurementManager, isPresented: $showMeasurement)
+                .zIndex(1000)
+        }
+    }
+
+    /// Route navigation panel (ATAK-style, top-left) — engine-agnostic,
+    /// mounted on both engine bodies. Renders content only while a route
+    /// is active / navigating.
+    @ViewBuilder
+    private var routeNavigationChrome: some View {
+        VStack {
+            HStack {
+                RouteNavigationPanel(
+                    routeService: routeService,
+                    isExpanded: $isNavigationPanelExpanded
+                )
+                .frame(maxWidth: 320) // ATAK-style compact width
+                .padding(.leading, 8)
+                .padding(.top, 70) // Below status bar
+                Spacer()
+            }
+            Spacer()
+        }
+        .zIndex(1100)
     }
 
     @ViewBuilder
@@ -1192,27 +1237,11 @@ struct ATAKMapView: View {
             interactiveOverlays
             gpsFollowButton
 
-            // Compact measurement overlay (ATAK-style)
-            if showMeasurement {
-                CompactMeasurementOverlay(manager: measurementManager, isPresented: $showMeasurement)
-                    .zIndex(1000)
-            }
-
-            // Route Navigation Panel (ATAK-style, top-left position)
-            VStack {
-                HStack {
-                    RouteNavigationPanel(
-                        routeService: routeService,
-                        isExpanded: $isNavigationPanelExpanded
-                    )
-                    .frame(maxWidth: 320) // ATAK-style compact width
-                    .padding(.leading, 8)
-                    .padding(.top, 70) // Below status bar
-                    Spacer()
-                }
-                Spacer()
-            }
-            .zIndex(1100)
+            // Measurement HUD + route navigation panel — shared chrome
+            // mounted on BOTH engine bodies (see measurementChrome /
+            // routeNavigationChrome).
+            measurementChrome
+            routeNavigationChrome
         }
         // Modal sheets, error overlays, lifecycle handlers, and the radial-
         // menu .onReceive observers used to chain here but moved up to the
@@ -1654,7 +1683,7 @@ struct ATAKMapView: View {
             // for non-contact entities. None of those have a CoT event
             // behind them, so skip the marker-context menu for them.
             if uid == "__self__" { return }
-            let nonContactPrefixes = ["ads-", "line-", "poly-", "circ-", "rring-", "meas-", "trail-"]
+            let nonContactPrefixes = ["ads-", "line-", "poly-", "circ-", "rring-", "meas-", "trail-", "route-"]
             if nonContactPrefixes.contains(where: { uid.hasPrefix($0) }) { return }
             if uid.contains(":v") { return }
             // CoT contact match — open the marker-context radial menu
@@ -4517,6 +4546,16 @@ struct CesiumMainMap: UIViewRepresentable {
     // Phase 3b — measurement sessions to mirror as dashed polylines with
     // per-segment distance labels. Sourced from `MeasurementManager`.
     let measurements: [Measurement]
+    // Live in-progress measurement vertices (MeasurementManager's
+    // temporaryPoints while a measurement is active). Mirrored as a yellow
+    // polyline with per-segment labels so the globe shows the measurement
+    // as it's built — parity with the Mapbox path's systemYellow temp line.
+    // Empty when no measurement is active.
+    var liveMeasurementPoints: [CLLocationCoordinate2D] = []
+    // Active navigation route (RoutePlanningService.activeRoute) — bridged
+    // as a polyline + waypoint billboards so starting navigation on the 3D
+    // globe shows the route instead of silently rendering nothing.
+    var activeRoute: Route? = nil
     // Phase 3b — operator's breadcrumb trail (single trail; sourced from
     // `BreadcrumbTrailService.shared`). Empty array means "no trail".
     let breadcrumbTrailCoords: [CLLocationCoordinate2D]
@@ -4921,6 +4960,27 @@ struct CesiumMainMap: UIViewRepresentable {
             ))
         }
 
+        // Active navigation route — bridged as a wide line in the route's
+        // own color. Prefer the calculated segment paths (road-following
+        // when available); fall back to straight waypoint legs.
+        if let route = activeRoute {
+            var coords = route.segments.flatMap { $0.path }
+            if coords.count < 2 {
+                coords = route.waypoints
+                    .sorted { $0.order < $1.order }
+                    .map { $0.coordinate }
+            }
+            if coords.count >= 2 {
+                all.append(BridgeDrawing(
+                    uid: "route-\(route.id.uuidString)",
+                    kind: "line",
+                    coords: coords.map { [$0.longitude, $0.latitude] },
+                    color: route.color,
+                    width: max(3, route.lineWidth)
+                ))
+            }
+        }
+
         // Range rings reuse the circle bridge path — same (center, edge)
         // shape, different uid namespace so an operator's range rings
         // can't collide with their drawing circles or the in-progress
@@ -5085,6 +5145,28 @@ struct CesiumMainMap: UIViewRepresentable {
             ))
         }
 
+        // Active-route waypoints — labelled billboards so the operator can
+        // see where the route goes on the globe (the 2D path renders these
+        // via RouteOverlayCoordinator's MKAnnotations). Friendly affiliation
+        // keeps the billboard in the route's tactical color family; nil sidc
+        // falls back to the affiliation-shape canvas billboard.
+        if let route = activeRoute {
+            for wp in route.waypoints {
+                all.append(BridgeEntity(
+                    uid: "route-wp-\(wp.id.uuidString)",
+                    lat: wp.latitude,
+                    lon: wp.longitude,
+                    hae: nil,
+                    callsign: wp.name,
+                    affiliation: "f",
+                    kind: "marker",
+                    heading: nil,
+                    sidc: nil,
+                    leader: false
+                ))
+            }
+        }
+
         guard let data = try? JSONEncoder().encode(all),
               let str = String(data: data, encoding: .utf8) else { return "[]" }
         return str
@@ -5130,6 +5212,30 @@ struct CesiumMainMap: UIViewRepresentable {
                 uid: "meas-\(m.id.uuidString)",
                 vertices: verts,
                 color: CesiumMainMap.hex(forUIColor: m.color),
+                segments: segments
+            ))
+        }
+
+        // Live in-progress measurement — same schema under a fixed uid so
+        // each new vertex replaces the previous polyline. systemYellow to
+        // match the Mapbox temp line; disappears on complete/cancel (the
+        // committed session then arrives via `measurements`).
+        if liveMeasurementPoints.count >= 2 {
+            let verts: [[Double]] = liveMeasurementPoints.map { [$0.longitude, $0.latitude] }
+            var segments: [BridgeMeasurement.Segment] = []
+            segments.reserveCapacity(liveMeasurementPoints.count)
+            for (i, pt) in liveMeasurementPoints.enumerated() {
+                if i == 0 {
+                    segments.append(.init(label: ""))
+                } else {
+                    let metres = CesiumMainMap.haversineMetres(liveMeasurementPoints[i - 1], pt)
+                    segments.append(.init(label: CesiumMainMap.formatDistanceLabel(metres)))
+                }
+            }
+            all.append(BridgeMeasurement(
+                uid: "meas-live",
+                vertices: verts,
+                color: "#FFCC00",
                 segments: segments
             ))
         }
