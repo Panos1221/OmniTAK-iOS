@@ -528,8 +528,11 @@ enum ATAKPluginParser {
         staleTime: Date,
         detailXML: String
     ) -> String {
-        let fmt = ISO8601DateFormatter()
-        fmt.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        // detailXML arrives pre-wrapped in <detail>…</detail> (it doubles as
+        // ATAKPluginParsedMessage.detailXML), so the envelope is assembled
+        // here rather than via CoTXMLBuilder.buildEvent — but timestamps and
+        // escaping route through the shared infrastructure.
+        let fmt = CoTXMLBuilder.timestampFormatter
         return """
         <?xml version="1.0" encoding="UTF-8"?>
         <event version="2.0" uid="\(escape(event.uid))" type="\(escape(event.type))" time="\(fmt.string(from: sendTime))" start="\(fmt.string(from: startTime))" stale="\(fmt.string(from: staleTime))" how="\(escape(how))">
@@ -641,11 +644,7 @@ enum ATAKPluginParser {
     }
 
     private static func escape(_ s: String) -> String {
-        return s
-            .replacingOccurrences(of: "&", with: "&amp;")
-            .replacingOccurrences(of: "<", with: "&lt;")
-            .replacingOccurrences(of: ">", with: "&gt;")
-            .replacingOccurrences(of: "\"", with: "&quot;")
+        return s.xmlEscaped
     }
 
     private static func extractDetailXML(from xml: String) -> String? {

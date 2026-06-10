@@ -294,43 +294,32 @@ class EmergencyBeaconService: ObservableObject {
         longitude: Double,
         altitude: Double
     ) -> String {
-        let formatter = ISO8601DateFormatter()
-        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-
         let now = Date()
-        let timeStr = formatter.string(from: now)
-        let startStr = formatter.string(from: now)
-        let staleStr = formatter.string(from: now.addingTimeInterval(staleTime))
-
         let uid = "\(userUID)-\(Int(now.timeIntervalSince1970))"
 
-        // Generate emergency CoT XML following ATAK standards
-        let xml = """
-        <?xml version="1.0" encoding="UTF-8"?>
-        <event version="2.0" uid="\(uid)" type="\(type.cotType)" how="h-g-i-g-o" time="\(timeStr)" start="\(startStr)" stale="\(staleStr)">
-            <point lat="\(latitude)" lon="\(longitude)" hae="\(altitude)" ce="9999" le="9999"/>
-            <detail>
-                <contact callsign="\(userCallsign)"/>
-                <emergency type="\(type.rawValue)">\(escapeXML(message))</emergency>
-                <remarks>\(escapeXML(message))</remarks>
+        // Emergency CoT detail following ATAK standards
+        let detail = """
+                <contact callsign="\(userCallsign.xmlEscaped)"/>
+                <emergency type="\(type.rawValue.xmlEscaped)">\(message.xmlEscaped)</emergency>
+                <remarks>\(message.xmlEscaped)</remarks>
                 <status readiness="true"/>
                 <takv device="\(UIDevice.current.model)" platform="OmniTAK-iOS" os="\(UIDevice.current.systemVersion)" version="\(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "2.0.0")"/>
                 <__group name="Emergency" role="Team Member"/>
-            </detail>
-        </event>
         """
 
-        return xml
-    }
-
-    private func escapeXML(_ string: String) -> String {
-        var escaped = string
-        escaped = escaped.replacingOccurrences(of: "&", with: "&amp;")
-        escaped = escaped.replacingOccurrences(of: "<", with: "&lt;")
-        escaped = escaped.replacingOccurrences(of: ">", with: "&gt;")
-        escaped = escaped.replacingOccurrences(of: "\"", with: "&quot;")
-        escaped = escaped.replacingOccurrences(of: "'", with: "&apos;")
-        return escaped
+        return CoTXMLBuilder.buildEvent(
+            uid: uid,
+            type: type.cotType,
+            how: "h-g-i-g-o",
+            time: now,
+            staleAfter: staleTime,
+            lat: latitude,
+            lon: longitude,
+            hae: altitude,
+            ce: 9999,
+            le: 9999,
+            detail: detail
+        )
     }
 
     // MARK: - Persistence

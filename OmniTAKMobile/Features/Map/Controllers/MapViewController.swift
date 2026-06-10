@@ -1920,25 +1920,6 @@ struct ATAKMapView: View {
         }
     }
 
-    private func generateSelfCoT(location: CLLocation) -> String {
-        let now = ISO8601DateFormatter().string(from: Date())
-        let stale = ISO8601DateFormatter().string(from: Date().addingTimeInterval(300))
-
-        return """
-        <?xml version="1.0" encoding="UTF-8"?>
-        <event version="2.0" uid="SELF-\(UUID().uuidString)" type="a-f-G-E-S" how="m-g" time="\(now)" start="\(now)" stale="\(stale)">
-            <point lat="\(location.coordinate.latitude)" lon="\(location.coordinate.longitude)" hae="\(location.altitude)" ce="\(location.horizontalAccuracy)" le="\(location.verticalAccuracy)"/>
-            <detail>
-                <contact callsign="OmniTAK-iOS" endpoint="*:-1:stcp"/>
-                <__group name="Cyan" role="Team Member"/>
-                <status battery="100"/>
-                <takv device="iPhone" platform="OmniTAK" os="iOS" version="\(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "2.0.0")"/>
-                <track speed="\(location.speed)" course="\(location.course)"/>
-            </detail>
-        </event>
-        """
-    }
-
     // MARK: - Contact Detail Actions (Bug #9)
     //
     // Subscribers for ContactDetailView's "Show on Map" / "Navigate to Contact"

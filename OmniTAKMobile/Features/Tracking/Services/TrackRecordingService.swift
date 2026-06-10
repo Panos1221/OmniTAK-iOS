@@ -504,8 +504,7 @@ extension TrackRecordingService: CLLocationManagerDelegate {
 
 struct GPXExporter {
     static func export(track: Track) -> String {
-        let dateFormatter = ISO8601DateFormatter()
-        dateFormatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        let dateFormatter = CoTXMLBuilder.timestampFormatter
 
         var gpx = """
         <?xml version="1.0" encoding="UTF-8"?>
@@ -514,17 +513,17 @@ struct GPXExporter {
              xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
              xsi:schemaLocation="http://www.topografix.com/GPX/1/1 http://www.topografix.com/GPX/1/1/gpx.xsd">
           <metadata>
-            <name>\(escapeXML(track.name))</name>
+            <name>\(track.name.xmlEscaped)</name>
             <time>\(dateFormatter.string(from: track.startTime))</time>
           </metadata>
           <trk>
-            <name>\(escapeXML(track.name))</name>
+            <name>\(track.name.xmlEscaped)</name>
         """
 
         if let notes = track.notes {
             gpx += """
 
-            <desc>\(escapeXML(notes))</desc>
+            <desc>\(notes.xmlEscaped)</desc>
         """
         }
 
@@ -552,28 +551,19 @@ struct GPXExporter {
 
         return gpx
     }
-
-    private static func escapeXML(_ string: String) -> String {
-        string
-            .replacingOccurrences(of: "&", with: "&amp;")
-            .replacingOccurrences(of: "<", with: "&lt;")
-            .replacingOccurrences(of: ">", with: "&gt;")
-            .replacingOccurrences(of: "\"", with: "&quot;")
-            .replacingOccurrences(of: "'", with: "&apos;")
-    }
 }
 
 // MARK: - KML Exporter
 
 struct KMLExporter {
     static func export(track: Track) -> String {
-        let dateFormatter = ISO8601DateFormatter()
+        let dateFormatter = CoTXMLBuilder.timestampFormatterNoFraction
 
         var kml = """
         <?xml version="1.0" encoding="UTF-8"?>
         <kml xmlns="http://www.opengis.net/kml/2.2">
           <Document>
-            <name>\(escapeXML(track.name))</name>
+            <name>\(track.name.xmlEscaped)</name>
             <description>Recorded on \(dateFormatter.string(from: track.startTime))
         Distance: \(track.formattedDistance)
         Duration: \(track.formattedDuration)
@@ -585,7 +575,7 @@ struct KMLExporter {
               </LineStyle>
             </Style>
             <Placemark>
-              <name>\(escapeXML(track.name))</name>
+              <name>\(track.name.xmlEscaped)</name>
               <styleUrl>#trackStyle</styleUrl>
               <LineString>
                 <altitudeMode>absolute</altitudeMode>
@@ -621,14 +611,5 @@ struct KMLExporter {
 
         // KML format is AABBGGRR (alpha, blue, green, red)
         return "FF\(b)\(g)\(r)"
-    }
-
-    private static func escapeXML(_ string: String) -> String {
-        string
-            .replacingOccurrences(of: "&", with: "&amp;")
-            .replacingOccurrences(of: "<", with: "&lt;")
-            .replacingOccurrences(of: ">", with: "&gt;")
-            .replacingOccurrences(of: "\"", with: "&quot;")
-            .replacingOccurrences(of: "'", with: "&apos;")
     }
 }

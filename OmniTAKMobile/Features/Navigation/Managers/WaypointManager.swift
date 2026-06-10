@@ -259,37 +259,26 @@ class WaypointManager: ObservableObject {
 
     /// Export waypoint to CoT XML
     func exportToCoT(_ waypoint: Waypoint, staleTime: TimeInterval = 3600) -> String {
-        let dateFormatter = ISO8601DateFormatter()
-        dateFormatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-
-        let now = Date()
-        let stale = now.addingTimeInterval(staleTime)
-
-        let lat = waypoint.coordinate.latitude
-        let lon = waypoint.coordinate.longitude
-        let hae = waypoint.altitude ?? 0.0
-
-        var xml = """
-        <?xml version="1.0" encoding="UTF-8"?>
-        <event version="2.0" uid="\(waypoint.uid)" type="\(waypoint.cotType)" time="\(dateFormatter.string(from: now))" start="\(dateFormatter.string(from: now))" stale="\(dateFormatter.string(from: stale))">
-            <point lat="\(lat)" lon="\(lon)" hae="\(hae)" ce="10.0" le="10.0"/>
-            <detail>
-                <contact callsign="\(waypoint.name)"/>
+        var detail = """
+                <contact callsign="\(waypoint.name.xmlEscaped)"/>
                 <usericon iconsetpath="\(waypoint.icon.cotIconType)"/>
                 <color value="\(waypoint.color.cotColorHex)"/>
         """
 
         if let remarks = waypoint.remarks {
-            xml += "\n        <remarks>\(remarks)</remarks>"
+            detail += "\n        <remarks>\(remarks.xmlEscaped)</remarks>"
         }
 
-        xml += """
-
-            </detail>
-        </event>
-        """
-
-        return xml
+        return CoTXMLBuilder.buildEvent(
+            uid: waypoint.uid,
+            type: waypoint.cotType,
+            staleAfter: staleTime,
+            coordinate: waypoint.coordinate,
+            hae: waypoint.altitude ?? 0.0,
+            ce: 10.0,
+            le: 10.0,
+            detail: detail
+        )
     }
 
     // MARK: - Map Annotations

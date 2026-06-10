@@ -377,8 +377,7 @@ class BreadcrumbTrailService: NSObject, ObservableObject {
 
     /// Export trail as GPX format
     func exportToGPX() -> String {
-        let dateFormatter = ISO8601DateFormatter()
-        dateFormatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        let dateFormatter = CoTXMLBuilder.timestampFormatter
 
         var gpx = """
         <?xml version="1.0" encoding="UTF-8"?>
@@ -418,7 +417,7 @@ class BreadcrumbTrailService: NSObject, ObservableObject {
 
     /// Export trail as KML format
     func exportToKML() -> String {
-        let dateFormatter = ISO8601DateFormatter()
+        let dateFormatter = CoTXMLBuilder.timestampFormatterNoFraction
 
         var kml = """
         <?xml version="1.0" encoding="UTF-8"?>

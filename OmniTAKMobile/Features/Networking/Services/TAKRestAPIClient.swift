@@ -80,7 +80,7 @@ struct TAKMissionInfo: Codable, Identifiable {
 
         // Handle date parsing
         if let timeString = try container.decodeIfPresent(String.self, forKey: .createTime) {
-            createTime = ISO8601DateFormatter().date(from: timeString)
+            createTime = CoTXMLBuilder.timestampFormatter.date(from: timeString) ?? CoTXMLBuilder.timestampFormatterNoFraction.date(from: timeString)
         } else if let timeDouble = try? container.decode(Double.self, forKey: .createTime) {
             createTime = Date(timeIntervalSince1970: timeDouble / 1000)
         } else {
@@ -108,7 +108,7 @@ struct TAKMissionUID: Codable, Identifiable {
         details = try container.decodeIfPresent(TAKMissionUIDDetails.self, forKey: .details)
 
         if let timeString = try container.decodeIfPresent(String.self, forKey: .timestamp) {
-            timestamp = ISO8601DateFormatter().date(from: timeString)
+            timestamp = CoTXMLBuilder.timestampFormatter.date(from: timeString) ?? CoTXMLBuilder.timestampFormatterNoFraction.date(from: timeString)
         } else if let timeDouble = try? container.decode(Double.self, forKey: .timestamp) {
             timestamp = Date(timeIntervalSince1970: timeDouble / 1000)
         } else {
@@ -156,7 +156,7 @@ struct TAKMissionContent: Codable, Identifiable {
         keywords = try container.decodeIfPresent([String].self, forKey: .keywords)
 
         if let timeString = try container.decodeIfPresent(String.self, forKey: .submissionTime) {
-            submissionTime = ISO8601DateFormatter().date(from: timeString)
+            submissionTime = CoTXMLBuilder.timestampFormatter.date(from: timeString) ?? CoTXMLBuilder.timestampFormatterNoFraction.date(from: timeString)
         } else if let timeDouble = try? container.decode(Double.self, forKey: .submissionTime) {
             submissionTime = Date(timeIntervalSince1970: timeDouble / 1000)
         } else {
@@ -195,7 +195,7 @@ struct TAKDataPackageInfo: Codable, Identifiable {
         keywords = try container.decodeIfPresent([String].self, forKey: .keywords)
 
         if let timeString = try container.decodeIfPresent(String.self, forKey: .submissionTime) {
-            submissionTime = ISO8601DateFormatter().date(from: timeString)
+            submissionTime = CoTXMLBuilder.timestampFormatter.date(from: timeString) ?? CoTXMLBuilder.timestampFormatterNoFraction.date(from: timeString)
         } else if let timeDouble = try? container.decode(Double.self, forKey: .submissionTime) {
             submissionTime = Date(timeIntervalSince1970: timeDouble / 1000)
         } else {
@@ -203,7 +203,7 @@ struct TAKDataPackageInfo: Codable, Identifiable {
         }
 
         if let timeString = try container.decodeIfPresent(String.self, forKey: .expiration) {
-            expiration = ISO8601DateFormatter().date(from: timeString)
+            expiration = CoTXMLBuilder.timestampFormatter.date(from: timeString) ?? CoTXMLBuilder.timestampFormatterNoFraction.date(from: timeString)
         } else if let timeDouble = try? container.decode(Double.self, forKey: .expiration) {
             expiration = Date(timeIntervalSince1970: timeDouble / 1000)
         } else {

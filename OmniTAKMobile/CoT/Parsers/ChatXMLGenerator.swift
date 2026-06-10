@@ -20,8 +20,8 @@ class ChatXMLGenerator {
         groupName: String? = nil
     ) -> String {
         let messageId = message.id
-        let now = ISO8601DateFormatter().string(from: Date())
-        let stale = ISO8601DateFormatter().string(from: Date().addingTimeInterval(3600)) // 1 hour
+        let now = Date()
+        let nowStr = CoTXMLBuilder.timestamp(now)
 
         // Use current location or default
         let lat = location?.coordinate.latitude ?? 0.0
@@ -45,7 +45,7 @@ class ChatXMLGenerator {
             martiElement = """
 
                     <marti>
-                        <dest callsign="\(recipientCallsign)"/>
+                        <dest callsign="\(recipientCallsign.xmlEscaped)"/>
                     </marti>
             """
         } else {
@@ -61,21 +61,27 @@ class ChatXMLGenerator {
         // For direct message, uid1 should be the recipient's UID
         let chatgrpUid1 = isGroupChat ? chatroom : (message.recipientId ?? chatroom)
 
-        let xml = """
-        <?xml version="1.0" encoding="UTF-8"?>
-        <event version="2.0" uid="GeoChat.\(senderUid).\(chatroom).\(messageId)" type="b-t-f" time="\(now)" start="\(now)" stale="\(stale)" how="h-g-i-g-o">
-            <point lat="\(lat)" lon="\(lon)" hae="\(hae)" ce="\(ce)" le="\(le)"/>
-            <detail>
-                <__chat id="\(chatroom)" chatroom="\(chatroom)" senderCallsign="\(senderCallsign)" groupOwner="false">
-                    <chatgrp uid0="\(senderUid)" uid1="\(chatgrpUid1)" id="\(chatroom)"/>
+        let detail = """
+                <__chat id="\(chatroom.xmlEscaped)" chatroom="\(chatroom.xmlEscaped)" senderCallsign="\(senderCallsign.xmlEscaped)" groupOwner="false">
+                    <chatgrp uid0="\(senderUid.xmlEscaped)" uid1="\(chatgrpUid1.xmlEscaped)" id="\(chatroom.xmlEscaped)"/>
                 </__chat>
-                <link uid="\(senderUid)" production_time="\(now)" type="a-f-G-U-C" parent_callsign="\(senderCallsign)" relation="p-p"/>
-                <remarks source="BAO.F.ATAK.\(senderUid)" to="\(chatroom)" time="\(now)">\(escapeXML(message.messageText))</remarks>\(fileshareElement)\(martiElement)
-            </detail>
-        </event>
+                <link uid="\(senderUid.xmlEscaped)" production_time="\(nowStr)" type="a-f-G-U-C" parent_callsign="\(senderCallsign.xmlEscaped)" relation="p-p"/>
+                <remarks source="BAO.F.ATAK.\(senderUid.xmlEscaped)" to="\(chatroom.xmlEscaped)" time="\(nowStr)">\(message.messageText.xmlEscaped)</remarks>\(fileshareElement)\(martiElement)
         """
 
-        return xml
+        return CoTXMLBuilder.buildEvent(
+            uid: "GeoChat.\(senderUid).\(chatroom).\(messageId)",
+            type: "b-t-f",
+            how: "h-g-i-g-o",
+            time: now,
+            staleAfter: 3600, // 1 hour
+            lat: lat,
+            lon: lon,
+            hae: hae,
+            ce: ce,
+            le: le,
+            detail: detail
+        )
     }
 
     // Generate fileshare element for image attachments
@@ -98,67 +104,9 @@ class ChatXMLGenerator {
 
         let fileshareXML = """
 
-                <fileshare filename="\(escapeXML(attachment.filename))" senderUrl="\(senderUrl)" size="\(attachment.fileSize)" sha256="" senderUid="\(message.senderId)" senderCallsign="\(escapeXML(message.senderCallsign))" name="\(escapeXML(attachment.filename))" mimeType="\(attachment.mimeType)"/>
+                <fileshare filename="\(attachment.filename.xmlEscaped)" senderUrl="\(senderUrl)" size="\(attachment.fileSize)" sha256="" senderUid="\(message.senderId)" senderCallsign="\(message.senderCallsign.xmlEscaped)" name="\(attachment.filename.xmlEscaped)" mimeType="\(attachment.mimeType)"/>
         """
 
         return fileshareXML
-    }
-
-    // Generate GeoChat XML specifically for image messages
-    static func generateImageGeoChatXML(
-        message: ChatMessage,
-        senderUid: String,
-        senderCallsign: String,
-        location: CLLocation?,
-        isGroupChat: Bool = false,
-        groupName: String? = nil
-    ) -> String {
-        // Use the standard generator which now supports attachments
-        return generateGeoChatXML(
-            message: message,
-            senderUid: senderUid,
-            senderCallsign: senderCallsign,
-            location: location,
-            isGroupChat: isGroupChat,
-            groupName: groupName
-        )
-    }
-
-    // Escape special XML characters
-    static func escapeXML(_ string: String) -> String {
-        var escaped = string
-        escaped = escaped.replacingOccurrences(of: "&", with: "&amp;")
-        escaped = escaped.replacingOccurrences(of: "<", with: "&lt;")
-        escaped = escaped.replacingOccurrences(of: ">", with: "&gt;")
-        escaped = escaped.replacingOccurrences(of: "\"", with: "&quot;")
-        escaped = escaped.replacingOccurrences(of: "'", with: "&apos;")
-        return escaped
-    }
-
-    // Generate presence CoT with chat endpoint information
-    static func generatePresenceWithChatEndpoint(
-        uid: String,
-        callsign: String,
-        location: CLLocation,
-        endpoint: String = "*:-1:stcp"
-    ) -> String {
-        let now = ISO8601DateFormatter().string(from: Date())
-        let stale = ISO8601DateFormatter().string(from: Date().addingTimeInterval(300)) // 5 minutes
-
-        let xml = """
-        <?xml version="1.0" encoding="UTF-8"?>
-        <event version="2.0" uid="\(uid)" type="a-f-G-E-S" how="m-g" time="\(now)" start="\(now)" stale="\(stale)">
-            <point lat="\(location.coordinate.latitude)" lon="\(location.coordinate.longitude)" hae="\(location.altitude)" ce="\(location.horizontalAccuracy)" le="\(location.verticalAccuracy)"/>
-            <detail>
-                <contact callsign="\(callsign)" endpoint="\(endpoint)"/>
-                <__group name="Cyan" role="Team Member"/>
-                <status battery="100"/>
-                <takv device="iPhone" platform="OmniTAK" os="iOS" version="\(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "2.0.0")"/>
-                <track speed="\(location.speed)" course="\(location.course)"/>
-            </detail>
-        </event>
-        """
-
-        return xml
     }
 }
