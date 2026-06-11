@@ -230,4 +230,75 @@ final class PluginSDKTests: XCTestCase {
         XCTAssertTrue(mgr.isRegisteredPluginEnabled("soy.engindearing.adsb"),
                       "ADS-B should default ON so first-time users see it")
     }
+
+    // MARK: - ADS-B re-enable is symmetric (overlay returns to prior state)
+
+    /// Restore the shared ADS-B service to a known enabled state after each
+    /// case so the symmetric-toggle tests don't leak into each other or into
+    /// any later test that reads the singleton.
+    private func setADSBOverlay(enabled: Bool) {
+        var s = ADSBTrafficService.shared.settings
+        s.isEnabled = enabled
+        ADSBTrafficService.shared.settings = s
+    }
+
+    /// Disabling then re-enabling the plugin must restore the overlay to the
+    /// state it was in BEFORE deactivation. When it was ON, it comes back ON.
+    func testADSBReenableRestoresOverlayWhenPreviouslyOn() {
+        let originalEnabled = ADSBTrafficService.shared.settings.isEnabled
+        defer { setADSBOverlay(enabled: originalEnabled) }
+
+        let plugin = ADSBPlugin()
+        setADSBOverlay(enabled: true)
+
+        plugin.deactivate()
+        XCTAssertFalse(ADSBTrafficService.shared.settings.isEnabled,
+                       "deactivate should turn the overlay off")
+
+        plugin.activate(host: AppPluginHost.shared)
+        XCTAssertTrue(ADSBTrafficService.shared.settings.isEnabled,
+                      "re-enabling the plugin should restore the overlay to ON")
+
+        AppPluginHost.shared.removeHooks(for: plugin.pluginId)
+    }
+
+    /// When the user had hidden aircraft (overlay OFF) but left the plugin
+    /// enabled, disabling then re-enabling the plugin must NOT force the
+    /// overlay back on — it stays OFF, exactly as the user left it.
+    func testADSBReenableRestoresOverlayWhenPreviouslyOff() {
+        let originalEnabled = ADSBTrafficService.shared.settings.isEnabled
+        defer { setADSBOverlay(enabled: originalEnabled) }
+
+        let plugin = ADSBPlugin()
+        setADSBOverlay(enabled: false)
+
+        plugin.deactivate()
+        XCTAssertFalse(ADSBTrafficService.shared.settings.isEnabled,
+                       "deactivate is a no-op for visibility when already off")
+
+        plugin.activate(host: AppPluginHost.shared)
+        XCTAssertFalse(ADSBTrafficService.shared.settings.isEnabled,
+                       "re-enabling must not clobber a user who hid aircraft")
+
+        AppPluginHost.shared.removeHooks(for: plugin.pluginId)
+    }
+
+    /// First-ever activation (no prior deactivate, nothing stashed) defaults
+    /// the overlay ON, matching the plugin's default-enabled posture so a
+    /// first-time user sees aircraft.
+    func testADSBFirstActivationDefaultsOverlayOn() {
+        let originalEnabled = ADSBTrafficService.shared.settings.isEnabled
+        defer { setADSBOverlay(enabled: originalEnabled) }
+
+        // Start from OFF and activate a fresh plugin that has never stashed a
+        // value — the nil-stash branch should restore to the default-ON state.
+        setADSBOverlay(enabled: false)
+        let plugin = ADSBPlugin()
+
+        plugin.activate(host: AppPluginHost.shared)
+        XCTAssertTrue(ADSBTrafficService.shared.settings.isEnabled,
+                      "first activation with no stash should default the overlay ON")
+
+        AppPluginHost.shared.removeHooks(for: plugin.pluginId)
+    }
 }
