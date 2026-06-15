@@ -42,6 +42,24 @@ struct PointMarker: Identifiable, Codable, Equatable {
     // the affiliation default. See `FemaIconSet.swift` for the MVP caveat.
     var femaIcon: FemaIcon?
 
+    // TAK Spot Map icon (issue #75). When set, the marker is a standard TAK
+    // spot-map point: it renders with the colored dot, emits the canonical
+    // `b-m-p-s-m` CoT type + `COT_MAPPING_SPOTMAP/{color}` usericon path, and
+    // round-trips with ATAK / iTAK. Takes precedence over the affiliation
+    // default; mutually exclusive with the other icon-pack overrides.
+    var takIcon: TAKSpotIcon?
+
+    // TAK Markers (2525C) icon (issue #75). When set, the marker is from the
+    // ATAK "Markers" pack: it renders with MIL-STD-2525 symbology, emits the
+    // icon's 2525 CoT type + `COT_MAPPING_2525C/{type}` usericon path, and
+    // round-trips with ATAK / iTAK.
+    var markersIcon: TAKMarkersIcon?
+
+    // TAK Google place icon (issue #75). When set, the marker is from the ATAK
+    // "Google" pack: it renders as a place pin, emits the pack's CoT type +
+    // `{googleUID}/{token}.png` usericon path, and round-trips with ATAK / iTAK.
+    var googleIcon: TAKGoogleIcon?
+
     // Sharing
     var isBroadcast: Bool
 
@@ -55,6 +73,9 @@ struct PointMarker: Identifiable, Codable, Equatable {
         saluteReport: SALUTEReport? = nil,
         createdBy: String? = nil,
         femaIcon: FemaIcon? = nil,
+        takIcon: TAKSpotIcon? = nil,
+        markersIcon: TAKMarkersIcon? = nil,
+        googleIcon: TAKGoogleIcon? = nil,
         isBroadcast: Bool = false
     ) {
         self.id = id
@@ -68,10 +89,19 @@ struct PointMarker: Identifiable, Codable, Equatable {
         self.saluteReport = saluteReport
         self.createdBy = createdBy
         self.uid = "marker-\(id.uuidString)"
-        // FEMA icon (if any) overrides the affiliation-default CoT type and icon.
-        self.cotType = femaIcon?.cotType ?? affiliation.cotType
-        self.iconName = femaIcon?.sfSymbolName ?? affiliation.iconName
+        // Icon precedence: TAK spot-map → Markers (2525C) → Google place →
+        // FEMA → affiliation default. Each pack emits its own canonical CoT
+        // type; otherwise the affiliation's ground-unit type.
+        self.cotType = takIcon.map { _ in TAKSpotIcon.cotType }
+            ?? markersIcon?.cotType
+            ?? googleIcon?.cotType
+            ?? femaIcon?.cotType
+            ?? affiliation.cotType
+        self.iconName = femaIcon?.sfSymbolName ?? googleIcon?.symbolName ?? affiliation.iconName
         self.femaIcon = femaIcon
+        self.takIcon = takIcon
+        self.markersIcon = markersIcon
+        self.googleIcon = googleIcon
         self.isBroadcast = isBroadcast
     }
 
@@ -80,7 +110,8 @@ struct PointMarker: Identifiable, Codable, Equatable {
     enum CodingKeys: String, CodingKey {
         case id, name, affiliation, latitude, longitude, altitude
         case timestamp, modifiedAt, remarks, createdBy, saluteReport
-        case uid, cotType, iconName, isBroadcast, femaIcon
+        case uid, cotType, iconName, isBroadcast, femaIcon, takIcon
+        case markersIcon, googleIcon
     }
 
     init(from decoder: Decoder) throws {
@@ -104,6 +135,9 @@ struct PointMarker: Identifiable, Codable, Equatable {
         iconName = try container.decode(String.self, forKey: .iconName)
         isBroadcast = try container.decode(Bool.self, forKey: .isBroadcast)
         femaIcon = try container.decodeIfPresent(FemaIcon.self, forKey: .femaIcon)
+        takIcon = try container.decodeIfPresent(TAKSpotIcon.self, forKey: .takIcon)
+        markersIcon = try container.decodeIfPresent(TAKMarkersIcon.self, forKey: .markersIcon)
+        googleIcon = try container.decodeIfPresent(TAKGoogleIcon.self, forKey: .googleIcon)
     }
 
     func encode(to encoder: Encoder) throws {
@@ -124,6 +158,9 @@ struct PointMarker: Identifiable, Codable, Equatable {
         try container.encode(iconName, forKey: .iconName)
         try container.encode(isBroadcast, forKey: .isBroadcast)
         try container.encodeIfPresent(femaIcon, forKey: .femaIcon)
+        try container.encodeIfPresent(takIcon, forKey: .takIcon)
+        try container.encodeIfPresent(markersIcon, forKey: .markersIcon)
+        try container.encodeIfPresent(googleIcon, forKey: .googleIcon)
     }
 
     // MARK: - Equatable

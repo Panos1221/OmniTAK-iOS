@@ -13,6 +13,13 @@ import CoreLocation
 import MapboxMaps
 import UIKit
 
+// MARK: - Mapbox north-reset notification (Issue #72/#73)
+
+extension Notification.Name {
+    /// Posted by ATAKMapView to snap the Mapbox camera heading to 0° (north).
+    static let mapboxResetNorth = Notification.Name("mapboxResetNorth")
+}
+
 // MARK: - Tactical Map View (Mapbox Maps SDK v3 — native)
 //
 // This is the main map surface for OmniTAK iOS. It used to wrap MKMapView;
@@ -44,6 +51,13 @@ struct TacticalMapView: UIViewRepresentable {
     @ObservedObject var rasterStore: RasterOverlayStore = RasterOverlayStore.shared
     @ObservedObject var mbtilesStore: MBTilesOverlayStore = MBTilesOverlayStore.shared
     let onMapTap: (CLLocationCoordinate2D) -> Void
+    /// Issue #72 — when true, rotation gestures are disabled and bearing
+    /// is snapped back to 0° on any camera-change that drifts off north.
+    var isNorthLocked: Bool = false
+    /// Issue #73 — called with the current map bearing (° CW from north)
+    /// whenever the Mapbox camera rotates, so the parent can update the
+    /// compass overlay needle.
+    var onBearingChanged: ((Double) -> Void)? = nil
 
     // MARK: - UIViewRepresentable
 
@@ -144,6 +158,23 @@ struct TacticalMapView: UIViewRepresentable {
             coord.handleCameraChanged(mapView: mapView)
         }
 
+        // Issue #72/#73 — listen for the north-snap notification so
+        // both the compass tap and the north-lock toggle route through
+        // the same path on the 2D engine.
+        coord.resetNorthObserver = NotificationCenter.default.addObserver(
+            forName: .mapboxResetNorth, object: nil, queue: .main
+        ) { [weak coord, weak mapView] _ in
+            guard let mapView = mapView else { return }
+            coord?.isProgrammaticUpdate = true
+            let state = mapView.mapboxMap.cameraState
+            mapView.mapboxMap.setCamera(to: CameraOptions(
+                center: state.center,
+                zoom: state.zoom,
+                bearing: 0,
+                pitch: state.pitch
+            ))
+        }
+
         return mapView
     }
 
@@ -163,6 +194,11 @@ struct TacticalMapView: UIViewRepresentable {
             }
         }
 
+        // Issue #72 — north-lock: disable rotation gesture while locked,
+        // re-enable when released. The Mapbox API exposes this cleanly on
+        // gestures.options without tearing down the whole gesture stack.
+        mapView.gestures.options.rotateEnabled = !isNorthLocked
+
         // Region sync — only push to Mapbox if the SwiftUI region
         // diverges from the camera state by more than a hair. This is
         // the same feedback-loop guard MKMapView needed.
@@ -172,6 +208,8 @@ struct TacticalMapView: UIViewRepresentable {
                 abs(cameraState.center.latitude - region.center.latitude) > 0.0001 ||
                 abs(cameraState.center.longitude - region.center.longitude) > 0.0001
             let zoomChanged = abs(cameraState.zoom - TacticalMapView.zoom(forSpan: region.span, mapHeight: mapView.bounds.height)) > 0.25
+            // Issue #72 — when north-locked, always keep bearing at 0.
+            let bearingForUpdate = isNorthLocked ? 0.0 : cameraState.bearing
             if centerChanged || zoomChanged {
                 context.coordinator.isProgrammaticUpdate = true
                 // Explicitly preserve current pitch + bearing — MKCoordinateRegion
@@ -181,7 +219,7 @@ struct TacticalMapView: UIViewRepresentable {
                 let opts = CameraOptions(
                     center: region.center,
                     zoom: TacticalMapView.zoom(forSpan: region.span, mapHeight: mapView.bounds.height),
-                    bearing: cameraState.bearing,
+                    bearing: bearingForUpdate,
                     pitch: cameraState.pitch
                 )
                 mapView.mapboxMap.setCamera(to: opts)
@@ -293,6 +331,9 @@ struct TacticalMapView: UIViewRepresentable {
         // Camera feedback-loop guards
         var isUserInteracting = false
         var isProgrammaticUpdate = false
+
+        // Issue #72/#73 — reset-north observer (removes itself on dealloc)
+        var resetNorthObserver: NSObjectProtocol?
 
         // Annotation managers — one per geometry kind. Mapbox v11
         // wants us to reuse these (cheap to create, expensive to
@@ -422,7 +463,23 @@ struct TacticalMapView: UIViewRepresentable {
                 span: TacticalMapView.span(forZoom: state.zoom, latitude: state.center.latitude)
             )
             DispatchQueue.main.async { [weak self] in
-                self?.parent.region = newRegion
+                guard let self else { return }
+                self.parent.region = newRegion
+                // Issue #73 — report bearing so the compass overlay needle tracks
+                // the 2D map's rotation (not just the device's magnetometer).
+                self.parent.onBearingChanged?(state.bearing)
+                // Issue #72 — if north-lock is engaged, snap back to 0° on any
+                // user-initiated rotation (bearing drift > 0.5° threshold).
+                if self.parent.isNorthLocked && !self.isProgrammaticUpdate && abs(state.bearing) > 0.5 {
+                    self.isProgrammaticUpdate = true
+                    mapView.mapboxMap.setCamera(to: CameraOptions(
+                        center: state.center,
+                        zoom: state.zoom,
+                        bearing: 0,
+                        pitch: state.pitch
+                    ))
+                    self.isProgrammaticUpdate = false
+                }
             }
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in
                 self?.isUserInteracting = false
@@ -659,7 +716,9 @@ struct TacticalMapView: UIViewRepresentable {
             var fresh: [PointAnnotation] = []
             fresh.reserveCapacity(parent.markers.count)
             for marker in parent.markers {
-                let key = "cot|\(marker.type)|\(marker.callsign)"
+                // Style-image key folds in the icon source so a spot-map dot and
+                // an affiliation frame of the same type don't share one image.
+                let key = "cot|\(marker.type)|\(marker.iconsetPath ?? "")|\(marker.argbColor ?? 0)|\(marker.callsign)"
                 let img = symbolImage(for: marker)
                 var ann = PointAnnotation(id: "cot-\(marker.uid)", coordinate: marker.coordinate)
                 ann.image = .init(image: img, name: key)
@@ -671,6 +730,19 @@ struct TacticalMapView: UIViewRepresentable {
         }
 
         private func symbolImage(for marker: CoTMarker) -> UIImage {
+            // Issue #75 — TAK icon suite. If the marker carries a known iconset
+            // path (e.g. COT_MAPPING_SPOTMAP/red) or is a spot-map CoT type,
+            // resolve it to the standard TAK icon. Falls through to MIL-STD-2525
+            // when the registry has no match (the existing affiliation frames).
+            if let img = TAKIconRegistry.shared.resolveImage(
+                cotType: marker.type,
+                iconsetPath: marker.iconsetPath,
+                argb: marker.argbColor,
+                size: 28
+            ) {
+                return img
+            }
+
             let key = "cot|\(marker.type)|\(marker.callsign)"
             if let cached = symbolImageCache[key] { return cached }
 
@@ -721,7 +793,14 @@ struct TacticalMapView: UIViewRepresentable {
             fresh.reserveCapacity(parent.pointMarkers.count)
             for pm in parent.pointMarkers {
                 let img = pointMarkerImage(for: pm)
-                let key = "pm|\(pm.affiliation.rawValue)"
+                // Style-image key must distinguish each TAK icon pack from plain
+                // affiliation glyphs, else two markers sharing an affiliation
+                // but different pack icons would collide on one cached image.
+                let key: String
+                if let spot = pm.takIcon { key = "pm|spot|\(spot.rawValue)" }
+                else if let mk = pm.markersIcon { key = "pm|mk|\(mk.rawValue)" }
+                else if let g = pm.googleIcon { key = "pm|google|\(g.rawValue)" }
+                else { key = "pm|\(pm.affiliation.rawValue)" }
                 var ann = PointAnnotation(id: "pm-\(pm.id.uuidString)", coordinate: pm.coordinate)
                 ann.image = .init(image: img, name: key)
                 ann.textField = pm.name
@@ -731,17 +810,27 @@ struct TacticalMapView: UIViewRepresentable {
                 ann.textHaloColor = StyleColor(.black)
                 ann.textHaloWidth = 1.0
                 ann.textSize = 11
-                // Affiliation glyphs are circular, so center them on the
-                // coordinate. `.bottom` (for teardrop pins) made the circle
-                // render above its point — markers appeared to drop above
-                // the aim crosshair.
-                ann.iconAnchor = .center
+                // Circular glyphs (spot dots, 2525 frames, affiliation) center on
+                // the coordinate; the Google teardrop pin points at its tip, so
+                // it anchors at the bottom.
+                ann.iconAnchor = pm.googleIcon != nil ? .bottom : .center
                 fresh.append(ann)
             }
             manager.annotations = fresh
         }
 
         private func pointMarkerImage(for marker: PointMarker) -> UIImage {
+            // TAK icon suite (issue #75) — render the picked pack icon via the
+            // shared registry so it matches the picker swatch and the 3D globe.
+            if let spot = marker.takIcon {
+                return TAKIconRegistry.shared.image(for: spot, size: 36)
+            }
+            if let mk = marker.markersIcon {
+                return TAKIconRegistry.shared.image(for: mk, size: 36)
+            }
+            if let g = marker.googleIcon {
+                return TAKIconRegistry.shared.image(for: g, size: 40)
+            }
             let key = "pmimg|\(marker.affiliation.rawValue)"
             if let cached = symbolImageCache[key] { return cached }
             let size = CGSize(width: 36, height: 36)
