@@ -424,8 +424,22 @@ class PointDropperService: ObservableObject {
         }
 
         let xml = MarkerCoTGenerator.generateCoT(for: marker, staleTime: defaultStaleTime)
+        let sentToServer = takService.sendCoT(xml: xml)
 
-        if takService.sendCoT(xml: xml) {
+        // Also push the marker over the mesh so it reaches off-grid peers on
+        // Meshtastic PortNum 78 (TAKPacketV2). This is independent of the TAK
+        // server send — a marker should reach the mesh even when no server is
+        // connected. Fire-and-forget on the main actor (the manager is
+        // @MainActor and applies its own per-uid throttle + hop limit), the
+        // same pattern ChatManager / PositionBroadcastService use.
+        let event = MarkerCoTGenerator.cotEvent(for: marker, staleTime: defaultStaleTime)
+        Task { @MainActor in
+            if MeshtasticManager.shared.isConnected {
+                MeshtasticManager.shared.sendCoTOverMesh(event)
+            }
+        }
+
+        if sentToServer {
             // Update marker to mark as broadcast
             if let index = markers.firstIndex(where: { $0.id == marker.id }) {
                 markers[index].isBroadcast = true

@@ -362,10 +362,18 @@ class MeshtasticBLEClient: NSObject, ObservableObject {
         sendToRadio(packet, peripheral: peripheral, characteristic: characteristic)
     }
 
-    /// Send a portnum-72 (ATAK_PLUGIN) payload over the active BLE connection.
-    /// Returns true if the bytes were dispatched to the radio.
+    /// Send an ATAK payload over the active BLE connection. Defaults to
+    /// portnum 72 (ATAK_PLUGIN, TAKPacket v1); pass portnum 78 for a
+    /// TAKPacketV2 marker. Returns true if the bytes were dispatched to the radio.
     @discardableResult
-    func sendATAKPlugin(payload: Data, to destination: UInt32 = 0xFFFFFFFF, channel: UInt32 = 0) -> Bool {
+    func sendATAKPlugin(
+        payload: Data,
+        to destination: UInt32 = 0xFFFFFFFF,
+        channel: UInt32 = 0,
+        portnum: UInt64 = 72,
+        hopLimit: UInt32 = 3,
+        wantAck: Bool = false
+    ) -> Bool {
         guard let peripheral = connectedPeripheral,
               let characteristic = toRadioCharacteristic,
               peripheral.state == .connected else {
@@ -376,7 +384,35 @@ class MeshtasticBLEClient: NSObject, ObservableObject {
         let toRadio = ATAKPluginSerializer.buildToRadio(
             atakPayload: payload,
             to: destination,
-            channel: channel
+            channel: channel,
+            portnum: portnum,
+            hopLimit: hopLimit,
+            wantAck: wantAck
+        )
+        sendToRadio(toRadio, peripheral: peripheral, characteristic: characteristic)
+        return true
+    }
+
+    /// Send an `AdminMessage` payload (channel / config apply) on the ADMIN_APP
+    /// portnum (6) to the local radio. Admin writes are unicast to our own node
+    /// with want_ack so the radio applies + persists them. Returns true if the
+    /// bytes were dispatched.
+    @discardableResult
+    func sendAdmin(payload: Data) -> Bool {
+        guard let peripheral = connectedPeripheral,
+              let characteristic = toRadioCharacteristic,
+              peripheral.state == .connected else {
+            DispatchQueue.main.async { self.lastError = "Not connected" }
+            return false
+        }
+        let destination = myNodeNum != 0 ? myNodeNum : 0xFFFFFFFF
+        let toRadio = ATAKPluginSerializer.buildToRadio(
+            atakPayload: payload,
+            to: destination,
+            channel: 0,
+            portnum: MeshtasticAdminCodec.adminPortnum,
+            hopLimit: 3,
+            wantAck: true
         )
         sendToRadio(toRadio, peripheral: peripheral, characteristic: characteristic)
         return true
@@ -946,8 +982,27 @@ class MeshtasticBLEClient: NSObject, ObservableObject {
             print("   🎯 ATAK Plugin message from \(String(format: "0x%08X", packet.from)) (\(packet.payload.count) bytes)")
             handleATAKPluginPayload(packet.payload, from: packet.from)
 
+        case 78: // ATAK_PLUGIN_V2 / TAKPacketV2 — a dropped tactical marker
+            print("   🎯 TAKPacketV2 marker from \(String(format: "0x%08X", packet.from)) (\(packet.payload.count) bytes)")
+            handleTAKPacketV2Payload(packet.payload, from: packet.from)
+
         default:
             print("   ❓ Unknown portNum \(packet.portNum) from \(String(format: "0x%08X", packet.from))")
+        }
+    }
+
+    /// Decode a port-78 TAKPacketV2 payload into a marker CoTEvent and feed it
+    /// to the CoT pipeline as a position/marker update (NOT chat). Dedup is by
+    /// uid (preserved verbatim by the codec) — CoTEventHandler updates the
+    /// existing event in place when the uid already exists.
+    fileprivate func handleTAKPacketV2Payload(_ payload: Data, from nodeId: UInt32) {
+        guard let event = TAKPacketV2Codec.decode(payload) else {
+            print("   ⚠️ Failed to decode TAKPacketV2 payload (\(payload.count) bytes) from \(String(format: "0x%08X", nodeId))")
+            return
+        }
+        print("   ✅ TAKPacketV2 → marker CoTEvent uid=\(event.uid) type=\(event.type) callsign=\(event.detail.callsign)")
+        DispatchQueue.main.async {
+            CoTEventHandler.shared.handle(event: .positionUpdate(event))
         }
     }
 

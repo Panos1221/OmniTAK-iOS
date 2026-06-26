@@ -13,37 +13,64 @@ import CoreLocation
 /// Generates TAK-compatible CoT XML for point markers
 class MarkerCoTGenerator {
 
+    /// Resolve a marker's canonical `usericon iconsetpath` + signed ARGB color
+    /// (issue #75 — the standard TAK icon suite). Each pack emits its canonical
+    /// path so the marker renders as the exact icon the operator picked on
+    /// ATAK / iTAK / TAK Server:
+    ///   • Spot Map → `COT_MAPPING_SPOTMAP/{color}` + the swatch color
+    ///   • Markers  → `COT_MAPPING_2525C/{2525type}` (color follows affiliation)
+    ///   • Google   → `{googleUID}/{token}.png`
+    /// Markers/Spots that carry no explicit pack fall back to the
+    /// affiliation-keyed spot-map path the app has always sent. Shared by the
+    /// XML generator and the mesh (TAKPacketV2) CoTEvent builder so both wire
+    /// formats carry the same icon/color.
+    static func iconAndColor(for marker: PointMarker) -> (iconsetPath: String, argbColor: Int) {
+        if let importedPath = marker.importedIconsetPath, !importedPath.isEmpty {
+            return (importedPath, hexToARGB(marker.affiliation.hexColor))
+        } else if let takIcon = marker.takIcon {
+            return (takIcon.iconsetPath, hexToARGB(takIcon.argbHex))
+        } else if let markersIcon = marker.markersIcon {
+            return (markersIcon.iconsetPath, hexToARGB(marker.affiliation.hexColor))
+        } else if let googleIcon = marker.googleIcon {
+            return (googleIcon.iconsetPath, hexToARGB(marker.affiliation.hexColor))
+        } else {
+            return ("COT_MAPPING_SPOTMAP/\(marker.affiliation.rawValue.lowercased())_point",
+                    hexToARGB(marker.affiliation.hexColor))
+        }
+    }
+
+    /// Build a `CoTEvent` from a point marker — the in-memory event the mesh
+    /// path (TAKPacketV2 codec) encodes and the local map renders. Carries the
+    /// same uid, CoT type, position, iconset and color as the XML form so a
+    /// marker shared over the mesh round-trips into a marker on the receiver.
+    static func cotEvent(for marker: PointMarker, staleTime: TimeInterval = 3600) -> CoTEvent {
+        let (iconsetPath, argbColor) = iconAndColor(for: marker)
+        var detail = CoTDetail(
+            callsign: marker.name,
+            team: nil, teamRole: nil, speed: nil,
+            course: marker.heading,
+            remarks: marker.remarks,
+            battery: nil, device: "iPhone", platform: "OmniTAK"
+        )
+        detail.iconsetPath = iconsetPath
+        detail.argbColor = argbColor
+        return CoTEvent(
+            uid: marker.uid,
+            type: marker.cotType,
+            time: Date(),
+            point: CoTPoint(
+                lat: marker.coordinate.latitude,
+                lon: marker.coordinate.longitude,
+                hae: marker.altitude ?? 0.0,
+                ce: 10.0, le: 10.0
+            ),
+            detail: detail
+        )
+    }
+
     /// Generate CoT XML for a point marker
     static func generateCoT(for marker: PointMarker, staleTime: TimeInterval = 3600) -> String {
-        // Icon + color (issue #75 — the standard TAK icon suite). Each pack
-        // emits its canonical `usericon iconsetpath` so the marker renders as
-        // the exact icon the operator picked on ATAK / iTAK / TAK Server:
-        //   • Spot Map → `COT_MAPPING_SPOTMAP/{color}` + the swatch color
-        //   • Markers  → `COT_MAPPING_2525C/{2525type}` (color follows affiliation)
-        //   • Google   → `{googleUID}/{token}.png`
-        // Markers/Spots that carry no explicit pack fall back to the
-        // affiliation-keyed spot-map path the app has always sent.
-        let iconsetPath: String
-        let argbColor: Int
-        if let importedPath = marker.importedIconsetPath, !importedPath.isEmpty {
-            // Imported custom pack (issue #75 Phase 2): emit the canonical
-            // iconsetpath so ATAK / iTAK peers can resolve it. Color follows
-            // the affiliation (same as Markers pack behavior).
-            iconsetPath = importedPath
-            argbColor = hexToARGB(marker.affiliation.hexColor)
-        } else if let takIcon = marker.takIcon {
-            iconsetPath = takIcon.iconsetPath
-            argbColor = hexToARGB(takIcon.argbHex)
-        } else if let markersIcon = marker.markersIcon {
-            iconsetPath = markersIcon.iconsetPath
-            argbColor = hexToARGB(marker.affiliation.hexColor)
-        } else if let googleIcon = marker.googleIcon {
-            iconsetPath = googleIcon.iconsetPath
-            argbColor = hexToARGB(marker.affiliation.hexColor)
-        } else {
-            iconsetPath = "COT_MAPPING_SPOTMAP/\(marker.affiliation.rawValue.lowercased())_point"
-            argbColor = hexToARGB(marker.affiliation.hexColor)
-        }
+        let (iconsetPath, argbColor) = iconAndColor(for: marker)
 
         var detail = """
                 <contact callsign="\(marker.name.xmlEscaped)"/>

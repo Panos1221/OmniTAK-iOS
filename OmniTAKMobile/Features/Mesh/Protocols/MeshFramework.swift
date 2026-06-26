@@ -126,15 +126,41 @@ enum MeshTAKRouting {
 
     /// Which on-the-wire encoder a given CoT event takes over the mesh.
     enum Format: Equatable {
-        /// Compact `TAKPacket` (atak.proto) — PLI or GeoChat.
+        /// Compact `TAKPacket` (atak.proto) — PLI or GeoChat (port 72).
         case takPacket
+        /// `TAKPacketV2` (port 78) — a dropped tactical MARKER carrying full
+        /// CoT type, color and iconset so it renders as a marker (not chat).
+        case takPacketV2
         /// `TAKMessage{CoTEvent}` fallback (OmniTAK↔OmniTAK, non-PLI/non-chat).
         case takMessage
     }
 
+    /// True if a CoT type belongs to a tactical MARKER family that should ride
+    /// the TAKPacketV2 (port 78) path rather than the v1 PLI path. These are the
+    /// dropped-point families: unknown/hostile/friendly ground units and the
+    /// `b-m-p-*` point-marker (spot/waypoint/checkpoint) tree.
+    static func isMarkerType(_ type: String) -> Bool {
+        return type.hasPrefix("a-u-")
+            || type.hasPrefix("a-h-")
+            || type.hasPrefix("a-f-G-U-")
+            || type.hasPrefix("b-m-p-")
+    }
+
     /// Decide the wire format for an outbound CoT event. Pure — no radio, no I/O.
     static func decide(for event: CoTEvent) -> Format {
-        if event.type.hasPrefix("a-") || event.type == "b-t-f" {
+        // GeoChat stays on the v1 path.
+        if event.type == "b-t-f" {
+            return .takPacket
+        }
+        // A dropped tactical MARKER (uid "marker-…") of a marker CoT family is
+        // routed to TAKPacketV2 (port 78) BEFORE the generic a-* → PLI branch,
+        // so it renders as a marker on receive — and so a friendly self-PLI
+        // (a-f-G-U-C, uid != marker-…) keeps the v1 PLI path.
+        if event.uid.isDroppedPointMarkerUID, isMarkerType(event.type) {
+            return .takPacketV2
+        }
+        // Self-position PLI + other a-* SA messages on the v1 TAKPacket path.
+        if event.type.hasPrefix("a-") {
             return .takPacket
         }
         return .takMessage
@@ -145,11 +171,15 @@ enum MeshTAKRouting {
     ///
     /// `TAKPacketCodec.encode` only returns nil for types it doesn't handle; in
     /// that case (which `decide` already routes to `.takMessage`) we fall back to
-    /// the `TAKMessage` serializer so a payload is always produced.
+    /// the `TAKMessage` serializer so a payload is always produced. A
+    /// `.takPacketV2` marker that overruns the LoRa wire budget (codec returns
+    /// nil) degrades to the `TAKMessage` fallback so a payload is always emitted.
     static func encodePayload(for event: CoTEvent) -> Data? {
         switch decide(for: event) {
         case .takPacket:
             return TAKPacketCodec.encode(event) ?? ATAKPluginSerializer.serialize(event)
+        case .takPacketV2:
+            return TAKPacketV2Codec.encodeMarker(event) ?? ATAKPluginSerializer.serialize(event)
         case .takMessage:
             return ATAKPluginSerializer.serialize(event)
         }

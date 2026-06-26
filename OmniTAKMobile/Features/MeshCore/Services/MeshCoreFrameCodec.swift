@@ -96,7 +96,12 @@ enum MeshCoreFrameCodec {
     static let cmdGetBattery: UInt8      = 0x14
     static let cmdDeviceQuery: UInt8     = 0x16
     static let cmdGetContactByKey: UInt8 = 0x1E
+    static let cmdSetChannel: UInt8      = 0x20
     static let cmdSendChannelData: UInt8 = 0x3E
+
+    /// MeshCore CMD_SET_CHANNEL fixed field widths (companion_protocol.md §4).
+    static let channelNameMaxBytes = 32
+    static let channelSecretBytes = 16
 
     static let txtTypePlain: UInt8       = 0x00
     static let deviceQueryArg: UInt8     = 0x03
@@ -202,6 +207,44 @@ enum MeshCoreFrameCodec {
         var out = Data([cmdGetContactByKey])
         out.append(advertFrame.subdata(in: 1..<33))
         return out
+    }
+
+    /// SET_CHANNEL — create / update a channel slot on the radio. This is the
+    /// MeshCore companion analogue of Meshtastic's AdminMessage.set_channel,
+    /// used to APPLY an imported / created channel (OmniTAK-iOS #101).
+    ///
+    /// Layout (companion_protocol.md §4 "Set Channel", 50 bytes total):
+    ///   [0x20][index u8][name 32 bytes UTF-8 null-padded][secret 16 bytes]
+    ///
+    /// - index 0 is the public channel (secret should be all-zero).
+    /// - indices 1–7 are private channels (16-byte secret).
+    /// The name is truncated to 32 bytes and null-padded; the secret is
+    /// zero-padded / truncated to exactly 16 bytes. Returns nil for an
+    /// out-of-range index. The 32-byte-secret variant is unsupported by the
+    /// firmware, so only a 16-byte secret is emitted.
+    static func encodeSetChannel(index: Int, name: String, secret: Data) -> Data? {
+        guard index >= 0, index <= 7 else { return nil }
+
+        var out = Data([cmdSetChannel, UInt8(index)])
+
+        // Name: UTF-8, truncated to 32 bytes, null-padded to exactly 32.
+        var nameBytes = Array(name.utf8)
+        if nameBytes.count > channelNameMaxBytes {
+            nameBytes = Array(nameBytes.prefix(channelNameMaxBytes))
+        }
+        out.append(contentsOf: nameBytes)
+        if nameBytes.count < channelNameMaxBytes {
+            out.append(contentsOf: [UInt8](repeating: 0, count: channelNameMaxBytes - nameBytes.count))
+        }
+
+        // Secret: exactly 16 bytes, zero-padded / truncated.
+        var secretBytes = Array(secret.prefix(channelSecretBytes))
+        if secretBytes.count < channelSecretBytes {
+            secretBytes.append(contentsOf: [UInt8](repeating: 0, count: channelSecretBytes - secretBytes.count))
+        }
+        out.append(contentsOf: secretBytes)
+
+        return out // 1 + 1 + 32 + 16 = 50 bytes
     }
 
     // MARK: - Decoder

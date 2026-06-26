@@ -12,6 +12,7 @@ struct MeshtasticConnectionView: View {
     @State private var showingDevicePicker = false
     @State private var showingMeshTopology = false
     @State private var showingNodeMap = false
+    @State private var showingChannelSettings = false
 
     var body: some View {
         NavigationView {
@@ -42,6 +43,12 @@ struct MeshtasticConnectionView: View {
             }
             .navigationTitle("Meshtastic")
             .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button(action: { showingChannelSettings = true }) {
+                        Image(systemName: "gearshape")
+                    }
+                    .accessibilityLabel("Mesh Settings")
+                }
                 ToolbarItem(placement: .navigationBarTrailing) {
                     if manager.isConnected {
                         Menu {
@@ -78,6 +85,9 @@ struct MeshtasticConnectionView: View {
             }
             .sheet(isPresented: $showingDevicePicker) {
                 MeshFrameworkDevicePickerView(meshtasticManager: manager)
+            }
+            .sheet(isPresented: $showingChannelSettings) {
+                MeshtasticSettingsView()
             }
             .sheet(isPresented: $showingMeshTopology) {
                 MeshTopologyView()

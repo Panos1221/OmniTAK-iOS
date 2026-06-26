@@ -66,6 +66,17 @@ public class MeshtasticManager: ObservableObject {
     // Saved TCP connections
     @AppStorage("meshtastic_saved_hosts") private var savedHostsData: Data = Data()
 
+    /// LoRa hop limit applied to dropped-marker (TAKPacketV2 / port 78) sends.
+    /// Default 3 — enough to relay across a small mesh without flooding airtime.
+    @AppStorage("meshtastic_marker_hop_limit") private var markerHopLimit: Int = 3
+
+    /// Per-uid debounce of marker mesh sends. The first send of a uid always
+    /// goes out; repeats of the same marker within `markerSendThrottle` seconds
+    /// are suppressed so a re-broadcast / edit storm doesn't flood the LoRa
+    /// channel. Keyed by marker uid → last send time.
+    private var lastMarkerSendTimes: [String: Date] = [:]
+    private let markerSendThrottle: TimeInterval = 30
+
     // MARK: - Initialization
 
     public init() {
@@ -421,6 +432,143 @@ public class MeshtasticManager: ObservableObject {
         }
     }
 
+    // MARK: - Channels & Settings (OmniTAK-iOS #101)
+
+    /// Operator-managed Meshtastic channels created / imported inside OmniTAK.
+    /// The radio does not expose its channel table to us yet, so this is the
+    /// app-side working set the Settings screen lists, shares and applies.
+    /// Persisted as JSON via @AppStorage.
+    @AppStorage("meshtastic_app_channels") private var appChannelsData: Data = Data()
+
+    /// Codable mirror of `MeshChannel` (which lives in a codec file and isn't
+    /// Codable) so the operator's channel set survives relaunch.
+    public struct StoredChannel: Codable, Identifiable, Equatable {
+        public var id: String { "\(index):\(name)" }
+        public var index: Int
+        public var name: String
+        /// PSK as lowercase hex; "" = no crypto.
+        public var pskHex: String
+        public var isPrimary: Bool
+
+        public init(index: Int, name: String, pskHex: String, isPrimary: Bool) {
+            self.index = index
+            self.name = name
+            self.pskHex = pskHex
+            self.isPrimary = isPrimary
+        }
+    }
+
+    public var appChannels: [StoredChannel] {
+        get { (try? JSONDecoder().decode([StoredChannel].self, from: appChannelsData)) ?? [] }
+        set { appChannelsData = (try? JSONEncoder().encode(newValue)) ?? Data() }
+    }
+
+    /// Add or replace a channel in the operator's working set (keyed by index).
+    public func upsertAppChannel(_ ch: StoredChannel) {
+        var list = appChannels
+        if let i = list.firstIndex(where: { $0.index == ch.index }) {
+            list[i] = ch
+        } else {
+            list.append(ch)
+        }
+        list.sort { $0.index < $1.index }
+        appChannels = list
+    }
+
+    public func removeAppChannel(index: Int) {
+        appChannels = appChannels.filter { $0.index != index }
+    }
+
+    /// Translate stored hex PSK into raw bytes (empty for "" / invalid).
+    static func pskData(fromHex hex: String) -> Data {
+        MeshCoreChannelCodec.dehex(hex) ?? Data()
+    }
+
+    /// Build the shareable channel-set URL for the operator's working set
+    /// (or a single channel when `only` is supplied).
+    public func channelShareURL(only: StoredChannel? = nil) -> String? {
+        let source = only.map { [$0] } ?? appChannels
+        guard !source.isEmpty else { return nil }
+        let channels = source.map {
+            MeshChannel(name: $0.name, psk: Self.pskData(fromHex: $0.pskHex))
+        }
+        return MeshChannelShare.shareURL(transport: .meshtastic, meshtastic: channels)
+    }
+
+    /// Apply (write) a channel to the connected radio via AdminMessage.set_channel.
+    /// Also records it in the operator's working set. Returns true if dispatched.
+    @discardableResult
+    public func applyChannel(_ ch: StoredChannel) -> Bool {
+        upsertAppChannel(ch)
+        guard #available(iOS 13.0, *), isConnected, let device = connectedDevice else {
+            lastError = "Not connected"
+            return false
+        }
+        let payload = MeshtasticAdminCodec.encodeSetChannel(
+            index: Int32(ch.index),
+            name: ch.name,
+            psk: Self.pskData(fromHex: ch.pskHex),
+            role: ch.isPrimary ? .primary : .secondary
+        )
+        switch device.connectionType {
+        case .bluetooth: return bleClient.sendAdmin(payload: payload)
+        case .tcp:       return tcpClient.sendAdmin(payload: payload)
+        }
+    }
+
+    /// Apply an imported Meshtastic channel-set (from a scanned QR / pasted
+    /// link) to the radio. Channels land at indices 1…N as SECONDARY (the
+    /// primary index 0 is left untouched). Returns the number applied.
+    @discardableResult
+    func applyImportedChannels(_ channels: [MeshChannel], startIndex: Int = 1) -> Int {
+        var applied = 0
+        for (offset, ch) in channels.enumerated() {
+            let idx = startIndex + offset
+            guard idx <= 7 else { break }
+            let stored = StoredChannel(
+                index: idx,
+                name: ch.name,
+                pskHex: MeshCoreChannelCodec.hex(ch.psk),
+                isPrimary: false
+            )
+            if applyChannel(stored) { applied += 1 }
+        }
+        return applied
+    }
+
+    /// Apply device role + rebroadcast scope via AdminMessage.set_config.
+    @discardableResult
+    func applyDeviceConfig(
+        role: MeshtasticAdminCodec.DeviceRole,
+        rebroadcastMode: MeshtasticAdminCodec.RebroadcastMode
+    ) -> Bool {
+        guard #available(iOS 13.0, *), isConnected, let device = connectedDevice else {
+            lastError = "Not connected"
+            return false
+        }
+        let payload = MeshtasticAdminCodec.encodeSetDeviceConfig(
+            role: role, rebroadcastMode: rebroadcastMode
+        )
+        switch device.connectionType {
+        case .bluetooth: return bleClient.sendAdmin(payload: payload)
+        case .tcp:       return tcpClient.sendAdmin(payload: payload)
+        }
+    }
+
+    /// Apply the position broadcast interval via AdminMessage.set_config.
+    @discardableResult
+    public func applyPositionBroadcastInterval(seconds: UInt32) -> Bool {
+        guard #available(iOS 13.0, *), isConnected, let device = connectedDevice else {
+            lastError = "Not connected"
+            return false
+        }
+        let payload = MeshtasticAdminCodec.encodeSetPositionBroadcastInterval(seconds: seconds)
+        switch device.connectionType {
+        case .bluetooth: return bleClient.sendAdmin(payload: payload)
+        case .tcp:       return tcpClient.sendAdmin(payload: payload)
+        }
+    }
+
     /// Send a CoT event over the active Meshtastic transport (BLE or TCP) as
     /// a portnum-72 (ATAK_PLUGIN) packet.
     ///
@@ -444,8 +592,41 @@ public class MeshtasticManager: ObservableObject {
             return false
         }
 
-        // Format selection (TAKPacket for PLI/GeoChat, TAKMessage fallback for
-        // everything else) is the pure, unit-tested MeshTAKRouting decision.
+        // Format selection (TAKPacket for PLI/GeoChat, TAKPacketV2 for dropped
+        // markers, TAKMessage fallback for everything else) is the pure,
+        // unit-tested MeshTAKRouting decision.
+        let format = MeshTAKRouting.decide(for: event)
+
+        // Dropped-marker (port 78) path: encode the v2 marker and ship it on
+        // PortNum 78 with a config hop limit and no broadcast ACK. Throttle
+        // repeats of the same uid so an edit/re-broadcast storm doesn't flood
+        // the LoRa channel; the first send of any uid is always allowed.
+        if format == .takPacketV2, let v2Payload = TAKPacketV2Codec.encodeMarker(event) {
+            if let last = lastMarkerSendTimes[event.uid],
+               Date().timeIntervalSince(last) < markerSendThrottle {
+                #if DEBUG
+                print("⏳ Throttled marker mesh send for uid \(event.uid) (within \(Int(markerSendThrottle))s)")
+                #endif
+                return false
+            }
+            lastMarkerSendTimes[event.uid] = Date()
+
+            let hop = UInt32(max(1, markerHopLimit))
+            switch device.connectionType {
+            case .bluetooth:
+                return bleClient.sendATAKPlugin(
+                    payload: v2Payload, channel: channelIndex,
+                    portnum: TAKPacketV2Codec.portnum, hopLimit: hop, wantAck: false
+                )
+            case .tcp:
+                return tcpClient.sendATAKPlugin(
+                    payload: v2Payload, channel: channelIndex,
+                    portnum: TAKPacketV2Codec.portnum, hopLimit: hop, wantAck: false
+                )
+            }
+        }
+
+        // v1 / fallback path (PLI, GeoChat, TAKMessage) — port 72.
         let payload = MeshTAKRouting.encodePayload(for: event)
             ?? ATAKPluginSerializer.serialize(event)
 

@@ -288,6 +288,43 @@ public final class MeshCoreManager: ObservableObject, MeshManager {
         }
     }
 
+    // MARK: Channels & Settings (OmniTAK-iOS #101)
+
+    /// Apply (write) a channel to the connected MeshCore radio via
+    /// CMD_SET_CHANNEL. `secretHex` is the lowercase hex of the 16-byte secret
+    /// ("" for the public channel at index 0). Returns true if dispatched.
+    @available(iOS 13.0, *)
+    @discardableResult
+    func applyChannel(index: Int, name: String, secretHex: String) -> Bool {
+        guard isConnected else { lastError = "Not connected"; return false }
+        let secret = MeshCoreChannelCodec.dehex(secretHex) ?? Data()
+        guard let frame = MeshCoreFrameCodec.encodeSetChannel(
+            index: index, name: name, secret: secret) else {
+            lastError = "Invalid channel (index 0–7)"
+            return false
+        }
+        transport.send(frame)
+        return true
+    }
+
+    /// Apply an imported MeshCore channel (from a scanned QR / pasted link).
+    /// Lands at index 1 by default (the first private slot). Returns true if
+    /// dispatched.
+    @available(iOS 13.0, *)
+    @discardableResult
+    func applyImportedChannel(_ ch: MeshCoreChannel, index: Int = 1) -> Bool {
+        applyChannel(index: index, name: ch.name, secretHex: MeshCoreChannelCodec.hex(ch.secret))
+    }
+
+    /// Build a shareable MeshCore channel link.
+    func channelShareURL(name: String, secretHex: String) -> String? {
+        let secret = MeshCoreChannelCodec.dehex(secretHex) ?? Data()
+        return MeshChannelShare.shareURL(
+            transport: .meshcore,
+            meshcore: MeshCoreChannel(name: name, secret: secret)
+        )
+    }
+
     // MARK: Outbound (CoT -> mesh)
 
     /// Bridge a CoT event onto the MeshCore mesh.

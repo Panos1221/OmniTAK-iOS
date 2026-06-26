@@ -75,7 +75,14 @@ class CoTEventHandler: ObservableObject {
         let originalCount = service.cotEvents.count
 
         service.cotEvents.removeAll { event in
-            event.time < cutoffDate
+            // Exempt locally-dropped / shared tactical point markers
+            // (uid "marker-…") from the stale sweep. A marker a teammate shared
+            // (or one we dropped) is a deliberate, persistent annotation — it
+            // must not ghost-expire just because no fresh position update for it
+            // arrives within the stale window the way a live EUD's PPLI does.
+            // Markers are removed explicitly via removeEvent(uid:) instead.
+            guard !event.uid.isDroppedPointMarkerUID else { return false }
+            return event.time < cutoffDate
         }
 
         let removedCount = originalCount - service.cotEvents.count

@@ -201,19 +201,29 @@ enum ATAKPluginSerializer {
 
     // MARK: - MeshPacket / ToRadio (for TX path)
 
-    /// Build a Meshtastic ToRadio bytes blob with a MeshPacket carrying a
-    /// portnum-72 payload. Caller is responsible for any TCP framing.
+    /// Build a Meshtastic ToRadio bytes blob with a MeshPacket carrying an
+    /// ATAK payload. Caller is responsible for any TCP framing.
+    ///
+    /// - Parameters:
+    ///   - portnum: Meshtastic PortNum for the Data submessage. Defaults to 72
+    ///     (ATAK_PLUGIN, TAKPacket v1). Pass 78 for TAKPacketV2 markers.
+    ///   - hopLimit: LoRa hop_limit (MeshPacket field 9). Defaults to 3.
+    ///   - wantAck: whether to request a delivery ACK. Defaults to false —
+    ///     broadcast marker/chat traffic doesn't ACK (an ACK on a broadcast
+    ///     just adds airtime). Unicast callers can opt in.
     static func buildToRadio(
         atakPayload: Data,
         to destination: UInt32 = 0xFFFFFFFF,
         channel: UInt32 = 0,
-        wantAck: Bool = true,
+        portnum: UInt64 = 72,
+        hopLimit: UInt32 = 3,
+        wantAck: Bool = false,
         packetID: UInt32 = UInt32.random(in: 1...UInt32.max)
     ) -> Data {
         // Data submessage.
         var decoded = Data()
-        // 1: portnum = 72 (ATAK_PLUGIN)
-        appendVarintField(&decoded, field: 1, value: 72)
+        // 1: portnum (ATAK_PLUGIN = 72, ATAK_PLUGIN_V2 / TAKPacketV2 = 78)
+        appendVarintField(&decoded, field: 1, value: portnum)
         // 2: payload
         appendTag(&decoded, field: 2, wire: 2)
         appendVarint(&decoded, UInt64(atakPayload.count))
@@ -235,6 +245,11 @@ enum ATAKPluginSerializer {
         // 6: id (fixed32)
         appendTag(&meshPacket, field: 6, wire: 5)
         appendFixed32(&meshPacket, value: packetID)
+        // 9: hop_limit (uint32 varint) — emitted before field 10 so the
+        // marker survives multi-hop relays across the mesh.
+        if hopLimit != 0 {
+            appendVarintField(&meshPacket, field: 9, value: UInt64(hopLimit))
+        }
         // 10: want_ack (bool varint)
         if wantAck {
             appendVarintField(&meshPacket, field: 10, value: 1)
