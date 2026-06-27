@@ -117,6 +117,14 @@ struct ATAKMapView: View {
     // tactical bullseye. Consumed by both engines: the Mapbox puck image
     // and the Cesium self-pip billboard.
     @AppStorage("selfMarkerStyle") private var selfMarkerStyle = "milstd"
+    // #178 — on-map staleness overlay (Settings → "Show point age on map").
+    // When on, contact pins fade by age bucket and gain a compact age label.
+    @AppStorage("stalenessOverlayEnabled") private var stalenessOverlayEnabled = false
+    // Bumps once on a slow cadence while the overlay is on, so the pins
+    // re-fade / re-label as points age even when no new CoT arrives. Idle when
+    // the overlay is off, so the default render path is untouched.
+    @State private var stalenessTick = 0
+    private let stalenessTimer = Timer.publish(every: 15, on: .main, in: .common).autoconnect()
     @State private var showLineOfSight = false
     @State private var showEchelonHierarchy = false
     @State private var showMissionSync = false
@@ -199,7 +207,9 @@ struct ATAKMapView: View {
                 // Issue #75 — carry the usericon path + color so spot-map /
                 // iconset markers resolve to the right TAK icon on the map.
                 iconsetPath: event.detail.iconsetPath,
-                argbColor: event.detail.argbColor
+                argbColor: event.detail.argbColor,
+                // #178 — carry the receive time for the staleness overlay.
+                receivedAt: event.receivedAt
             )
 
             // Filter based on overlay settings and CoT affiliation
@@ -294,9 +304,17 @@ struct ATAKMapView: View {
             // bearing to the parent for the compass overlay needle.
             onBearingChanged: { bearing in
                 mapBearing = bearing
-            }
+            },
+            // #178 — fade/label contact pins by age when enabled in Settings.
+            // Referencing stalenessTick here ties the slow timer to a re-render
+            // so pins age visibly even without inbound CoT.
+            stalenessOverlay: stalenessOverlayEnabled && stalenessTick >= 0
         )
         .ignoresSafeArea()
+        .onReceive(stalenessTimer) { _ in
+            // Only churn the map while the overlay is on; otherwise no-op.
+            if stalenessOverlayEnabled { stalenessTick &+= 1 }
+        }
     }
 
     @ViewBuilder
@@ -2852,6 +2870,10 @@ struct CoTMarker: Identifiable {
     /// Issue #75 — signed ARGB color from the CoT `<color>` element. Spot-map
     /// points carry their color here rather than in the type.
     var argbColor: Int? = nil
+    /// #178 — wall-clock receive time of the backing CoT event, so the optional
+    /// on-map staleness overlay can fade/label the pin by age. Nil for tracks
+    /// that never went through the ingest stamp.
+    var receivedAt: Date? = nil
 }
 
 struct CoTMarkerView: View {

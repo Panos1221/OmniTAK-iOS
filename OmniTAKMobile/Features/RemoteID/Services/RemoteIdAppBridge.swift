@@ -112,11 +112,12 @@ final class RemoteIdAppBridge: ObservableObject {
         // fix for the invisible-detection bug.
         if let loc = track.lastLocation, loc.hasValidPosition {
             let event = Self.makeDroneCoTEvent(track: track, loc: loc, sourceNote: sourceNote)
-            CoTEventHandler.shared.handle(event: .positionUpdate(event))
+            // #180 — a local RID/sensor detection, not a point off a TAK server.
+            CoTEventHandler.shared.handle(event: .positionUpdate(event), source: .local)
         }
         if let op = track.lastOperatorLocation, op.hasValidPosition {
             let event = Self.makeOperatorCoTEvent(track: track, op: op, sourceNote: sourceNote)
-            CoTEventHandler.shared.handle(event: .positionUpdate(event))
+            CoTEventHandler.shared.handle(event: .positionUpdate(event), source: .local)
         }
     }
 

@@ -802,6 +802,10 @@ struct MarkerInfoSheet: View {
     let marker: PointMarker
     @ObservedObject private var loc = LocalizationManager.shared
     @Environment(\.dismiss) private var dismiss
+    /// #178 — drives the live "Age: Nm ago" relative label while the sheet is
+    /// open (ticks once a second), mirroring the Android marker detail sheet.
+    @State private var now = Date()
+    private let tick = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
 
     var body: some View {
         NavigationView {
@@ -811,6 +815,12 @@ struct MarkerInfoSheet: View {
                     infoRow(loc.t("markerInfo.affiliation"), marker.affiliation.displayName)
                     // CoT is a bare acronym — intentionally untranslated.
                     infoRow("CoT", marker.cotType)
+                    // #178 / #180 — age (since drop) + source. A marker the
+                    // operator dropped never traversed a link, so it's Local.
+                    if let age = CoTAge.relative(receivedAt: marker.timestamp, now: now) {
+                        infoRow("Age", age)
+                    }
+                    infoRow("Source", CoTSource.local.label)
                 }
                 Section(loc.t("markerInfo.coordinates")) {
                     // MGRS / Lat-Lon labels are acronyms, left as-is (same
@@ -843,6 +853,7 @@ struct MarkerInfoSheet: View {
                 }
             }
         }
+        .onReceive(tick) { now = $0 }
     }
 
     private func infoRow(_ label: String, _ value: String) -> some View {

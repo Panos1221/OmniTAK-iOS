@@ -669,7 +669,8 @@ public class MeshtasticManager: ObservableObject {
     public func publishMeshNodesToMap() {
         let cotEvents = MeshtasticCoTConverter.toCoTEvents(nodes: meshNodes, ownNodeId: myNodeNum)
         for event in cotEvents {
-            CoTEventHandler.shared.handle(event: .positionUpdate(event))
+            // #180 — these arrived over the Meshtastic mesh, not a TAK server.
+            CoTEventHandler.shared.handle(event: .positionUpdate(event), source: .mesh("Meshtastic"))
         }
         print("📍 Published \(cotEvents.count) mesh nodes to TAK map")
     }
@@ -678,7 +679,7 @@ public class MeshtasticManager: ObservableObject {
     public func publishNodeToMap(_ node: MeshNode) {
         let isOwn = node.id == myNodeNum
         if let event = MeshtasticCoTConverter.toCoTEvent(node: node, isOwnNode: isOwn) {
-            CoTEventHandler.shared.handle(event: .positionUpdate(event))
+            CoTEventHandler.shared.handle(event: .positionUpdate(event), source: .mesh("Meshtastic"))
             print("📍 Published node \(node.shortName) to TAK map")
         }
     }

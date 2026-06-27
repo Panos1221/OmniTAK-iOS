@@ -75,6 +75,10 @@ struct TacticalMapView: UIViewRepresentable {
     /// whenever the Mapbox camera rotates, so the parent can update the
     /// compass overlay needle.
     var onBearingChanged: ((Double) -> Void)? = nil
+    /// #178 — when on, contact pins fade by freshness bucket and gain a compact
+    /// age label ("<1m" / "Nm" / ">1h"). Off by default; gated by the Settings
+    /// "Show point age on map" toggle. Defaulted so other call sites are unchanged.
+    var stalenessOverlay: Bool = false
 
     // MARK: - UIViewRepresentable
 
@@ -929,6 +933,12 @@ struct TacticalMapView: UIViewRepresentable {
 
         private func refreshCotMarkers() {
             guard let manager = ensurePoint(\.cotMarkerManager) else { return }
+            // #178 — staleness overlay: fade contact pins by age bucket and label
+            // each with a compact age. Off by default; the per-pin alpha + label
+            // ride only when the Settings toggle is on, so the default path is
+            // byte-for-byte the original.
+            let overlay = parent.stalenessOverlay
+            let now = Date()
             var fresh: [PointAnnotation] = []
             fresh.reserveCapacity(parent.markers.count)
             for marker in parent.markers {
@@ -940,6 +950,21 @@ struct TacticalMapView: UIViewRepresentable {
                 ann.image = .init(image: img, name: key)
                 ann.iconSize = 1.0
                 ann.iconAnchor = .bottom
+                if overlay {
+                    if let receivedAt = marker.receivedAt {
+                        ann.iconOpacity = CoTAge.alpha(receivedAt: receivedAt, now: now)
+                    }
+                    if let ageLabel = CoTAge.shortLabel(receivedAt: marker.receivedAt, now: now) {
+                        ann.textField = ageLabel
+                        ann.textAnchor = .top
+                        ann.textOffset = [0, 0.6]
+                        ann.textColor = StyleColor(.white)
+                        ann.textHaloColor = StyleColor(.black)
+                        ann.textHaloWidth = 1.0
+                        ann.textSize = 10
+                        ann.textOpacity = ann.iconOpacity ?? 1.0
+                    }
+                }
                 fresh.append(ann)
             }
             manager.annotations = fresh

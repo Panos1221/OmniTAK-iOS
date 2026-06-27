@@ -112,8 +112,13 @@ class CoTEventHandler: ObservableObject {
 
     // MARK: - Event Routing
 
-    /// Handle a parsed CoT event and route to appropriate handlers
-    func handle(event: CoTEventType, serverId: UUID? = nil) {
+    /// Handle a parsed CoT event and route to appropriate handlers.
+    ///
+    /// `source` (#180) tags the transport the event arrived on so the detail
+    /// sheet can show "TAK: <server>" / "Mesh: Meshtastic" etc. When nil and the
+    /// event came off a TAK server (serverId set), the server path resolves it to
+    /// `.takServer(<name>)`; mesh ingest points pass `.mesh(...)` explicitly.
+    func handle(event: CoTEventType, serverId: UUID? = nil, source: CoTSource? = nil) {
         DispatchQueue.main.async { [weak self] in
             guard let self = self else { return }
 
@@ -122,7 +127,7 @@ class CoTEventHandler: ObservableObject {
 
             switch event {
             case .positionUpdate(let cotEvent):
-                self.handlePositionUpdate(cotEvent, serverId: serverId)
+                self.handlePositionUpdate(cotEvent, serverId: serverId, source: source)
 
             case .chatMessage(let message):
                 self.handleChatMessage(message, serverId: serverId)
@@ -141,7 +146,21 @@ class CoTEventHandler: ObservableObject {
 
     // MARK: - Position Update Handler
 
-    private func handlePositionUpdate(_ event: CoTEvent, serverId: UUID? = nil) {
+    private func handlePositionUpdate(_ rawEvent: CoTEvent, serverId: UUID? = nil, source: CoTSource? = nil) {
+        // #178 / #180 — stamp the wall-clock receive time and the transport the
+        // point arrived on, so the detail sheet + staleness overlay have a
+        // truthful "when did I last hear this, and over what link" signal. The
+        // server path resolves the source from serverId → server name when the
+        // caller didn't pass one; an explicit `source` (mesh ingest) wins.
+        var event = rawEvent
+        event.receivedAt = Date()
+        if let source {
+            event.source = source
+        } else if event.source == nil {
+            // No explicit source: it came off a TAK server connection.
+            event.source = .takServer(takService?.serverName(for: serverId))
+        }
+
         print("CoTEventHandler: Position update from \(event.detail.callsign) at (\(event.point.lat), \(event.point.lon))")
 
         latestPositionUpdate = event

@@ -19,6 +19,8 @@ struct SettingsView: View {
     @AppStorage("mgrsGridEnabled") private var mgrsGridEnabled = false
     @AppStorage("mgrsGridDensity") private var mgrsGridDensityString = "1km"
     @AppStorage("showMGRSLabels") private var showMGRSLabels = true
+    // #178 — on-map staleness overlay. Off by default; read by ATAKMapView.
+    @AppStorage("stalenessOverlayEnabled") private var stalenessOverlayEnabled = false
     @AppStorage("coordinateDisplayFormat") private var coordinateFormatString = "MGRS"
     @AppStorage("breadcrumbTrailsEnabled") private var breadcrumbTrailsEnabled = true
     @AppStorage("trailMaxLength") private var trailMaxLength = 100
@@ -218,6 +220,15 @@ struct SettingsView: View {
                         // triangle always points in the device's heading direction.
                         Text(loc.t("settings.marker.arrow")).tag("arrow")
                     }
+
+                    // #178 — point-age / staleness overlay. Mirrors the Android
+                    // "Show point age on map" toggle (same thresholds + copy).
+                    Toggle("Show point age on map", isOn: $stalenessOverlayEnabled)
+
+                    Text("Label contact pins with their age and fade them as they go stale " +
+                         "(fresh under 1 min, aging 1–5 min, stale over 5 min)")
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
                 }
 
                 Section(loc.t("settings.section.droneDetection")) {

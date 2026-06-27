@@ -24,6 +24,10 @@ private struct ConversationRef: Identifiable, Equatable {
 struct ContactDetailView: View {
     let contact: ChatParticipant
     @ObservedObject var chatManager: ChatManager
+    /// #178 / #180 — the live CoT store backs the point-age + data-source rows.
+    /// Observed so "Age: Nm ago" refreshes when a fresh position lands while the
+    /// sheet is open.
+    @ObservedObject private var takService = TAKService.shared
     @Environment(\.dismiss) var dismiss
     /// Direct conversation to present. Identifiable item so the sheet is
     /// bound to a specific conversation (not the first one whose participants
@@ -31,6 +35,9 @@ struct ContactDetailView: View {
     @State private var activeConversation: ConversationRef?
     @State private var mapRegion: MKCoordinateRegion
     @State private var showShareSheet = false
+    /// #178 — ticks the relative point-age label once a second while open.
+    @State private var now = Date()
+    private let ageTick = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
 
     init(contact: ChatParticipant, chatManager: ChatManager) {
         self.contact = contact
@@ -70,6 +77,23 @@ struct ContactDetailView: View {
             let days = Int(interval / 86400)
             return "\(days) day\(days == 1 ? "" : "s") ago"
         }
+    }
+
+    /// #178 / #180 — the most recent CoT event for this contact (by UID), the
+    /// carrier of receive-time + source. Nil for a contact we only know from a
+    /// chat message (never had a position).
+    private var cotEvent: CoTEvent? {
+        takService.cotEvents.first { $0.uid == contact.id }
+    }
+
+    /// "Age: 4m ago" relative label, recomputed against `now` so it ticks live.
+    private var pointAge: String? {
+        CoTAge.relative(receivedAt: cotEvent?.receivedAt, now: now)
+    }
+
+    /// "TAK: <server>" / "Mesh: Meshtastic" / "Local" data-source label.
+    private var sourceLabel: String? {
+        cotEvent?.source?.label
     }
 
     var messageCount: Int {
@@ -199,6 +223,30 @@ struct ContactDetailView: View {
                                 }
                             }
 
+                            // #178 / #180 — Position Data: how old this contact's
+                            // last position is, and which transport carried it.
+                            // Only shown when we have a CoT point for the contact.
+                            if pointAge != nil || sourceLabel != nil {
+                                DetailSection(title: "POSITION DATA") {
+                                    if let age = pointAge {
+                                        DetailRow(
+                                            icon: "clock.badge.questionmark",
+                                            label: "Age",
+                                            value: age,
+                                            valueColor: Color(hex: "#CCCCCC")
+                                        )
+                                    }
+                                    if let src = sourceLabel {
+                                        DetailRow(
+                                            icon: "dot.radiowaves.up.forward",
+                                            label: "Source",
+                                            value: src,
+                                            valueColor: Color(hex: "#CCCCCC")
+                                        )
+                                    }
+                                }
+                            }
+
                             // Communication Section
                             DetailSection(title: "COMMUNICATION") {
                                 DetailRow(
@@ -292,6 +340,7 @@ struct ContactDetailView: View {
                 }
             )
             .preferredColorScheme(.dark)
+            .onReceive(ageTick) { now = $0 }
             .sheet(item: $activeConversation) { ref in
                 // Re-fetch by id so we always get the live conversation object.
                 if let conversation = chatManager.conversations.first(where: { $0.id == ref.id }) {

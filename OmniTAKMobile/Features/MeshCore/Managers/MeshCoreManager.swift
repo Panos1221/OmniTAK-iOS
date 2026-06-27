@@ -236,7 +236,8 @@ public final class MeshCoreManager: ObservableObject, MeshManager {
         }
 
         if let event = MeshCoreCoTConverter.toCoTEvent(contact: contact) {
-            CoTEventHandler.shared.handle(event: .positionUpdate(event))
+            // #180 — arrived over the MeshCore mesh, not a TAK server.
+            CoTEventHandler.shared.handle(event: .positionUpdate(event), source: .mesh("MeshCore"))
         }
     }
 
@@ -276,7 +277,8 @@ public final class MeshCoreManager: ObservableObject, MeshManager {
     public func publishMeshNodesToMap() {
         for contact in contactsByNodeId.values {
             if let event = MeshCoreCoTConverter.toCoTEvent(contact: contact) {
-                CoTEventHandler.shared.handle(event: .positionUpdate(event))
+                // #180 — arrived over the MeshCore mesh, not a TAK server.
+                CoTEventHandler.shared.handle(event: .positionUpdate(event), source: .mesh("MeshCore"))
             }
         }
     }

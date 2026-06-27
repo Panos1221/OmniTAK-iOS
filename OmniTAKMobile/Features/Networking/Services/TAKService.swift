@@ -946,6 +946,16 @@ struct CoTEvent {
     let time: Date
     let point: CoTPoint
     let detail: CoTDetail
+    /// #178 — wall-clock time this event was last received/ingested (NOT the CoT
+    /// `time` attribute — that's the producer's clock and can lag the link).
+    /// Stamped by CoTEventHandler at ingest. Nil means "never ingested through the
+    /// handler" (e.g. a freshly-built local event before ingest). Defaulted so
+    /// every existing CoTEvent(...) call site keeps compiling.
+    var receivedAt: Date? = nil
+    /// #180 — which transport carried this event (TAK server vs mesh vs local),
+    /// tagged at the ingest point. Nil when unknown. Display/debug only — never
+    /// rides the wire.
+    var source: CoTSource? = nil
 }
 
 struct CoTPoint {
@@ -1144,6 +1154,20 @@ class TAKService: ObservableObject {
         connectionsLock.lock()
         defer { connectionsLock.unlock() }
         return serverConnections[serverId]?.isConnected ?? false
+    }
+
+    /// #180 — human-readable name for a connected server, used to tag inbound
+    /// CoT with its source ("TAK: <name>") at the ingest point. Falls back to the
+    /// single-connection `currentServerName` (host:port) when the id is unknown
+    /// (e.g. legacy single-server connect path that has no per-id entry).
+    func serverName(for serverId: UUID?) -> String? {
+        if let id = serverId {
+            connectionsLock.lock()
+            let name = serverConnections[id]?.serverName
+            connectionsLock.unlock()
+            if let name, !name.isEmpty { return name }
+        }
+        return currentServerName.isEmpty ? nil : currentServerName
     }
 
     /// Connect to a specific server
