@@ -186,6 +186,26 @@ struct ATAKMapView: View {
         horizontalSizeClass == .regular || verticalSizeClass == .compact
     }
 
+    // #182 — landscape (plate-carrier) compaction. On the wide-but-short
+    // landscape canvas the portrait bottom offsets (tuned to clear the
+    // full-width floating bar + the tall tab strip) push the bottom chrome
+    // most of the way up the map. In landscape the floating bar is a compact
+    // centered pill (see CustomToolbar), so the bottom corners are free and
+    // the chrome only needs to clear the home indicator. These offsets shrink
+    // the bottom reservations accordingly; portrait keeps its original values.
+    /// Bottom offset for the left zoom toolbar (above the GPS cluster).
+    private var bottomToolbarBottomPad: CGFloat {
+        if isCursorModeActive { return isLandscape ? 110 : 240 }
+        return isLandscape ? 64 : 140
+    }
+    /// Bottom offset for the bottom-right callsign card.
+    private var callsignBottomPad: CGFloat { isLandscape ? 56 : 120 }
+    /// Bottom offset for the left GPS/center cluster.
+    private var gpsClusterBottomPad: CGFloat {
+        if isCursorModeActive { return isLandscape ? 96 : 222 }
+        return isLandscape ? 56 : (showQuickActionToolbar ? 150 : 90)
+    }
+
     // Computed CoT markers from TAK service - filtered by overlay settings
     private var cotMarkers: [CoTMarker] {
         takService.cotEvents.compactMap { event in
@@ -372,7 +392,7 @@ struct ATAKMapView: View {
                 onZoomOut: zoomOut
             )
             .padding(.horizontal, 8)
-            .padding(.bottom, isCursorModeActive ? 240 : 140)
+            .padding(.bottom, bottomToolbarBottomPad)
 
             if showQuickActionToolbar && !isCursorModeActive {
                 QuickActionToolbar(
@@ -566,7 +586,7 @@ struct ATAKMapView: View {
                         }
                     )
                     .padding(.trailing, 16)
-                    .padding(.bottom, 120)
+                    .padding(.bottom, callsignBottomPad)
                 }
             }
             .zIndex(1003)
@@ -641,7 +661,8 @@ struct ATAKMapView: View {
     private var scaleBar: some View {
         ScaleBarView(
             region: mapRegion,
-            isVisible: showScaleBar
+            isVisible: showScaleBar,
+            compact: isLandscape
         )
         .zIndex(1007)
     }
@@ -862,7 +883,7 @@ struct ATAKMapView: View {
                         }
                     )
                     .padding(.trailing, 16)
-                    .padding(.bottom, 200) // above the bottom toolbar
+                    .padding(.bottom, isLandscape ? 96 : 200) // above the bottom toolbar (#182 compact in landscape)
                 }
             }
             .zIndex(2000)
@@ -1112,7 +1133,7 @@ struct ATAKMapView: View {
                 Spacer()
             }
             .padding(.leading, 12)
-            .padding(.bottom, isCursorModeActive ? 222 : (showQuickActionToolbar ? 150 : 90))
+            .padding(.bottom, gpsClusterBottomPad)
         }
         .zIndex(1012)
     }

@@ -31,12 +31,30 @@ struct CustomToolbar: View {
     /// One-time discovery hint that the bar is customizable.
     @AppStorage("didShowToolbarCoachmark") private var seenCoachmark = false
 
+    // #182 — landscape parity. The wide-but-short landscape canvas (plate-
+    // carrier orientation) shouldn't be straddled by a full-width bar that
+    // buries the map. In landscape we let the pill hug its content (capped
+    // width) and center it, freeing the map flanks. Every shortcut, edit
+    // mode, drag-reorder and the add-tile all stay exactly as in portrait.
+    @Environment(\.verticalSizeClass) private var verticalSizeClass
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+    private var isLandscape: Bool {
+        verticalSizeClass == .compact
+    }
+    /// Width budget for a compact landscape cell so the centered pill stays
+    /// tight against its icons instead of stretching edge to edge.
+    private var compactCellWidth: CGFloat { 64 }
+
     private var showCoachmark: Bool { !seenCoachmark && !store.isEditing && selectedTab == .map }
 
     private var totalCells: Int {
         store.items.count + (store.isEditing && !store.isFull ? 1 : 0)
     }
-    private var cellWidth: CGFloat { max(1, barWidth / CGFloat(max(totalCells, 1))) }
+    private var cellWidth: CGFloat {
+        // In landscape the pill hugs its content, so reorder math keys off the
+        // fixed compact cell width rather than the (now content-sized) bar.
+        isLandscape ? compactCellWidth : max(1, barWidth / CGFloat(max(totalCells, 1)))
+    }
 
     var body: some View {
         VStack(spacing: 8) {
@@ -45,7 +63,15 @@ struct CustomToolbar: View {
             } else if showCoachmark {
                 coachmark
             }
-            barPill
+            // Landscape: center the content-hugging pill so it doesn't span
+            // the whole width and cover the map. Portrait: unchanged (the
+            // HStack of maxWidth-infinity cells fills the bar edge to edge).
+            if isLandscape {
+                barPill
+                    .fixedSize(horizontal: true, vertical: false)
+            } else {
+                barPill
+            }
         }
         .padding(.horizontal, 14)
         .padding(.bottom, 4)
@@ -219,7 +245,7 @@ struct CustomToolbar: View {
                 removeBadge(item)
             }
         }
-        .frame(maxWidth: .infinity)
+        .frame(maxWidth: isLandscape ? compactCellWidth : .infinity)
         .rotationEffect(.degrees(store.isEditing && !isDragging ? (wigglePhase ? 1.6 : -1.6) : 0))
         .scaleEffect(isDragging ? 1.12 : 1)
         .offset(x: offsetX)
@@ -268,7 +294,7 @@ struct CustomToolbar: View {
                     .font(.system(size: 10, weight: .medium))
                     .foregroundColor(.white.opacity(0.7))
             }
-            .frame(maxWidth: .infinity)
+            .frame(maxWidth: isLandscape ? compactCellWidth : .infinity)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)

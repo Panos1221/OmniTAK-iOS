@@ -165,15 +165,31 @@ struct MeshtasticConnectionView: View {
 
                 Spacer()
 
-                if !manager.isConnected && manager.connectionState == "Disconnected" {
-                    Button(action: { showingDevicePicker = true }) {
-                        Text("Connect")
-                            .font(.headline)
-                            .foregroundColor(.white)
-                            .padding(.horizontal, 20)
-                            .padding(.vertical, 10)
-                            .background(Color.blue)
-                            .cornerRadius(10)
+                // #175 — while a connect attempt is in flight, offer Cancel so
+                // a stuck "Connecting…" / "Discovering…" is always escapable
+                // (the BLE client also self-recovers via a 20s watchdog). Once
+                // idle (disconnected OR a prior attempt failed) offer Connect.
+                if !manager.isConnected {
+                    if isConnecting {
+                        Button(action: { manager.disconnect() }) {
+                            Text("Cancel")
+                                .font(.headline)
+                                .foregroundColor(.white)
+                                .padding(.horizontal, 20)
+                                .padding(.vertical, 10)
+                                .background(Color.red)
+                                .cornerRadius(10)
+                        }
+                    } else {
+                        Button(action: { showingDevicePicker = true }) {
+                            Text("Connect")
+                                .font(.headline)
+                                .foregroundColor(.white)
+                                .padding(.horizontal, 20)
+                                .padding(.vertical, 10)
+                                .background(Color.blue)
+                                .cornerRadius(10)
+                        }
                     }
                 }
             }
@@ -203,14 +219,21 @@ struct MeshtasticConnectionView: View {
         .shadow(radius: 2)
     }
 
+    /// #175 — a connect attempt is mid-flight (connecting or discovering).
+    /// Matches the BLE ConnectionState rawValues, which carry trailing "…".
+    private var isConnecting: Bool {
+        manager.connectionState.hasPrefix("Connecting")
+            || manager.connectionState.hasPrefix("Discovering")
+    }
+
     private var statusIcon: String {
         switch manager.connectionState {
         case "Connected":
             return "antenna.radiowaves.left.and.right.circle.fill"
-        case "Connecting":
-            return "antenna.radiowaves.left.and.right"
         default:
-            return "antenna.radiowaves.left.and.right.slash"
+            return isConnecting
+                ? "antenna.radiowaves.left.and.right"
+                : "antenna.radiowaves.left.and.right.slash"
         }
     }
 
@@ -218,10 +241,8 @@ struct MeshtasticConnectionView: View {
         switch manager.connectionState {
         case "Connected":
             return .green
-        case "Connecting":
-            return .orange
         default:
-            return .gray
+            return isConnecting ? .orange : .gray
         }
     }
 
@@ -229,10 +250,8 @@ struct MeshtasticConnectionView: View {
         switch manager.connectionState {
         case "Connected":
             return "Connected"
-        case "Connecting":
-            return "Connecting..."
         default:
-            return "Not Connected"
+            return isConnecting ? "Connecting..." : "Not Connected"
         }
     }
 

@@ -9,6 +9,10 @@ import CoreLocation
 struct ScaleBarView: View {
     let region: MKCoordinateRegion
     let isVisible: Bool
+    /// #182 — compact landscape layout. The portrait bottom offset (225, tuned
+    /// to sit above the GPS cluster + full-width bar) lifts the scale bar near
+    /// the top on the short landscape canvas, so shrink the reservation.
+    var compact: Bool = false
 
     @State private var isExpanded: Bool = false
 
@@ -30,7 +34,7 @@ struct ScaleBarView: View {
                     Spacer()
                 }
                 .padding(.leading, 16)
-                .padding(.bottom, 225)
+                .padding(.bottom, compact ? 110 : 225)
             }
         }
     }

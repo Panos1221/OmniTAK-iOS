@@ -119,6 +119,16 @@ class MeshtasticBLEClient: NSObject, ObservableObject {
     // Timer for periodic FromRadio reads
     private var readTimer: Timer?
 
+    // #175 — connection watchdog. CoreBluetooth's connect() has no built-in
+    // timeout: if the radio is off/out of range (common when auto-reconnecting
+    // to a previously-paired device that's now gone), neither didConnect nor
+    // didFailToConnect ever fires and the UI hangs forever on "Connecting…" /
+    // "Discovering Services…". This timer caps the whole connect → discover
+    // window; on expiry we cancel the in-flight connection and surface a
+    // retryable failure instead of an indefinite spinner.
+    private var connectTimeoutTimer: Timer?
+    private let connectTimeoutInterval: TimeInterval = 20
+
     // Flag to prevent operations during shutdown
     private var isShuttingDown = false
 
@@ -143,6 +153,8 @@ class MeshtasticBLEClient: NSObject, ObservableObject {
 
     deinit {
         isShuttingDown = true
+        connectTimeoutTimer?.invalidate()
+        connectTimeoutTimer = nil
         readTimer?.invalidate()
         readTimer = nil
         // Don't call disconnect() in deinit - it can cause crashes
@@ -201,6 +213,7 @@ class MeshtasticBLEClient: NSObject, ObservableObject {
         }
 
         centralManager.connect(device.peripheral, options: nil)
+        startConnectTimeout()
         print("Connecting to \(device.name)...")
     }
 
@@ -215,6 +228,55 @@ class MeshtasticBLEClient: NSObject, ObservableObject {
         }
 
         centralManager.connect(peripheral, options: nil)
+        startConnectTimeout()
+    }
+
+    // MARK: - Connection Watchdog (#175)
+
+    /// Arm the connect/discover watchdog. Replaces any prior timer so a retry
+    /// always gets the full window. Runs on the main run loop (CB callbacks are
+    /// already on .main), so it fires on the same queue that owns our state.
+    private func startConnectTimeout() {
+        cancelConnectTimeout()
+        let timer = Timer(timeInterval: connectTimeoutInterval, repeats: false) { [weak self] _ in
+            self?.handleConnectTimeout()
+        }
+        RunLoop.main.add(timer, forMode: .common)
+        connectTimeoutTimer = timer
+    }
+
+    /// Clear the watchdog once the connection resolves (connected or failed) or
+    /// the operator cancels. Safe to call when no timer is armed.
+    private func cancelConnectTimeout() {
+        connectTimeoutTimer?.invalidate()
+        connectTimeoutTimer = nil
+    }
+
+    /// Fired when connect/discover overran the budget. Tear down the in-flight
+    /// attempt and surface a retryable failure so the UI escapes "Connecting…".
+    private func handleConnectTimeout() {
+        connectTimeoutTimer = nil
+        // Already resolved (e.g. didConnect + discovery completed) — nothing to do.
+        guard connectionState == .connecting || connectionState == .discovering else { return }
+
+        print("⌛️ Meshtastic BLE connect timed out after \(Int(connectTimeoutInterval))s — cancelling")
+
+        // Cancel whichever peripheral is in flight so CoreBluetooth stops
+        // trying and frees the slot for a clean retry.
+        if let peripheral = connectedPeripheral {
+            centralManager.cancelPeripheralConnection(peripheral)
+        } else if let peripheral = pendingPeripheral {
+            centralManager.cancelPeripheralConnection(peripheral)
+        }
+        pendingPeripheral = nil
+
+        DispatchQueue.main.async { [weak self] in
+            guard let self = self else { return }
+            self.isConnected = false
+            self.connectedPeripheral = nil
+            self.connectionState = .failed
+            self.lastError = "Connection timed out. Make sure the radio is powered on and nearby, then try again."
+        }
     }
 
     func disconnect() {
@@ -223,6 +285,7 @@ class MeshtasticBLEClient: NSObject, ObservableObject {
         // Operator-initiated leave — don't auto-reconnect to this device.
         userDidDisconnect = true
 
+        cancelConnectTimeout()
         readTimer?.invalidate()
         readTimer = nil
 
@@ -1236,6 +1299,7 @@ extension MeshtasticBLEClient: CBCentralManagerDelegate {
     }
 
     func centralManager(_ central: CBCentralManager, didFailToConnect peripheral: CBPeripheral, error: Error?) {
+        cancelConnectTimeout()
         let pairing = isPairingError(error)
         if pairing {
             // Stale bond — don't auto-reconnect into a guaranteed-failing loop.
@@ -1254,6 +1318,7 @@ extension MeshtasticBLEClient: CBCentralManagerDelegate {
     }
 
     func centralManager(_ central: CBCentralManager, didDisconnectPeripheral peripheral: CBPeripheral, error: Error?) {
+        cancelConnectTimeout()
         DispatchQueue.main.async {
             self.isConnected = false
             self.connectionState = .disconnected
@@ -1349,6 +1414,9 @@ extension MeshtasticBLEClient: CBPeripheralDelegate {
         if canSend && canReceive {
             print("✅ Ready to communicate with Meshtastic device")
 
+            // Connection fully established — stand the watchdog down.
+            cancelConnectTimeout()
+
             // Remember this radio so it shows under "Paired Devices" and can
             // be auto-reconnected next time without a scan.
             rememberDevice(peripheral)
@@ -1383,6 +1451,7 @@ extension MeshtasticBLEClient: CBPeripheralDelegate {
             }
         } else {
             print("❌ Missing required characteristics - cannot communicate")
+            cancelConnectTimeout()
             DispatchQueue.main.async {
                 self.lastError = "Device missing required BLE characteristics"
                 self.connectionState = .failed
